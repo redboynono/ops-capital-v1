@@ -48,13 +48,16 @@ export default function AdminEditorPage() {
   const [isPublished, setIsPublished] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const contentLength = useMemo(() => content.length, [content]);
 
   const onGenerate = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
+    setSaveMessage(null);
 
     if (!target.trim()) {
       setError("请先输入标的代码、宏观事件或公司名称");
@@ -92,6 +95,45 @@ export default function AdminEditorPage() {
     }
   };
 
+  const onSave = async () => {
+    setError(null);
+    setSaveMessage(null);
+
+    if (!title.trim() || !slug.trim() || !excerpt.trim() || !content.trim()) {
+      setError("请先补全 Title / Slug / Excerpt / Content");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const response = await fetch("/api/admin/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          slug,
+          excerpt,
+          content,
+          is_premium: isPremium,
+          is_published: isPublished,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data?.error ?? "保存失败");
+        return;
+      }
+
+      setSaveMessage(`保存成功：/reports/${data?.post?.slug ?? slug}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存请求失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto w-full max-w-6xl px-4 py-8 md:px-6">
@@ -99,6 +141,7 @@ export default function AdminEditorPage() {
         <p className="mt-2 text-sm text-zinc-400">
           输入标的后一键生成机构级 Markdown 研报草稿，并回填到正文编辑区。
         </p>
+        <p className="mt-1 text-xs text-zinc-500">提示：先生成，再点保存即可写入 `posts` 表。</p>
 
         <form onSubmit={onGenerate} className="mt-6 grid gap-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 md:grid-cols-2">
           <div className="space-y-2 md:col-span-2">
@@ -133,6 +176,7 @@ export default function AdminEditorPage() {
           </div>
 
           {error ? <p className="md:col-span-2 text-sm text-red-400">{error}</p> : null}
+          {saveMessage ? <p className="md:col-span-2 text-sm text-emerald-400">{saveMessage}</p> : null}
         </form>
 
         <div className="mt-8 grid gap-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 md:grid-cols-2">
@@ -186,6 +230,17 @@ export default function AdminEditorPage() {
               rows={20}
               className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm outline-none focus:border-emerald-500"
             />
+          </div>
+
+          <div className="md:col-span-2">
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving}
+              className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-60"
+            >
+              {saving ? "保存中..." : "保存到数据库"}
+            </button>
           </div>
         </div>
       </div>

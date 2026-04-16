@@ -14,8 +14,20 @@ export default function Home() {
 
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
-            href="/admin/editor"
+            href="/reports"
             className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+          >
+            查看研报
+          </Link>
+          <Link
+            href="/pricing"
+            className="rounded-lg border border-emerald-500/60 px-4 py-2 text-sm font-medium text-emerald-300 hover:border-emerald-300"
+          >
+            订阅方案
+          </Link>
+          <Link
+            href="/admin/editor"
+            className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-100 hover:border-zinc-500"
           >
             打开 Admin Editor
           </Link>
