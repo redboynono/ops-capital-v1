@@ -134,34 +134,48 @@ export default function AdminEditorPage() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <div className="mx-auto w-full max-w-6xl px-4 py-8 md:px-6">
-        <h1 className="text-2xl font-semibold md:text-3xl">Admin Editor · AI 投研生成</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          输入标的后一键生成机构级 Markdown 研报草稿，并回填到正文编辑区。
-        </p>
-        <p className="mt-1 text-xs text-zinc-500">提示：先生成，再点保存即可写入 `posts` 表。</p>
+  const inputClass =
+    "w-full rounded-xl border border-border/80 bg-surface/60 px-4 py-2.5 text-sm text-foreground outline-none placeholder:text-muted/70 focus:border-accent focus:bg-surface-elevated";
 
-        <form onSubmit={onGenerate} className="mt-6 grid gap-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 md:grid-cols-2">
+  return (
+    <div className="relative overflow-hidden pb-24">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_0%,rgba(176,139,87,0.12),transparent_40%)]" />
+
+      <div className="relative mx-auto w-full max-w-6xl px-4 pb-8 pt-12 md:px-6 md:pt-16">
+        <section className="rise-in">
+          <p className="text-xs uppercase tracking-[0.34em] text-accent-soft/85">后台 · 编辑器</p>
+          <h1 className="mt-4 font-[var(--font-brand-serif)] text-4xl leading-[1.05] text-foreground md:text-5xl">
+            AI 研报工作台
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
+            一键生成机构级 Markdown 研报草稿，再打磨标题、Slug、摘要与正文，保存到
+            <code className="text-accent-soft">posts</code> 表。
+          </p>
+        </section>
+
+        <form
+          onSubmit={onGenerate}
+          className="glass-panel rise-in mt-8 grid gap-4 rounded-3xl p-6 md:grid-cols-2 md:p-7"
+          style={{ animationDelay: "80ms" }}
+        >
           <div className="space-y-2 md:col-span-2">
-            <label className="text-sm text-zinc-300">标的 / 事件</label>
+            <label className="text-xs uppercase tracking-[0.22em] text-muted">标的 / 事件</label>
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              placeholder="例如：NVDA / BTC / 美联储6月议息会议"
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 outline-none focus:border-emerald-500"
+              placeholder="例如：NVDA / BTC / 美联储 6 月议息会议"
+              className={inputClass}
             />
           </div>
 
           <div className="space-y-2 md:col-span-2">
-            <label className="text-sm text-zinc-300">关注点（可选）</label>
+            <label className="text-xs uppercase tracking-[0.22em] text-muted">关注点（可选）</label>
             <textarea
               value={focus}
               onChange={(e) => setFocus(e.target.value)}
               rows={3}
-              placeholder="例如：关注估值是否透支、未来12个月催化剂"
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 outline-none focus:border-emerald-500"
+              placeholder="例如：估值是否透支、未来 12 个月催化剂"
+              className={inputClass}
             />
           </div>
 
@@ -169,66 +183,71 @@ export default function AdminEditorPage() {
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="primary-cta rounded-full px-6 py-2.5 text-sm font-semibold tracking-wide disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "生成中..." : "一键生成研报"}
             </button>
           </div>
 
-          {error ? <p className="md:col-span-2 text-sm text-red-400">{error}</p> : null}
-          {saveMessage ? <p className="md:col-span-2 text-sm text-emerald-400">{saveMessage}</p> : null}
+          {error ? <p className="md:col-span-2 text-sm text-red-300">{error}</p> : null}
+          {saveMessage ? <p className="md:col-span-2 text-sm text-accent-soft">{saveMessage}</p> : null}
         </form>
 
-        <div className="mt-8 grid gap-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 md:grid-cols-2">
+        <div
+          className="glass-panel rise-in mt-8 grid gap-4 rounded-3xl p-6 md:grid-cols-2 md:p-7"
+          style={{ animationDelay: "140ms" }}
+        >
           <div className="space-y-2 md:col-span-2">
-            <label className="text-sm text-zinc-300">Title</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 outline-none focus:border-emerald-500"
-            />
+            <label className="text-xs uppercase tracking-[0.22em] text-muted">标题</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm text-zinc-300">Slug</label>
-            <input
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 outline-none focus:border-emerald-500"
-            />
+            <label className="text-xs uppercase tracking-[0.22em] text-muted">Slug（URL）</label>
+            <input value={slug} onChange={(e) => setSlug(e.target.value)} className={inputClass} />
           </div>
 
           <div className="flex items-center gap-6 pt-6">
-            <label className="inline-flex items-center gap-2 text-sm text-zinc-300">
-              <input type="checkbox" checked={isPremium} onChange={(e) => setIsPremium(e.target.checked)} />
-              Premium
+            <label className="inline-flex items-center gap-2 text-sm text-muted">
+              <input
+                type="checkbox"
+                checked={isPremium}
+                onChange={(e) => setIsPremium(e.target.checked)}
+                className="accent-[color:var(--accent)]"
+              />
+              付费
             </label>
-            <label className="inline-flex items-center gap-2 text-sm text-zinc-300">
-              <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} />
-              Published
+            <label className="inline-flex items-center gap-2 text-sm text-muted">
+              <input
+                type="checkbox"
+                checked={isPublished}
+                onChange={(e) => setIsPublished(e.target.checked)}
+                className="accent-[color:var(--accent)]"
+              />
+              已发布
             </label>
           </div>
 
           <div className="space-y-2 md:col-span-2">
-            <label className="text-sm text-zinc-300">Excerpt</label>
+            <label className="text-xs uppercase tracking-[0.22em] text-muted">摘要</label>
             <textarea
               value={excerpt}
               onChange={(e) => setExcerpt(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 outline-none focus:border-emerald-500"
+              className={inputClass}
             />
           </div>
 
           <div className="space-y-2 md:col-span-2">
             <div className="flex items-center justify-between">
-              <label className="text-sm text-zinc-300">Content (Markdown)</label>
-              <span className="text-xs text-zinc-500">{contentLength} chars</span>
+              <label className="text-xs uppercase tracking-[0.22em] text-muted">正文（Markdown）</label>
+              <span className="text-xs text-muted">{contentLength} 字</span>
             </div>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={20}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm outline-none focus:border-emerald-500"
+              className={`${inputClass} font-mono`}
             />
           </div>
 
@@ -237,7 +256,7 @@ export default function AdminEditorPage() {
               type="button"
               onClick={onSave}
               disabled={saving}
-              className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-60"
+              className="primary-cta rounded-full px-6 py-2.5 text-sm font-semibold tracking-wide disabled:opacity-60"
             >
               {saving ? "保存中..." : "保存到数据库"}
             </button>

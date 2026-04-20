@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { randomUUID } from "node:crypto";
+import { getSessionUser } from "@/lib/auth";
+import { mysqlQuery } from "@/lib/mysql";
 
 type CreatePostPayload = {
   title?: string;
@@ -21,10 +22,7 @@ function getAdminEmails() {
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getSessionUser();
 
     if (!user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -41,27 +39,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "title, slug, excerpt, content are required" }, { status: 400 });
     }
 
-    const supabaseAdmin = createAdminClient();
+    const id = randomUUID();
 
-    const { data, error } = await supabaseAdmin
-      .from("posts")
-      .insert({
-        title: body.title,
-        slug: body.slug,
-        excerpt: body.excerpt,
-        content: body.content,
-        is_premium: body.is_premium ?? true,
-        is_published: body.is_published ?? false,
-        author_id: user.id,
-      })
-      .select("id, slug")
-      .single();
+    await mysqlQuery(
+      "insert into posts (id, title, slug, excerpt, content, is_premium, is_published, author_id) values (?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        id,
+        body.title,
+        body.slug,
+        body.excerpt,
+        body.content,
+        body.is_premium ?? true,
+        body.is_published ?? false,
+        user.id,
+      ],
+    );
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    return NextResponse.json({ ok: true, post: data });
+    return NextResponse.json({ ok: true, post: { id, slug: body.slug } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

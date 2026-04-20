@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { mysqlQuery } from "@/lib/mysql";
 
 function addMonths(base: Date, months: number) {
   const date = new Date(base);
@@ -39,18 +39,18 @@ export async function POST(req: Request) {
     const plan = session.metadata?.plan === "yearly" ? "yearly" : "monthly";
 
     if (userId) {
-      const supabaseAdmin = createAdminClient();
       const months = plan === "yearly" ? 12 : 1;
       const subscriptionEndDate = addMonths(new Date(), months).toISOString();
 
-      await supabaseAdmin
-        .from("profiles")
-        .update({
-          subscription_status: "active",
-          subscription_end_date: subscriptionEndDate,
-          stripe_customer_id: typeof session.customer === "string" ? session.customer : null,
-        })
-        .eq("id", userId);
+      await mysqlQuery(
+        "update users set subscription_status = ?, subscription_end_date = ?, stripe_customer_id = ? where id = ?",
+        [
+          "active",
+          subscriptionEndDate,
+          typeof session.customer === "string" ? session.customer : null,
+          userId,
+        ],
+      );
     }
   }
 
