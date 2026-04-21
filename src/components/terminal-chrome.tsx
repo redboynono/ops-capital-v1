@@ -189,7 +189,7 @@ export function TerminalFunctionBar() {
     { k: "F5", label: "WATCH", href: "/dashboard/watchlist" },
     { k: "F6", label: "ACCT",  href: "/dashboard" },
     { k: "F7", label: "SUB",   href: "/pricing" },
-    { k: "F8", label: "HELP",  href: "#" },
+    { k: "F8", label: "HELP",  href: "/help" },
   ];
   return (
     <div className="term-rail fixed bottom-0 left-0 right-0 z-40 flex h-6 items-center gap-3 border-t px-3 text-[10px]">

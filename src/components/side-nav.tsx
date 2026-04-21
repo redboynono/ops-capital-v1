@@ -99,6 +99,9 @@ export async function SideNav() {
               <Link href="/admin/editor" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
                 AI 编辑器
               </Link>
+              <Link href="/admin/ratings" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
+                评级管理
+              </Link>
             </div>
           </div>
         ) : null}

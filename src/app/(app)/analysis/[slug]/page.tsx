@@ -12,10 +12,14 @@ export const dynamic = "force-dynamic";
 
 export default async function AnalysisDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ reader?: string }>;
 }) {
   const { slug } = await params;
+  const { reader } = await searchParams;
+  const readerMode = reader === "1";
   const post = await getPostBySlug(slug);
   if (!post || post.kind !== "analysis") notFound();
 
@@ -29,15 +33,27 @@ export default async function AnalysisDetailPage({
   const bookmarked = user ? await isBookmarked(user.id, post.id) : false;
   if (user) recordRead(user.id, post.id).catch(() => null);
 
+  const toggleHref = readerMode ? `/analysis/${post.slug}` : `/analysis/${post.slug}?reader=1`;
+
   return (
     <div className="mx-auto w-full max-w-[840px] px-4 py-6 md:px-6">
-      <nav className="text-[12px] text-muted">
-        <Link href="/analysis" className="hover:text-accent-strong">分析</Link>
-        <span className="mx-1">/</span>
-        <span>{post.slug}</span>
+      <nav className="flex items-center justify-between text-[12px] text-muted">
+        <div>
+          <Link href="/analysis" className="hover:text-accent-strong">分析</Link>
+          <span className="mx-1">/</span>
+          <span>{post.slug}</span>
+        </div>
+        <Link
+          href={toggleHref}
+          className="rounded-sm border border-border px-2 py-0.5 font-mono text-[11px] hover:border-accent hover:text-accent-strong"
+          title="切换阅读模式"
+        >
+          {readerMode ? "☾ 终端视图" : "☀ 阅读模式"}
+        </Link>
       </nav>
 
-      <header className="mt-3 border-b border-border pb-4">
+      <div className={readerMode ? "reader-mode mt-3" : "mt-3"}>
+      <header className={readerMode ? "border-b border-[#d8d0c2] pb-4" : "border-b border-border pb-4"}>
         <div className="flex flex-wrap items-center gap-2">
           {post.is_premium ? <span className="badge-premium">PRO</span> : <span className="badge-free">公开</span>}
           {tickers.map((t) => (
@@ -92,9 +108,10 @@ export default async function AnalysisDetailPage({
         </>
       )}
 
-      <p className="mt-8 border-t border-border pt-4 text-[11px] leading-relaxed text-muted-soft">
+      <p className={`mt-8 pt-4 text-[11px] leading-relaxed ${readerMode ? "border-t border-[#d8d0c2] text-[#6b5c3f]" : "border-t border-border text-muted-soft"}`}>
         免责声明：本文由 AI 编辑流水线生成并经人工复核，仅为研究观点，不构成投资建议。
       </p>
+      </div>
     </div>
   );
 }

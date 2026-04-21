@@ -165,6 +165,51 @@ a:hover {
   background: var(--surface-muted);
 }
 
+/* Reader mode: cream paper background + serif body, for long-form articles.
+   Used inside .terminal scope to give a dedicated reading surface while keeping chrome dark. */
+.terminal .reader-mode {
+  background: #f5f1ea;
+  color: #1a1a1a;
+  border: 1px solid #d8d0c2;
+  border-radius: 0;
+  padding: 28px 36px 36px;
+  font-family: var(--font-brand-serif);
+  font-size: 15.5px;
+  line-height: 1.78;
+}
+.terminal .reader-mode h1,
+.terminal .reader-mode h2,
+.terminal .reader-mode h3 {
+  color: #0f0f0f;
+  font-family: var(--font-brand-serif);
+}
+.terminal .reader-mode .prose {
+  color: #1a1a1a;
+}
+.terminal .reader-mode .prose strong { color: #0f0f0f; }
+.terminal .reader-mode .prose em { color: #3a3a3a; }
+.terminal .reader-mode .prose a { color: #b86a1a; text-decoration: underline; }
+.terminal .reader-mode .prose a:hover { color: #8a4c0e; }
+.terminal .reader-mode .prose code,
+.terminal .reader-mode .prose pre {
+  background: #e8e1d3;
+  color: #1a1a1a;
+}
+.terminal .reader-mode .prose blockquote {
+  border-left: 3px solid #b08b57;
+  color: #3a3a3a;
+}
+.terminal .reader-mode .prose ul > li::marker,
+.terminal .reader-mode .prose ol > li::marker {
+  color: #b08b57;
+}
+.terminal .reader-mode .label-caps { color: #6b5c3f; }
+.terminal .reader-mode .chip {
+  background: rgba(176,139,87,0.15);
+  color: #6b5c3f;
+  border: 1px solid rgba(176,139,87,0.35);
+}
+
 /* shared form input look (works in both root and .terminal scope) */
 .input-style {
   width: 100%;

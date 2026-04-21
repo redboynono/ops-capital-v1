@@ -351,8 +351,8 @@ function LoginInner() {
 
         <p className="mt-6 text-center text-[11px] text-muted">
           注册即表示同意 OPS Capital 的
-          <a className="mx-1 hover:text-accent-strong" href="#">服务条款</a>与
-          <a className="ml-1 hover:text-accent-strong" href="#">隐私政策</a>
+          <Link className="mx-1 hover:text-accent-strong" href="/terms">服务条款</Link>与
+          <Link className="ml-1 hover:text-accent-strong" href="/privacy">隐私政策</Link>
         </p>
       </div>
     </>
