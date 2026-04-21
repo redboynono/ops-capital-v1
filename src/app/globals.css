@@ -1,0 +1,367 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  --background: #f7f7f5;
+  --surface: #ffffff;
+  --surface-muted: #fafaf7;
+  --foreground: #111418;
+  --foreground-soft: #3a3f47;
+  --muted: #6b7280;
+  --muted-soft: #9ca3af;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --accent: #e15a3c;        /* SA orange */
+  --accent-strong: #c2462a;
+  --accent-soft: #fde9e0;
+  --paywall: #fff7ed;
+  --success: #15803d;
+  --danger: #b91c1c;
+  --font-brand-serif: "PingFang SC", "Songti SC", "Noto Serif SC", Georgia, serif;
+  --font-body-sans: "PingFang SC", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Hiragino Sans GB", "Microsoft YaHei", Roboto, Arial, sans-serif;
+  --font-mono: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-foreground-soft: var(--foreground-soft);
+  --color-muted: var(--muted);
+  --color-muted-soft: var(--muted-soft);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+}
+
+html,
+body {
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+a {
+  color: inherit;
+  transition: color 150ms ease;
+}
+a:hover {
+  color: var(--accent-strong);
+}
+
+/* SA-style small-caps label */
+.label-caps {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.divider {
+  border-top: 1px solid var(--border);
+}
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  font-weight: 600;
+}
+.btn-primary:hover {
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.btn-outline {
+  background: #fff;
+  color: var(--foreground);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  font-weight: 600;
+}
+.btn-outline:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-radius: 3px;
+  font-weight: 600;
+}
+.chip:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.badge-premium {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--paywall);
+  color: var(--accent-strong);
+  border: 1px solid #f7d4b8;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+.badge-free {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: #f0fdf4;
+  color: var(--success);
+  border: 1px solid #bbf7d0;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+.link-title {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.link-title:hover {
+  color: var(--accent-strong);
+}
+
+/* SA-style dense list hover row */
+.row-hover:hover {
+  background: var(--surface-muted);
+}
+
+/* shared form input look (works in both root and .terminal scope) */
+.input-style {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+.input-style:focus {
+  border-color: var(--accent);
+}
+
+/* numbered list for trending news */
+ol.sa-list {
+  counter-reset: item;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+ol.sa-list > li {
+  counter-increment: item;
+  position: relative;
+  padding: 10px 0 10px 28px;
+  border-bottom: 1px solid var(--border);
+}
+ol.sa-list > li:last-child { border-bottom: 0; }
+ol.sa-list > li::before {
+  content: counter(item);
+  position: absolute;
+  left: 0;
+  top: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-soft);
+  font-weight: 700;
+}
+
+/* ========================================================================
+   Bloomberg Terminal theme — scoped to .terminal wrapper
+   Applied to /(app)/** via its layout. Marketing / keeps Bridgewater theme.
+   ======================================================================== */
+.terminal {
+  --background: #0a0a0d;
+  --surface: #141418;
+  --surface-muted: #1a1a20;
+  --foreground: #e8e8ea;
+  --foreground-soft: #c2c2c8;
+  --muted: #7a7a85;
+  --muted-soft: #555560;
+  --border: #26262d;
+  --border-strong: #353540;
+  --accent: #ff9900;          /* Bloomberg amber */
+  --accent-strong: #ffb84d;
+  --accent-soft: #2a1a08;
+  --paywall: #1e1508;
+  --success: #00d97f;         /* up */
+  --danger:  #ff4d4d;         /* down */
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-mono), var(--font-body-sans);
+  font-feature-settings: "tnum" 1;
+}
+
+/* CJK chars stay in sans (mono fonts render CJK poorly); numbers + latin stay mono */
+.terminal :lang(zh),
+.terminal {
+  font-family: var(--font-body-sans);
+}
+.terminal .mono,
+.terminal code,
+.terminal kbd,
+.terminal .ticker,
+.terminal .num,
+.terminal .label-caps {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sharper edges everywhere inside terminal */
+.terminal .card {
+  border-radius: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.terminal .btn-primary,
+.terminal .btn-outline,
+.terminal .chip,
+.terminal .badge-premium,
+.terminal .badge-free,
+.terminal .kbd,
+.terminal input,
+.terminal select,
+.terminal textarea,
+.terminal button {
+  border-radius: 0;
+}
+.terminal .btn-primary {
+  background: var(--accent);
+  color: #0a0a0d;
+}
+.terminal .btn-primary:hover {
+  background: var(--accent-strong);
+  color: #0a0a0d;
+}
+.terminal .btn-outline {
+  background: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border-strong);
+}
+.terminal .btn-outline:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.terminal .chip {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.terminal .chip:hover {
+  background: var(--accent);
+  color: #0a0a0d;
+}
+.terminal input,
+.terminal select,
+.terminal textarea {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+.terminal input::placeholder,
+.terminal textarea::placeholder {
+  color: var(--muted-soft);
+}
+.terminal hr,
+.terminal .divider {
+  border-color: var(--border);
+}
+
+.terminal .badge-premium {
+  background: var(--paywall);
+  color: var(--accent);
+  border-color: var(--accent-soft);
+}
+.terminal .badge-free {
+  background: #07140c;
+  color: var(--success);
+  border-color: #134020;
+}
+
+/* up / down / flat for numbers */
+.up   { color: var(--success); }
+.down { color: var(--danger); }
+.flat { color: var(--muted); }
+
+/* Terminal chrome rails */
+.term-rail {
+  background: #050507;
+  border-color: var(--border);
+  color: var(--foreground-soft);
+}
+.term-rail .sep { color: var(--muted-soft); }
+
+/* Scrolling ticker tape */
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-tape {
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: #050507;
+}
+.ticker-track {
+  display: inline-flex;
+  gap: 32px;
+  white-space: nowrap;
+  animation: ticker-scroll 80s linear infinite;
+  padding: 6px 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ticker-track:hover { animation-play-state: paused; }
+
+/* Pulsing live dot */
+@keyframes term-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+.live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: term-pulse 1.6s ease-in-out infinite;
+}
