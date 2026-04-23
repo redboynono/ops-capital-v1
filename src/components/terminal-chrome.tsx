@@ -3,38 +3,87 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-// Static-ish demo tickers. In a later iteration these can be wired to a real feed.
-const TAPE: { sym: string; px: string; chg: number }[] = [
-  { sym: "NVDA",   px: "1234.56", chg: +2.41 },
-  { sym: "TSLA",   px: "212.78",  chg: -1.25 },
-  { sym: "AAPL",   px: "178.91",  chg: +0.42 },
-  { sym: "MSFT",   px: "442.10",  chg: +0.88 },
-  { sym: "GOOGL",  px: "166.72",  chg: -0.33 },
-  { sym: "META",   px: "534.20",  chg: +1.74 },
-  { sym: "AMZN",   px: "196.45",  chg: +0.51 },
-  { sym: "AMD",    px: "161.02",  chg: -2.10 },
-  { sym: "TSM",    px: "188.63",  chg: +1.22 },
-  { sym: "AVGO",   px: "1702.90", chg: +3.15 },
-  { sym: "BABA",   px: "87.41",   chg: -0.74 },
-  { sym: "PDD",    px: "134.88",  chg: +1.02 },
-  { sym: "NIO",    px: "5.21",    chg: -0.18 },
-  { sym: "BTC",    px: "71234",   chg: +1.85 },
-  { sym: "ETH",    px: "3812",    chg: +2.34 },
-  { sym: "SOL",    px: "198.4",   chg: -0.92 },
-  { sym: "HSI",    px: "19842",   chg: +0.62 },
-  { sym: "00700",  px: "412.4",   chg: +0.88 },
-  { sym: "09988",  px: "88.2",    chg: -0.44 },
-  { sym: "SPX",    px: "5704.3",  chg: +0.41 },
-  { sym: "NDX",    px: "20122.1", chg: +0.73 },
-  { sym: "USD/CNY",px: "7.228",   chg: -0.04 },
-  { sym: "USD/JPY",px: "154.1",   chg: +0.22 },
-  { sym: "GOLD",   px: "2634.5",  chg: +0.31 },
-  { sym: "WTI",    px: "68.9",    chg: -0.58 },
+// Symbols to poll from Finnhub (free tier: US stocks + crypto).
+// `display` is what the tape shows; `finnhub` is what we query.
+const TAPE_SYMBOLS: { display: string; finnhub: string }[] = [
+  { display: "NVDA",  finnhub: "NVDA" },
+  { display: "TSLA",  finnhub: "TSLA" },
+  { display: "AAPL",  finnhub: "AAPL" },
+  { display: "MSFT",  finnhub: "MSFT" },
+  { display: "GOOGL", finnhub: "GOOGL" },
+  { display: "META",  finnhub: "META" },
+  { display: "AMZN",  finnhub: "AMZN" },
+  { display: "AMD",   finnhub: "AMD" },
+  { display: "TSM",   finnhub: "TSM" },
+  { display: "AVGO",  finnhub: "AVGO" },
+  { display: "BABA",  finnhub: "BABA" },
+  { display: "PDD",   finnhub: "PDD" },
+  { display: "NIO",   finnhub: "NIO" },
+  { display: "XPEV",  finnhub: "XPEV" },
+  { display: "LI",    finnhub: "LI" },
+  { display: "BIDU",  finnhub: "BIDU" },
+  { display: "JD",    finnhub: "JD" },
+  { display: "NFLX",  finnhub: "NFLX" },
+  { display: "ORCL",  finnhub: "ORCL" },
+  { display: "CRM",   finnhub: "CRM" },
+  { display: "SPY",   finnhub: "SPY" },
+  { display: "QQQ",   finnhub: "QQQ" },
+  { display: "BTC",   finnhub: "BINANCE:BTCUSDT" },
+  { display: "ETH",   finnhub: "BINANCE:ETHUSDT" },
+  { display: "SOL",   finnhub: "BINANCE:SOLUSDT" },
 ];
+
+type TapeItem = { display: string; finnhub: string; price: number | null; chg: number | null };
 
 function formatChg(n: number) {
   const s = n >= 0 ? "+" : "";
   return `${s}${n.toFixed(2)}%`;
+}
+
+function formatPrice(n: number): string {
+  if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  if (n >= 100) return n.toFixed(2);
+  if (n >= 10) return n.toFixed(2);
+  return n.toFixed(3);
+}
+
+function useLiveTape(): TapeItem[] {
+  const [items, setItems] = useState<TapeItem[]>(
+    TAPE_SYMBOLS.map((t) => ({ ...t, price: null, chg: null })),
+  );
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const symbols = TAPE_SYMBOLS.map((t) => t.finnhub).join(",");
+        const res = await fetch(`/api/quotes?symbols=${encodeURIComponent(symbols)}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          quotes: Record<string, { c: number; dp: number | null } | null>;
+        };
+        if (cancelled) return;
+        setItems(
+          TAPE_SYMBOLS.map((t) => {
+            const q = data.quotes?.[t.finnhub];
+            return {
+              ...t,
+              price: q?.c ?? null,
+              chg: q?.dp ?? null,
+            };
+          }),
+        );
+      } catch {
+        /* ignore */
+      }
+    };
+    load();
+    const id = window.setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+  return items;
 }
 
 function useNowHK() {
@@ -157,20 +206,24 @@ export function TerminalTopBar({ userEmail }: { userEmail?: string | null }) {
 }
 
 export function TerminalTickerTape() {
-  // duplicate the array so the loop is seamless at 50% translateX
-  const dup = [...TAPE, ...TAPE];
+  const items = useLiveTape();
+  // duplicate the array so the CSS loop is seamless at 50% translateX
+  const dup = [...items, ...items];
   return (
     <div className="ticker-tape" aria-label="market ticker">
       <div className="ticker-track px-3">
         {dup.map((t, i) => {
-          const cls = t.chg > 0 ? "up" : t.chg < 0 ? "down" : "flat";
-          const arrow = t.chg > 0 ? "▲" : t.chg < 0 ? "▼" : "·";
+          const chg = t.chg;
+          const cls = chg == null ? "flat" : chg > 0 ? "up" : chg < 0 ? "down" : "flat";
+          const arrow = chg == null ? "·" : chg > 0 ? "▲" : chg < 0 ? "▼" : "·";
+          const priceText = t.price == null ? "—" : formatPrice(t.price);
+          const chgText = chg == null ? "--" : formatChg(chg);
           return (
-            <span key={`${t.sym}-${i}`} className="flex items-center gap-2">
-              <span className="font-semibold" style={{ color: "var(--foreground)" }}>{t.sym}</span>
-              <span style={{ color: "var(--foreground-soft)" }}>{t.px}</span>
+            <span key={`${t.display}-${i}`} className="flex items-center gap-2">
+              <span className="font-semibold" style={{ color: "var(--foreground)" }}>{t.display}</span>
+              <span style={{ color: "var(--foreground-soft)" }}>{priceText}</span>
               <span className={cls}>
-                {arrow} {formatChg(t.chg)}
+                {arrow} {chgText}
               </span>
             </span>
           );
