@@ -1,16 +1,13 @@
-import { getQuotes } from "@/lib/finnhub";
+import { getQuotes } from "@/lib/yahoo";
 
-// Map display names to Finnhub-supported tickers.
-// Free tier doesn't give indices directly, so we use liquid ETF proxies.
-// Finnhub 免费层不提供指数点位（^GSPC 等需要付费订阅），
-// 因此改用对应 ETF 价格展示——价格是 ETF 自身报价，但涨跌幅与指数基本一致。
+// Real indices via Yahoo Finance unofficial API (no key, wide coverage).
 const TARGETS: { key: string; name: string; sub: string }[] = [
-  { key: "SPY",                 name: "SPY", sub: "标普 500 ETF" },
-  { key: "QQQ",                 name: "QQQ", sub: "纳指 100 ETF" },
-  { key: "DIA",                 name: "DIA", sub: "道琼斯 ETF" },
-  { key: "FXI",                 name: "FXI", sub: "中概大盘 ETF" },
-  { key: "BINANCE:BTCUSDT",     name: "BTC", sub: "比特币 · USDT" },
-  { key: "BINANCE:ETHUSDT",     name: "ETH", sub: "以太坊 · USDT" },
+  { key: "^GSPC",     name: "S&P 500", sub: "标普 500" },
+  { key: "^IXIC",     name: "NASDAQ",  sub: "纳斯达克综合" },
+  { key: "^DJI",      name: "DJIA",    sub: "道琼斯" },
+  { key: "^HSI",      name: "HSI",     sub: "恒生指数" },
+  { key: "000001.SS", name: "SSE",     sub: "上证综指" },
+  { key: "BTC-USD",   name: "BTC",     sub: "比特币 · USD" },
 ];
 
 function fmtPrice(n: number): string {
@@ -21,14 +18,14 @@ function fmtPrice(n: number): string {
 
 export async function MarketSnapshot() {
   const quotes = await getQuotes(TARGETS.map((t) => t.key)).catch(
-    () => ({}) as Record<string, import("@/lib/finnhub").FinnhubQuote | null>,
+    () => ({}) as Record<string, import("@/lib/yahoo").YahooQuote | null>,
   );
 
   return (
     <section className="card overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span className="label-caps">市场快照</span>
-        <span className="text-[11px] text-muted-soft">数据：Finnhub · 15 分钟延迟</span>
+        <span className="text-[11px] text-muted-soft">数据：Yahoo Finance · 近实时</span>
       </div>
       <div className="grid grid-cols-2 divide-x divide-y divide-border sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
         {TARGETS.map((t) => {

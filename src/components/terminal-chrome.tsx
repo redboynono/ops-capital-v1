@@ -3,37 +3,44 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-// Symbols to poll from Finnhub (free tier: US stocks + crypto).
-// `display` is what the tape shows; `finnhub` is what we query.
-const TAPE_SYMBOLS: { display: string; finnhub: string }[] = [
-  { display: "NVDA",  finnhub: "NVDA" },
-  { display: "TSLA",  finnhub: "TSLA" },
-  { display: "AAPL",  finnhub: "AAPL" },
-  { display: "MSFT",  finnhub: "MSFT" },
-  { display: "GOOGL", finnhub: "GOOGL" },
-  { display: "META",  finnhub: "META" },
-  { display: "AMZN",  finnhub: "AMZN" },
-  { display: "AMD",   finnhub: "AMD" },
-  { display: "TSM",   finnhub: "TSM" },
-  { display: "AVGO",  finnhub: "AVGO" },
-  { display: "BABA",  finnhub: "BABA" },
-  { display: "PDD",   finnhub: "PDD" },
-  { display: "NIO",   finnhub: "NIO" },
-  { display: "XPEV",  finnhub: "XPEV" },
-  { display: "LI",    finnhub: "LI" },
-  { display: "BIDU",  finnhub: "BIDU" },
-  { display: "JD",    finnhub: "JD" },
-  { display: "NFLX",  finnhub: "NFLX" },
-  { display: "ORCL",  finnhub: "ORCL" },
-  { display: "CRM",   finnhub: "CRM" },
-  { display: "SPY",   finnhub: "SPY" },
-  { display: "QQQ",   finnhub: "QQQ" },
-  { display: "BTC",   finnhub: "BINANCE:BTCUSDT" },
-  { display: "ETH",   finnhub: "BINANCE:ETHUSDT" },
-  { display: "SOL",   finnhub: "BINANCE:SOLUSDT" },
+// Symbols to poll via Yahoo Finance (/api/quotes). No key needed; works for
+// US stocks, HK, A-shares, indices, crypto.
+// `display` is what the tape shows; `yahoo` is the Yahoo symbol format.
+const TAPE_SYMBOLS: { display: string; yahoo: string }[] = [
+  // Indices
+  { display: "S&P",   yahoo: "^GSPC" },
+  { display: "NDX",   yahoo: "^IXIC" },
+  { display: "DJIA",  yahoo: "^DJI" },
+  { display: "HSI",   yahoo: "^HSI" },
+  { display: "SSE",   yahoo: "000001.SS" },
+  // US mega-caps
+  { display: "NVDA",  yahoo: "NVDA" },
+  { display: "TSLA",  yahoo: "TSLA" },
+  { display: "AAPL",  yahoo: "AAPL" },
+  { display: "MSFT",  yahoo: "MSFT" },
+  { display: "GOOGL", yahoo: "GOOGL" },
+  { display: "META",  yahoo: "META" },
+  { display: "AMZN",  yahoo: "AMZN" },
+  { display: "AMD",   yahoo: "AMD" },
+  { display: "AVGO",  yahoo: "AVGO" },
+  // CN ADR
+  { display: "BABA",  yahoo: "BABA" },
+  { display: "PDD",   yahoo: "PDD" },
+  { display: "NIO",   yahoo: "NIO" },
+  // HK
+  { display: "0700",  yahoo: "0700.HK" },
+  { display: "9988",  yahoo: "9988.HK" },
+  { display: "3690",  yahoo: "3690.HK" },
+  // Crypto
+  { display: "BTC",   yahoo: "BTC-USD" },
+  { display: "ETH",   yahoo: "ETH-USD" },
+  { display: "SOL",   yahoo: "SOL-USD" },
+  // Forex
+  { display: "USDCNY", yahoo: "CNY=X" },
+  { display: "USDJPY", yahoo: "JPY=X" },
 ];
 
-type TapeItem = { display: string; finnhub: string; price: number | null; chg: number | null };
+type TapeItem = { display: string; yahoo: string; price: number | null; chg: number | null };
 
 function formatChg(n: number) {
   const s = n >= 0 ? "+" : "";
@@ -55,7 +62,7 @@ function useLiveTape(): TapeItem[] {
     let cancelled = false;
     const load = async () => {
       try {
-        const symbols = TAPE_SYMBOLS.map((t) => t.finnhub).join(",");
+        const symbols = TAPE_SYMBOLS.map((t) => t.yahoo).join(",");
         const res = await fetch(`/api/quotes?symbols=${encodeURIComponent(symbols)}`);
         if (!res.ok) return;
         const data = (await res.json()) as {
@@ -64,7 +71,7 @@ function useLiveTape(): TapeItem[] {
         if (cancelled) return;
         setItems(
           TAPE_SYMBOLS.map((t) => {
-            const q = data.quotes?.[t.finnhub];
+            const q = data.quotes?.[t.yahoo];
             return {
               ...t,
               price: q?.c ?? null,

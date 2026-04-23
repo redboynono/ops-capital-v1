@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getQuotes } from "@/lib/finnhub";
+import { getQuotes } from "@/lib/yahoo";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
-    .slice(0, 40); // hard cap to protect rate limit
+    .slice(0, 60); // hard cap to protect upstream
 
   try {
     const quotes = await getQuotes(symbols);
