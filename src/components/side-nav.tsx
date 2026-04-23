@@ -9,24 +9,25 @@ const sections: { title: string; items: NavItem[] }[] = [
     title: "MARKET",
     items: [
       { href: "/alpha",    label: "Alpha 首页",   fkey: "F1" },
-      { href: "/analysis", label: "分析长文",     fkey: "F2" },
-      { href: "/news",     label: "市场快讯",     fkey: "F3" },
+      { href: "/picks",    label: "OPS Picks",    fkey: "F2" },
+      { href: "/analysis", label: "分析长文",     fkey: "F3" },
+      { href: "/news",     label: "市场快讯",     fkey: "F4" },
     ],
   },
   {
     title: "SCREEN",
     items: [
-      { href: "/tickers",              label: "标的索引", fkey: "F4" },
-      { href: "/dashboard/watchlist",  label: "自选股",   fkey: "F5" },
+      { href: "/tickers",              label: "标的索引", fkey: "F5" },
+      { href: "/dashboard/watchlist",  label: "自选股",   fkey: "F6" },
     ],
   },
   {
     title: "ACCOUNT",
     items: [
-      { href: "/dashboard",         label: "会员中心",  fkey: "F6" },
+      { href: "/dashboard",         label: "会员中心",  fkey: "F7" },
       { href: "/dashboard/library", label: "收藏 / 历史" },
       { href: "/dashboard/profile", label: "资料" },
-      { href: "/pricing",           label: "订阅方案",  fkey: "F7" },
+      { href: "/pricing",           label: "订阅方案",  fkey: "F8" },
     ],
   },
 ];
@@ -101,6 +102,9 @@ export async function SideNav() {
               </Link>
               <Link href="/admin/ratings" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
                 评级管理
+              </Link>
+              <Link href="/admin/picks" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
+                OPS Picks 管理
               </Link>
             </div>
           </div>
