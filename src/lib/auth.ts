@@ -17,7 +17,6 @@ type DbUser = {
   full_name: string | null;
   subscription_status: string | null;
   subscription_end_date: string | null;
-  stripe_customer_id: string | null;
 };
 
 function getSessionSecret() {
@@ -90,7 +89,7 @@ export async function getSessionUser() {
   if (!payload) return null;
 
   const rows = await mysqlQuery<DbUser[]>(
-    "select id, email, full_name, subscription_status, subscription_end_date, stripe_customer_id from users where id = ? limit 1",
+    "select id, email, full_name, subscription_status, subscription_end_date from users where id = ? limit 1",
     [payload.userId],
   );
 
@@ -103,6 +102,5 @@ export async function getSessionUser() {
     fullName: user.full_name,
     subscriptionStatus: user.subscription_status ?? "inactive",
     subscriptionEndDate: user.subscription_end_date,
-    stripeCustomerId: user.stripe_customer_id,
   };
 }

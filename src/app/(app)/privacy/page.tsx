@@ -21,7 +21,7 @@ export default function PrivacyPage() {
         <h2>我们不收集</h2>
         <ul>
           <li>任何实际交易账户、持仓、资金信息</li>
-          <li>身份证、手机号、银行卡（支付功能由 Stripe / 第三方处理，不经过本平台存储）</li>
+          <li>身份证、手机号、银行卡（支付由支付宝 / 微信官方处理，不经过本平台存储）</li>
           <li>精确地理位置</li>
         </ul>
 
@@ -35,7 +35,7 @@ export default function PrivacyPage() {
         <ul>
           <li><strong>AI 模型提供商</strong>：MiniMax、OpenAI、Google 等。发送到模型的内容不包含你的个人数据，仅包含公开标的信息。</li>
           <li><strong>邮件发送</strong>：Resend API 用于发送密码重置邮件（仅传递邮箱地址与重置链接）。</li>
-          <li><strong>支付</strong>：若使用 Stripe / 微信支付 / 支付宝，支付数据直接由服务商处理，本平台仅保留订阅状态与 stripe_customer_id。</li>
+          <li><strong>支付</strong>：支付宝 / 微信支付 V3 Native。本平台仅保留订单号、金额、支付通道与订阅状态，不存储任何银行卡或实名信息。</li>
         </ul>
 
         <h2>数据保留</h2>

@@ -8,7 +8,6 @@ create table if not exists users (
   full_name varchar(255) null,
   password_reset_token_hash varchar(64) null,
   password_reset_expires_at datetime null,
-  stripe_customer_id varchar(255) null,
   subscription_status enum('inactive','active') not null default 'inactive',
   subscription_end_date datetime null,
   created_at datetime not null default current_timestamp
@@ -188,4 +187,32 @@ create table if not exists ops_picks (
   key idx_picks_entry_date (entry_date desc),
   constraint fk_picks_ticker foreign key (ticker_symbol) references tickers(symbol) on delete cascade,
   constraint fk_picks_author foreign key (created_by) references users(id) on delete set null
+);
+-- OPS Alpha · Payments
+-- 1) 移除 Stripe 相关字段（本项目从未实际接入 Stripe，只有占位）
+-- 2) 新建 orders 表：支持支付宝 / 微信 Native 预付费买断模型
+
+alter table users drop column if exists stripe_customer_id;
+
+create table if not exists orders (
+  id            char(36)     primary key,
+  out_trade_no  varchar(64)  not null unique,       -- 业务订单号：OPS + ts + rand
+  user_id       char(36)     not null,
+  pay_channel   enum('alipay','wechat') not null,
+  plan_id       varchar(32)  not null,              -- month / year 等，由 plans.ts 定义
+  amount        int unsigned not null,              -- 金额（分）
+  duration_months int unsigned not null,            -- 购买月份数
+  status        enum('pending','paid','failed') not null default 'pending',
+
+  -- 网关返回信息（用于审计与退款）
+  gateway_trade_no varchar(128) null,               -- alipay.trade_no / wechat.transaction_id
+  gateway_payload  text         null,               -- 最近一次回调/查询原始 JSON
+
+  created_at    datetime     not null default current_timestamp,
+  paid_at       datetime     null,
+  updated_at    datetime     not null default current_timestamp on update current_timestamp,
+
+  key idx_orders_user (user_id, created_at desc),
+  key idx_orders_status (status),
+  constraint fk_orders_user foreign key (user_id) references users(id) on delete cascade
 );
