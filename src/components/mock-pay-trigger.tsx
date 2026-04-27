@@ -5,7 +5,7 @@ import { useState } from "react";
 
 type Props = {
   outTradeNo: string;
-  channel: "alipay" | "wechat";
+  channel: "alipay" | "wechat" | "lemon";
   successSig: string;
   failedSig: string;
   initialStatus: "pending" | "paid" | "failed";
@@ -27,7 +27,10 @@ export function MockPayTrigger({
     setBusy(kind);
     setErr(null);
     try {
-      const res = await fetch(`/api/pay/notify/${channel}`, {
+      // Mock 模式下三种通道共用同一套 HMAC 验签流程，
+      // 走 alipay 通道的 webhook handler 即可（lemon 真实 webhook 用不同签名方式）
+      const webhookChannel = channel === "lemon" ? "alipay" : channel;
+      const res = await fetch(`/api/pay/notify/${webhookChannel}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -55,7 +55,12 @@ export default async function PricingPage() {
       ) : null}
 
       <section>
-        <PricingCheckout plans={plans} loggedIn={Boolean(user)} />
+        <PricingCheckout
+          plans={plans}
+          loggedIn={Boolean(user)}
+          primaryChannel="lemon"
+          showAltChannels={false}
+        />
       </section>
 
       <section className="card mt-6 p-5">

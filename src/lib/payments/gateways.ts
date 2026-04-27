@@ -16,9 +16,10 @@
  */
 
 import type { Order } from "@/lib/payments/orders";
+import { createLemonCheckout } from "@/lib/payments/lemon";
 
 export type CheckoutResult =
-  | { kind: "redirect"; payUrl: string }        // 支付宝 PC → 直接跳转
+  | { kind: "redirect"; payUrl: string }        // 支付宝 PC / LemonSqueezy → 直接跳转
   | { kind: "qrcode"; codeUrl: string };        // 微信 Native → 前端渲染二维码
 
 export class PaymentChannelNotConfiguredError extends Error {
@@ -45,9 +46,20 @@ function mockSecret(): string {
 
 // ============================== create ============================== //
 
-export async function createCheckout(order: Order): Promise<CheckoutResult> {
+export async function createCheckout(
+  order: Order,
+  ctx: { userEmail: string },
+): Promise<CheckoutResult> {
   if (MODE === "mock") {
     return createMockCheckout(order);
+  }
+  if (order.pay_channel === "lemon") {
+    const { checkoutUrl } = await createLemonCheckout({
+      order,
+      baseUrl: BASE_URL,
+      userEmail: ctx.userEmail,
+    });
+    return { kind: "redirect", payUrl: checkoutUrl };
   }
   if (order.pay_channel === "alipay") return createLiveAlipayCheckout(order);
   if (order.pay_channel === "wechat") return createLiveWechatCheckout(order);
@@ -56,11 +68,11 @@ export async function createCheckout(order: Order): Promise<CheckoutResult> {
 
 function createMockCheckout(order: Order): CheckoutResult {
   const mockUrl = `${BASE_URL}/pay/mock/${order.out_trade_no}`;
-  if (order.pay_channel === "alipay") {
-    return { kind: "redirect", payUrl: mockUrl };
+  // alipay / lemon 都走 redirect 流；wechat 走二维码流
+  if (order.pay_channel === "wechat") {
+    return { kind: "qrcode", codeUrl: mockUrl };
   }
-  // 微信渲染二维码 —— 二维码内容就是 mock 页 URL，用户手机扫描后点"模拟支付成功"即可
-  return { kind: "qrcode", codeUrl: mockUrl };
+  return { kind: "redirect", payUrl: mockUrl };
 }
 
 // ─────────── live stubs（接真 SDK 时在此实现） ─────────── //

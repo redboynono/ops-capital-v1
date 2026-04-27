@@ -7,20 +7,30 @@ import { formatYuan, type Plan } from "@/lib/payments/plans";
 type Props = {
   plans: Plan[];
   loggedIn: boolean;
+  primaryChannel: "lemon" | "alipay" | "wechat";
+  showAltChannels: boolean;       // 是否显示支付宝 / 微信 备选按钮
 };
 
 type CheckoutResp = {
   ok: true;
   mock: boolean;
-  order: { out_trade_no: string; amount: number; duration_months: number; pay_channel: "alipay" | "wechat"; plan_id: string };
+  order: { out_trade_no: string; amount: number; duration_months: number; pay_channel: "alipay" | "wechat" | "lemon"; plan_id: string };
   checkout:
     | { kind: "redirect"; payUrl: string }
     | { kind: "qrcode"; codeUrl: string };
 } | { error: string; code?: string };
 
-export function PricingCheckout({ plans, loggedIn }: Props) {
-  const [selectedPlan, setSelectedPlan] = useState<string>(plans.find((p) => p.highlight)?.id ?? plans[0].id);
-  const [busy, setBusy] = useState<"alipay" | "wechat" | null>(null);
+const CHANNEL_LABEL: Record<string, string> = {
+  lemon: "立即购买（信用卡 / PayPal / Apple Pay）",
+  alipay: "支付宝",
+  wechat: "微信支付",
+};
+
+export function PricingCheckout({ plans, loggedIn, primaryChannel, showAltChannels }: Props) {
+  const [selectedPlan, setSelectedPlan] = useState<string>(
+    plans.find((p) => p.highlight)?.id ?? plans[0].id,
+  );
+  const [busy, setBusy] = useState<string | null>(null);
   const [qrDialog, setQrDialog] = useState<null | {
     codeUrl: string;
     outTradeNo: string;
@@ -32,7 +42,7 @@ export function PricingCheckout({ plans, loggedIn }: Props) {
   const [polled, setPolled] = useState<"pending" | "paid" | "failed">("pending");
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const submit = async (channel: "alipay" | "wechat") => {
+  const submit = async (channel: "lemon" | "alipay" | "wechat") => {
     if (!loggedIn) {
       window.location.href = `/login?redirect=/pricing`;
       return;
@@ -52,12 +62,11 @@ export function PricingCheckout({ plans, loggedIn }: Props) {
       }
 
       if (data.checkout.kind === "redirect") {
-        // 支付宝：直接跳转
         window.location.href = data.checkout.payUrl;
         return;
       }
 
-      // 微信：弹二维码 + 轮询
+      // qrcode（微信 / mock）
       setQrDialog({
         codeUrl: data.checkout.codeUrl,
         outTradeNo: data.order.out_trade_no,
@@ -73,7 +82,7 @@ export function PricingCheckout({ plans, loggedIn }: Props) {
     }
   };
 
-  // 打开 dialog 后轮询 3s
+  // QR dialog 打开时每 3s 轮询一次订单状态
   useEffect(() => {
     if (!qrDialog) {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
@@ -84,7 +93,7 @@ export function PricingCheckout({ plans, loggedIn }: Props) {
       try {
         const res = await fetch(`/api/pay/order/${encodeURIComponent(qrDialog.outTradeNo)}`);
         if (!res.ok) return;
-        const data = await res.json() as { status: "pending" | "paid" | "failed" };
+        const data = (await res.json()) as { status: "pending" | "paid" | "failed" };
         if (data.status === "paid") {
           setPolled("paid");
           setTimeout(() => {
@@ -94,15 +103,13 @@ export function PricingCheckout({ plans, loggedIn }: Props) {
           setPolled("failed");
         }
       } catch {
-        // 静默失败继续轮询
+        /* ignore */
       }
     }, 3000);
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
   }, [qrDialog]);
-
-  const closeDialog = () => setQrDialog(null);
 
   return (
     <div>
@@ -116,17 +123,13 @@ export function PricingCheckout({ plans, loggedIn }: Props) {
               type="button"
               onClick={() => setSelectedPlan(p.id)}
               className={`card p-5 text-left transition ${
-                selected
-                  ? "border-accent ring-1 ring-accent"
-                  : "hover:border-border-strong"
+                selected ? "border-accent ring-1 ring-accent" : "hover:border-border-strong"
               }`}
             >
               <div className="flex items-start justify-between">
                 <div>
                   <p className="label-caps">{p.name}</p>
-                  <p className="mt-1 font-mono text-3xl font-bold">
-                    {formatYuan(p.amount)}
-                  </p>
+                  <p className="mt-1 font-mono text-3xl font-bold">{formatYuan(p.amount)}</p>
                   <p className="mt-0.5 text-[11px] text-muted">
                     {p.durationMonths} 个月 · ¥{(p.amount / p.durationMonths / 100).toFixed(0)}/月
                   </p>
@@ -138,7 +141,9 @@ export function PricingCheckout({ plans, loggedIn }: Props) {
               ) : null}
               <div
                 className={`mt-4 inline-flex h-5 w-5 items-center justify-center rounded-full border ${
-                  selected ? "border-accent bg-accent text-[color:var(--background)]" : "border-border text-transparent"
+                  selected
+                    ? "border-accent bg-accent text-[color:var(--background)]"
+                    : "border-border text-transparent"
                 }`}
               >
                 ✓
@@ -148,26 +153,48 @@ export function PricingCheckout({ plans, loggedIn }: Props) {
         })}
       </div>
 
-      {/* 支付通道按钮 */}
-      <div className="mt-5 flex flex-wrap gap-3">
+      {/* 主支付按钮（lemon redirect 或对应国内通道） */}
+      <div className="mt-5 space-y-3">
         <button
           type="button"
-          onClick={() => submit("alipay")}
+          onClick={() => submit(primaryChannel)}
           disabled={busy !== null}
-          className="flex items-center gap-2 rounded border border-[#1677ff]/60 bg-[#1677ff] px-6 py-3 text-[14px] font-semibold text-white transition hover:bg-[#0e5fd6] disabled:opacity-50"
+          className="btn-primary w-full py-3.5 text-[15px] font-semibold disabled:opacity-50"
         >
-          <span className="text-lg">支</span>
-          {busy === "alipay" ? "生成订单中..." : "支付宝支付"}
+          {busy === primaryChannel ? "生成订单中..." : CHANNEL_LABEL[primaryChannel]}
         </button>
-        <button
-          type="button"
-          onClick={() => submit("wechat")}
-          disabled={busy !== null}
-          className="flex items-center gap-2 rounded border border-[#09bb07]/60 bg-[#09bb07] px-6 py-3 text-[14px] font-semibold text-white transition hover:bg-[#08a006] disabled:opacity-50"
-        >
-          <span className="text-lg">微</span>
-          {busy === "wechat" ? "生成订单中..." : "微信支付"}
-        </button>
+
+        {primaryChannel === "lemon" ? (
+          <p className="text-center text-[11px] text-muted">
+            支付由 LemonSqueezy 处理 · 接受全球银行卡 · 自动开发票 · 7 天内可申请退款
+          </p>
+        ) : null}
+
+        {/* 备选通道（默认隐藏，仅在备案完成 / 配置生效后显示） */}
+        {showAltChannels ? (
+          <div className="grid gap-2 md:grid-cols-2">
+            {primaryChannel !== "alipay" ? (
+              <button
+                type="button"
+                onClick={() => submit("alipay")}
+                disabled={busy !== null}
+                className="flex items-center justify-center gap-2 rounded border border-[#1677ff]/60 bg-[#1677ff] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#0e5fd6] disabled:opacity-50"
+              >
+                {busy === "alipay" ? "生成订单中..." : "支付宝支付"}
+              </button>
+            ) : null}
+            {primaryChannel !== "wechat" ? (
+              <button
+                type="button"
+                onClick={() => submit("wechat")}
+                disabled={busy !== null}
+                className="flex items-center justify-center gap-2 rounded border border-[#09bb07]/60 bg-[#09bb07] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#08a006] disabled:opacity-50"
+              >
+                {busy === "wechat" ? "生成订单中..." : "微信支付"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {error ? (
@@ -176,11 +203,11 @@ export function PricingCheckout({ plans, loggedIn }: Props) {
         </p>
       ) : null}
 
-      {/* 微信扫码 Dialog */}
+      {/* 微信扫码 Dialog（只在 mock 或 wechat live 时使用） */}
       {qrDialog ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={closeDialog}
+          onClick={() => setQrDialog(null)}
         >
           <div
             className="card w-full max-w-sm p-5"
@@ -193,7 +220,7 @@ export function PricingCheckout({ plans, loggedIn }: Props) {
               </div>
               <button
                 type="button"
-                onClick={closeDialog}
+                onClick={() => setQrDialog(null)}
                 className="text-muted hover:text-foreground"
                 aria-label="close"
               >
@@ -205,9 +232,7 @@ export function PricingCheckout({ plans, loggedIn }: Props) {
               <div className="rounded bg-white p-3">
                 <QRCodeSVG value={qrDialog.codeUrl} size={200} />
               </div>
-              <p className="mt-3 font-mono text-xl font-bold">
-                {formatYuan(qrDialog.amount)}
-              </p>
+              <p className="mt-3 font-mono text-xl font-bold">{formatYuan(qrDialog.amount)}</p>
               <p className="mt-0.5 text-[11px] text-muted">
                 {qrDialog.durationMonths} 个月会员 · 订单 {qrDialog.outTradeNo}
               </p>

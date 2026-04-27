@@ -11,7 +11,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const CHANNELS: PayChannel[] = ["alipay", "wechat"];
+const CHANNELS: PayChannel[] = ["alipay", "wechat", "lemon"];
 
 export async function POST(req: Request) {
   const user = await getSessionUser();
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const checkout = await createCheckout(order);
+    const checkout = await createCheckout(order, { userEmail: user.email });
     return NextResponse.json({
       ok: true,
       mock: isMockMode(),

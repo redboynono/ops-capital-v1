@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { getMySqlPool, mysqlQuery } from "@/lib/mysql";
 import { getPlan, type PlanId } from "@/lib/payments/plans";
 
-export type PayChannel = "alipay" | "wechat";
+export type PayChannel = "alipay" | "wechat" | "lemon";
 export type OrderStatus = "pending" | "paid" | "failed";
 
 export type Order = {
