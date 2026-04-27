@@ -16,10 +16,10 @@
  */
 
 import type { Order } from "@/lib/payments/orders";
-import { createLemonCheckout } from "@/lib/payments/lemon";
+import { buildGumroadCheckoutUrl } from "@/lib/payments/gumroad";
 
 export type CheckoutResult =
-  | { kind: "redirect"; payUrl: string }        // 支付宝 PC / LemonSqueezy → 直接跳转
+  | { kind: "redirect"; payUrl: string }        // 支付宝 PC / Gumroad → 直接跳转
   | { kind: "qrcode"; codeUrl: string };        // 微信 Native → 前端渲染二维码
 
 export class PaymentChannelNotConfiguredError extends Error {
@@ -53,13 +53,9 @@ export async function createCheckout(
   if (MODE === "mock") {
     return createMockCheckout(order);
   }
-  if (order.pay_channel === "lemon") {
-    const { checkoutUrl } = await createLemonCheckout({
-      order,
-      baseUrl: BASE_URL,
-      userEmail: ctx.userEmail,
-    });
-    return { kind: "redirect", payUrl: checkoutUrl };
+  if (order.pay_channel === "gumroad") {
+    // Gumroad 走我们自己构造的托管收银台 URL（无需调 API 创建 checkout session）
+    return { kind: "redirect", payUrl: buildGumroadCheckoutUrl(order) };
   }
   if (order.pay_channel === "alipay") return createLiveAlipayCheckout(order);
   if (order.pay_channel === "wechat") return createLiveWechatCheckout(order);

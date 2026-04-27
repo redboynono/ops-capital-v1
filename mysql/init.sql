@@ -198,7 +198,7 @@ create table if not exists orders (
   id            char(36)     primary key,
   out_trade_no  varchar(64)  not null unique,       -- 业务订单号：OPS + ts + rand
   user_id       char(36)     not null,
-  pay_channel   enum('alipay','wechat','lemon') not null,
+  pay_channel   enum('alipay','wechat','gumroad') not null,
   plan_id       varchar(32)  not null,              -- month / year 等，由 plans.ts 定义
   amount        int unsigned not null,              -- 金额（分）
   duration_months int unsigned not null,            -- 购买月份数

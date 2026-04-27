@@ -7,21 +7,21 @@ import { formatYuan, type Plan } from "@/lib/payments/plans";
 type Props = {
   plans: Plan[];
   loggedIn: boolean;
-  primaryChannel: "lemon" | "alipay" | "wechat";
+  primaryChannel: "gumroad" | "alipay" | "wechat";
   showAltChannels: boolean;       // 是否显示支付宝 / 微信 备选按钮
 };
 
 type CheckoutResp = {
   ok: true;
   mock: boolean;
-  order: { out_trade_no: string; amount: number; duration_months: number; pay_channel: "alipay" | "wechat" | "lemon"; plan_id: string };
+  order: { out_trade_no: string; amount: number; duration_months: number; pay_channel: "alipay" | "wechat" | "gumroad"; plan_id: string };
   checkout:
     | { kind: "redirect"; payUrl: string }
     | { kind: "qrcode"; codeUrl: string };
 } | { error: string; code?: string };
 
 const CHANNEL_LABEL: Record<string, string> = {
-  lemon: "立即购买（信用卡 / PayPal / Apple Pay）",
+  gumroad: "立即购买（信用卡 / PayPal）",
   alipay: "支付宝",
   wechat: "微信支付",
 };
@@ -42,7 +42,7 @@ export function PricingCheckout({ plans, loggedIn, primaryChannel, showAltChanne
   const [polled, setPolled] = useState<"pending" | "paid" | "failed">("pending");
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const submit = async (channel: "lemon" | "alipay" | "wechat") => {
+  const submit = async (channel: "gumroad" | "alipay" | "wechat") => {
     if (!loggedIn) {
       window.location.href = `/login?redirect=/pricing`;
       return;
@@ -164,9 +164,9 @@ export function PricingCheckout({ plans, loggedIn, primaryChannel, showAltChanne
           {busy === primaryChannel ? "生成订单中..." : CHANNEL_LABEL[primaryChannel]}
         </button>
 
-        {primaryChannel === "lemon" ? (
+        {primaryChannel === "gumroad" ? (
           <p className="text-center text-[11px] text-muted">
-            支付由 LemonSqueezy 处理 · 接受全球银行卡 · 自动开发票 · 7 天内可申请退款
+            支付由 Gumroad 处理 · 接受全球银行卡 / PayPal · 自动续订 · 随时可取消
           </p>
         ) : null}
 

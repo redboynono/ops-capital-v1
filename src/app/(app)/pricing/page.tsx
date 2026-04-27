@@ -58,7 +58,7 @@ export default async function PricingPage() {
         <PricingCheckout
           plans={plans}
           loggedIn={Boolean(user)}
-          primaryChannel="lemon"
+          primaryChannel="gumroad"
           showAltChannels={false}
         />
       </section>

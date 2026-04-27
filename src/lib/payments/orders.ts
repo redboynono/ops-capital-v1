@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { getMySqlPool, mysqlQuery } from "@/lib/mysql";
 import { getPlan, type PlanId } from "@/lib/payments/plans";
 
-export type PayChannel = "alipay" | "wechat" | "lemon";
+export type PayChannel = "alipay" | "wechat" | "gumroad";
 export type OrderStatus = "pending" | "paid" | "failed";
 
 export type Order = {
@@ -136,6 +136,77 @@ export async function applyPaymentSuccess(opts: {
 
     const paidOrder = await getOrderByOutTradeNo(opts.outTradeNo);
     return { order: paidOrder!, alreadyPaid: false };
+  } catch (err) {
+    try { await conn.rollback(); } catch { /* ignore */ }
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+/**
+ * 为订阅续费 ping 创建并立即标 paid 的订单（不走 pending → paid 两步流程）。
+ * 用于 Gumroad 等订阅模式下每个 billing cycle 都会产生新 sale_id 的场景。
+ *
+ * 幂等策略：out_trade_no UNIQUE → 重复 ping 第一次成功插入，第二次 ER_DUP_ENTRY 被吞掉，
+ * 返回 alreadyExists=true，调用方跳过续期避免多扣。
+ */
+export async function createPaidOrderAndExtend(opts: {
+  outTradeNo: string;
+  userId: string;
+  channel: PayChannel;
+  planId: PlanId;
+  gatewayTradeNo: string;
+  payload: string;
+}): Promise<{ alreadyExists: boolean }> {
+  const plan = getPlan(opts.planId);
+  if (!plan) throw new Error(`unknown plan: ${opts.planId}`);
+
+  const pool = getMySqlPool();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 1) 尝试插入订单（paid）
+    const id = randomUUID();
+    try {
+      await conn.query(
+        `insert into orders
+           (id, out_trade_no, user_id, pay_channel, plan_id, amount, duration_months,
+            status, gateway_trade_no, gateway_payload, paid_at)
+         values (?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?, now())`,
+        [
+          id, opts.outTradeNo, opts.userId, opts.channel, plan.id, plan.amount,
+          plan.durationMonths, opts.gatewayTradeNo, opts.payload,
+        ],
+      );
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "ER_DUP_ENTRY") {
+        await conn.rollback();
+        return { alreadyExists: true };
+      }
+      throw err;
+    }
+
+    // 2) 续期 users（复用 applyPaymentSuccess 的续期逻辑）
+    const [userRowsRaw] = await conn.query(
+      "select subscription_end_date from users where id = ? for update",
+      [opts.userId],
+    );
+    const userRow = (userRowsRaw as { subscription_end_date: string | null }[])[0];
+    const now = new Date();
+    const currentEnd = userRow?.subscription_end_date ? new Date(userRow.subscription_end_date) : null;
+    const baseDate = currentEnd && currentEnd > now ? currentEnd : now;
+    const newEnd = addMonths(baseDate, plan.durationMonths);
+
+    await conn.query(
+      `update users set subscription_status='active', subscription_end_date=? where id=?`,
+      [formatDateTimeUTC(newEnd), opts.userId],
+    );
+
+    await conn.commit();
+    return { alreadyExists: false };
   } catch (err) {
     try { await conn.rollback(); } catch { /* ignore */ }
     throw err;

@@ -11,7 +11,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const CHANNELS: PayChannel[] = ["alipay", "wechat", "lemon"];
+const CHANNELS: PayChannel[] = ["alipay", "wechat", "gumroad"];
 
 export async function POST(req: Request) {
   const user = await getSessionUser();
