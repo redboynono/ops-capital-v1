@@ -81,7 +81,7 @@ export default async function MarketingHome() {
             <a href="#philosophy" className="hover:opacity-70">理念</a>
             <a href="#approach" className="hover:opacity-70">投资方式</a>
             <a href="#alpha" className="hover:opacity-70">OPS Alpha</a>
-            <a href="#contact" className="hover:opacity-70">联系</a>
+            <Link href="/contact" className="hover:opacity-70">联系</Link>
           </nav>
           <div className="flex items-center gap-3 text-[13px]">
             {user ? (
@@ -337,8 +337,9 @@ export default async function MarketingHome() {
           <div>
             <p className="text-[11px] tracking-[0.32em]" style={{ color: theme.gold }}>CONTACT</p>
             <ul className="mt-4 space-y-2 text-[14px]" style={{ color: "#d6d0c2" }}>
-              <li>contact@opscapital.com</li>
+              <li><a href="mailto:steven.sun@opscapital.com" className="hover:opacity-70">steven.sun@opscapital.com</a></li>
               <li>Singapore · Hong Kong</li>
+              <li><Link href="/contact" className="hover:opacity-70" style={{ color: theme.gold }}>查看全部联系方式 →</Link></li>
             </ul>
           </div>
         </div>
