@@ -16,6 +16,9 @@ export function getMySqlPool() {
     connectionLimit: 10,
     queueLimit: 0,
     timezone: "Z",
+    // 显式锁 utf8mb4，防止 server 默认连接字符集为 latin1 时
+    // 把 utf8 字节当 cp1252 重编码（曾导致 ops_picks 双重 mojibake）。
+    charset: "utf8mb4",
   });
 
   return pool;
