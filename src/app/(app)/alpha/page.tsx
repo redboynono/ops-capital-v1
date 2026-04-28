@@ -101,7 +101,7 @@ export default async function Home() {
           <div>
             <h3 className="text-[15px] font-bold text-foreground">解锁完整 Premium 研报</h3>
             <p className="mt-0.5 text-[12px] text-muted">
-              ¥50/月 · ¥500/年 · 完整分析 + 估值模型 + 每周备忘录
+              $9.99/月 · $87.99/年 · 完整分析 + 估值模型 + 每周备忘录
             </p>
           </div>
           <div className="flex gap-2">

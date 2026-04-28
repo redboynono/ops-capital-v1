@@ -45,7 +45,7 @@ export default async function PaySuccessPage({
             <dd className="font-mono">{validOrder.plan_id} · {validOrder.duration_months} 个月</dd>
 
             <dt className="text-muted">通道</dt>
-            <dd className="font-mono">{validOrder.pay_channel === "alipay" ? "支付宝" : "微信支付"}</dd>
+            <dd className="font-mono">{validOrder.pay_channel === "alipay" ? "支付宝" : validOrder.pay_channel === "wechat" ? "微信支付" : "Gumroad"}</dd>
 
             <dt className="text-muted">状态</dt>
             <dd className={`font-mono font-bold ${

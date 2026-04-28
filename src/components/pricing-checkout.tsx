@@ -7,6 +7,7 @@ import { formatYuan, type Plan } from "@/lib/payments/plans";
 type Props = {
   plans: Plan[];
   loggedIn: boolean;
+  userEmail?: string | null;       // 已登录用户的注册邮箱，用于 Gumroad 结账提醒
   primaryChannel: "gumroad" | "alipay" | "wechat";
   showAltChannels: boolean;       // 是否显示支付宝 / 微信 备选按钮
 };
@@ -26,7 +27,7 @@ const CHANNEL_LABEL: Record<string, string> = {
   wechat: "微信支付",
 };
 
-export function PricingCheckout({ plans, loggedIn, primaryChannel, showAltChannels }: Props) {
+export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, showAltChannels }: Props) {
   const [selectedPlan, setSelectedPlan] = useState<string>(
     plans.find((p) => p.highlight)?.id ?? plans[0].id,
   );
@@ -131,7 +132,7 @@ export function PricingCheckout({ plans, loggedIn, primaryChannel, showAltChanne
                   <p className="label-caps">{p.name}</p>
                   <p className="mt-1 font-mono text-3xl font-bold">{formatYuan(p.amount)}</p>
                   <p className="mt-0.5 text-[11px] text-muted">
-                    {p.durationMonths} 个月 · ¥{(p.amount / p.durationMonths / 100).toFixed(0)}/月
+                    {p.durationMonths} 个月 · ${(p.amount / p.durationMonths / 100).toFixed(2)}/月
                   </p>
                 </div>
                 {p.highlight ? <span className="badge-premium">PRO</span> : null}
@@ -165,9 +166,25 @@ export function PricingCheckout({ plans, loggedIn, primaryChannel, showAltChanne
         </button>
 
         {primaryChannel === "gumroad" ? (
-          <p className="text-center text-[11px] text-muted">
-            支付由 Gumroad 处理 · 接受全球银行卡 / PayPal · 自动续订 · 随时可取消
-          </p>
+          <>
+            {loggedIn && userEmail ? (
+              <div className="rounded border border-[color:var(--accent)]/40 bg-[color:var(--accent-soft)]/60 px-3 py-2 text-[12px]">
+                <p className="font-bold text-[color:var(--accent-strong)]">
+                  ⚠️ 结账请使用同一邮箱
+                </p>
+                <p className="mt-1 text-foreground">
+                  在 Gumroad 结账页填写邮箱时，请务必使用：
+                  <span className="mx-1 font-mono font-bold">{userEmail}</span>
+                </p>
+                <p className="mt-1 text-muted">
+                  否则 OPS Alpha 会员可能无法立即激活，需要联系客服手工对单。
+                </p>
+              </div>
+            ) : null}
+            <p className="text-center text-[11px] text-muted">
+              支付由 Gumroad 处理 · 接受全球银行卡 / PayPal · 自动续订 · 随时可取消
+            </p>
+          </>
         ) : null}
 
         {/* 备选通道（默认隐藏，仅在备案完成 / 配置生效后显示） */}

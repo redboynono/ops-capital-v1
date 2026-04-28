@@ -9,7 +9,7 @@ const pages: { k: string; label: string; href: string; desc: string }[] = [
   { k: "F4", label: "SCRN",  href: "/tickers",             desc: "标的索引：按交易所分组的全部 ticker" },
   { k: "F5", label: "WATCH", href: "/dashboard/watchlist", desc: "自选股清单" },
   { k: "F6", label: "ACCT",  href: "/dashboard",           desc: "会员桌面：订阅状态 + 收藏 + 阅读历史 + 自选概览" },
-  { k: "F7", label: "SUB",   href: "/pricing",             desc: "订阅方案（¥50/月 · ¥500/年）" },
+  { k: "F7", label: "SUB",   href: "/pricing",             desc: "订阅方案（$9.99/月 · $87.99/年，含 1 周免费试用）" },
   { k: "F8", label: "HELP",  href: "/help",                desc: "本页：使用说明" },
 ];
 

@@ -10,6 +10,24 @@ import {
   GumroadConfigError,
 } from "@/lib/payments/gumroad";
 import type { PlanId } from "@/lib/payments/plans";
+import { mysqlQuery } from "@/lib/mysql";
+
+/** 通过 email 反查 opscapital.com 注册用户（兜底：当 url_params 缺失时使用） */
+async function findUserIdByEmail(email: string): Promise<string | null> {
+  const rows = await mysqlQuery<{ id: string }[]>(
+    "select id from users where lower(email) = lower(?) limit 1",
+    [email],
+  );
+  return rows[0]?.id ?? null;
+}
+
+/** 从 product_permalink 推断 plan_id（env 配置的 3 个 permalink 反向查）*/
+function planIdFromPermalink(permalink: string): PlanId | null {
+  if (permalink === process.env.GUMROAD_PERMALINK_MONTH) return "month";
+  if (permalink === process.env.GUMROAD_PERMALINK_QUARTER) return "quarter";
+  if (permalink === process.env.GUMROAD_PERMALINK_YEAR) return "year";
+  return null;
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,10 +98,33 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 支付成功：分首次 / 续费两条路径
-  const { out_trade_no: originalOutTradeNo, user_id: userId, plan_id: planId } = ping.url_params;
-  if (!userId || !planId) {
-    console.warn("[gumroad ping] missing url_params.user_id/plan_id:", ping.url_params);
-    return new Response("missing url_params", { status: 400 });
+  // ─── 找用户：优先用 url_params（理论值），否则用 email 兜底匹配 ───
+  // Gumroad 的 /l/<permalink>?wanted=true 跳转流不保留自定义 URL params，
+  // 实际生产中 url_params 多半是空的，所以 email 兜底是主路径。
+  const originalOutTradeNo = ping.url_params.out_trade_no;
+  let userId: string | null = ping.url_params.user_id ?? null;
+  if (!userId && ping.email) {
+    userId = await findUserIdByEmail(ping.email);
+  }
+  if (!userId) {
+    console.warn(
+      "[gumroad ping] cannot resolve user (url_params.user_id missing AND no matching email):",
+      { email: ping.email, url_params: ping.url_params, sale_id: ping.sale_id },
+    );
+    // 不重试，返回 200 让 Gumroad 不再发；运营手工跟进
+    return new Response("user not found", { status: 200 });
+  }
+
+  // ─── 找 plan：优先用 url_params，否则用 product_permalink 反查 ───
+  const planId =
+    (ping.url_params.plan_id as PlanId | undefined) ??
+    planIdFromPermalink(ping.product_permalink);
+  if (!planId) {
+    console.warn(
+      "[gumroad ping] cannot resolve plan_id from permalink:",
+      ping.product_permalink,
+    );
+    return new Response("plan not found", { status: 200 });
   }
 
   const gatewayTradeNo = `GMRD-${ping.sale_id}`;
@@ -102,13 +143,15 @@ export async function POST(req: Request): Promise<Response> {
       }
     }
 
-    // 续费 / 无 pending order 的场景：合成新 out_trade_no 直接建 paid 订单
-    const syntheticOutTradeNo = gatewayTradeNo;  // "GMRD-<sale_id>"，随 sale 唯一
+    // 兜底路径：合成 out_trade_no 直建 paid 订单
+    // 适用于：续费 ping、url_params 丢失的首次购买
+    // 幂等：out_trade_no UNIQUE → Gumroad 重试同一 sale_id 不会双扣
+    const syntheticOutTradeNo = gatewayTradeNo;  // "GMRD-<sale_id>"
     await createPaidOrderAndExtend({
       outTradeNo: syntheticOutTradeNo,
       userId,
       channel: "gumroad",
-      planId: planId as PlanId,
+      planId,
       gatewayTradeNo,
       payload: rawBody,
     });
