@@ -90,6 +90,9 @@ export default async function PickDetailPage({
               targetPrice: pick.target_price,
               stopPrice: pick.stop_price,
               currentPrice: perf.currentPrice,
+              thesisMd: canViewFull ? pick.thesis_md : null,
+              catalystsMd: canViewFull ? pick.catalysts_md : null,
+              risksMd: canViewFull ? pick.risks_md : null,
             }}
             urlPath={`/picks/${pick.slug}`}
             fileNamePrefix={`ops_picks_${pick.ticker_symbol}`}

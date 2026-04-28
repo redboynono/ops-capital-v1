@@ -73,6 +73,7 @@ export default async function NewsDetailPage({
               kind: "news",
               title: post.title,
               excerpt: post.excerpt,
+              content: post.content,
               tickers: tickers.map((t) => t.symbol),
               createdAt: post.created_at,
             }}

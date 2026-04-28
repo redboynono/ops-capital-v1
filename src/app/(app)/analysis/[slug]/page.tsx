@@ -83,6 +83,7 @@ export default async function AnalysisDetailPage({
               kind: "analysis",
               title: post.title,
               excerpt: post.excerpt,
+              content: canViewFull ? post.content : null,
               tickers: tickers.map((t) => t.symbol),
               createdAt: post.created_at,
             }}

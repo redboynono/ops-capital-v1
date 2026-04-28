@@ -1,51 +1,50 @@
 "use client";
 
-import { QRCodeSVG } from "qrcode.react";
-import { forwardRef } from "react";
-
 /**
- * 小红书竖版分享海报：1080 × 1440 (3:4)
- * 两种内容类型：post（文章/快讯）、pick（OPS Picks 荐股）
+ * 单张幻灯片的视觉渲染：1080×1440 暗黑金融终端风。
+ * 由 share-slides.ts 的 Slide 联合类型驱动，全部 inline style 以保证 html-to-image 可靠捕获。
  */
 
-export type PostPoster = {
-  type: "post";
-  kind: "analysis" | "news";
-  title: string;
-  excerpt?: string | null;
-  tickers?: string[];
-  createdAt?: string;
-  url: string;
+import { QRCodeSVG } from "qrcode.react";
+import type { CSSProperties } from "react";
+import type { Slide } from "./share-slides";
+
+const W = 1080;
+const H = 1440;
+
+const C = {
+  ink: "#0a0a0a",
+  inkSoft: "#141414",
+  inkPanel: "#0d0c0a",
+  border: "#2a2620",
+  borderStrong: "#3a342a",
+  text: "#f3ede0",
+  textDim: "#d9d0bd",
+  muted: "#9a9284",
+  mutedSoft: "#7a7468",
+  gold: "#c9a15a",
+  goldSoft: "#8c7142",
+  success: "#36c26a",
+  danger: "#e0516e",
 };
 
-export type PickPoster = {
-  type: "pick";
-  symbol: string;
-  title: string;
-  subtitle?: string | null;
-  conviction?: "high" | "medium" | "low";
-  status: "open" | "closed" | "stopped";
-  unrealizedPct?: number | null;
-  realizedPct?: number | null;
-  entryPrice: number;
-  entryDate: string;
-  targetPrice?: number | null;
-  stopPrice?: number | null;
-  currentPrice?: number | null;
-  url: string;
+const FONT_SANS =
+  '"PingFang SC", "Noto Sans SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", Arial, sans-serif';
+const FONT_MONO =
+  '"JetBrains Mono", "SF Mono", "Roboto Mono", Menlo, Consolas, monospace';
+
+const baseStyle: CSSProperties = {
+  width: W,
+  height: H,
+  background: `radial-gradient(ellipse at 18% 0%, #1a1610 0%, ${C.ink} 60%), ${C.ink}`,
+  color: C.text,
+  fontFamily: FONT_SANS,
+  position: "relative",
+  overflow: "hidden",
+  display: "flex",
+  flexDirection: "column",
+  boxSizing: "border-box",
 };
-
-export type PosterData = PostPoster | PickPoster;
-
-const GOLD = "#c9a15a";
-const GOLD_SOFT = "#8c7142";
-const INK = "#0a0a0a";
-const INK_SOFT = "#141414";
-const BORDER = "#2a2620";
-const TEXT = "#f3ede0";
-const MUTED = "#9a9284";
-const SUCCESS = "#36c26a";
-const DANGER = "#e0516e";
 
 function fmtPct(n: number | null | undefined): string {
   if (n == null || !isFinite(n)) return "—";
@@ -57,391 +56,672 @@ function fmtPrice(n: number | null | undefined): string {
   if (n >= 10) return n.toFixed(2);
   return n.toFixed(3);
 }
-function returnColor(n: number | null | undefined): string {
-  if (n == null) return MUTED;
-  if (n > 0) return SUCCESS;
-  if (n < 0) return DANGER;
-  return TEXT;
+function pctColor(n: number | null | undefined): string {
+  if (n == null) return C.muted;
+  if (n > 0) return C.success;
+  if (n < 0) return C.danger;
+  return C.text;
 }
 
-export const SharePoster = forwardRef<HTMLDivElement, { data: PosterData }>(function SharePoster(
-  { data },
-  ref,
-) {
-  const timestamp = new Date().toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
+/** 顶部 brand 条，所有 slide 共用 */
+function BrandBar({ label, right }: { label: string; right?: string }) {
   return (
     <div
-      ref={ref}
       style={{
-        width: 1080,
-        height: 1440,
-        background: `radial-gradient(ellipse at 20% 0%, #1a1610 0%, ${INK} 55%), ${INK}`,
-        color: TEXT,
-        fontFamily:
-          '"PingFang SC", "Noto Sans SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
-        position: "relative",
-        overflow: "hidden",
+        padding: "52px 72px 0",
         display: "flex",
-        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "space-between",
       }}
     >
-      {/* subtle gold glow */}
-      <div
-        style={{
-          position: "absolute",
-          top: -200,
-          right: -200,
-          width: 600,
-          height: 600,
-          borderRadius: "50%",
-          background: `radial-gradient(circle, ${GOLD}22 0%, transparent 60%)`,
-          pointerEvents: "none",
-        }}
-      />
-
-      {/* Top bar */}
-      <header
-        style={{
-          padding: "60px 72px 0",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          zIndex: 1,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-          <span style={{ color: GOLD, fontSize: 44 }}>◆</span>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span
-              style={{
-                fontSize: 28,
-                fontWeight: 900,
-                letterSpacing: "0.22em",
-                color: TEXT,
-              }}
-            >
-              OPS ALPHA TERMINAL
-            </span>
-            <span
-              style={{
-                fontSize: 16,
-                letterSpacing: "0.3em",
-                color: GOLD_SOFT,
-                fontWeight: 600,
-              }}
-            >
-              RESEARCH · DISCIPLINE · ALPHA
-            </span>
-          </div>
-        </div>
-        <span style={{ fontSize: 18, color: MUTED, letterSpacing: "0.08em" }}>{timestamp}</span>
-      </header>
-
-      {/* Main content */}
-      <main
-        style={{
-          flex: 1,
-          padding: "80px 72px 40px",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          zIndex: 1,
-        }}
-      >
-        {data.type === "post" ? <PostBody data={data} /> : <PickBody data={data} />}
-      </main>
-
-      {/* Bottom CTA + QR */}
-      <footer
-        style={{
-          borderTop: `1px solid ${BORDER}`,
-          background: INK_SOFT,
-          padding: "48px 72px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 40,
-          zIndex: 1,
-        }}
-      >
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
-          <span
-            style={{
-              fontSize: 14,
-              letterSpacing: "0.32em",
-              color: GOLD,
-              fontWeight: 700,
-            }}
-          >
-            SCAN TO UNLOCK
-          </span>
-          <span
-            style={{
-              fontSize: 32,
-              fontWeight: 800,
-              color: TEXT,
-              lineHeight: 1.3,
-              letterSpacing: "0.01em",
-            }}
-          >
-            扫描二维码
-            <br />
-            解锁机构级超额收益
-          </span>
-          <span style={{ fontSize: 16, color: MUTED, marginTop: 6 }}>opscapital.com</span>
-        </div>
-        <div
-          style={{
-            background: TEXT,
-            padding: 18,
-            borderRadius: 8,
-            lineHeight: 0,
-          }}
-        >
-          <QRCodeSVG value={data.url} size={180} level="M" includeMargin={false} fgColor={INK} />
-        </div>
-      </footer>
-    </div>
-  );
-});
-
-function PostBody({ data }: { data: PostPoster }) {
-  const label = data.kind === "analysis" ? "深度研报" : "市场快讯";
-  return (
-    <>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <span style={{ color: C.gold, fontSize: 36 }}>◆</span>
         <span
           style={{
-            fontSize: 20,
+            fontSize: 22,
             fontWeight: 800,
-            letterSpacing: "0.18em",
-            color: INK,
-            background: GOLD,
-            padding: "8px 18px",
-            borderRadius: 2,
+            letterSpacing: "0.24em",
+            color: C.text,
           }}
         >
           {label}
         </span>
-        {data.tickers?.slice(0, 4).map((t) => (
-          <span
-            key={t}
-            style={{
-              fontSize: 20,
-              fontFamily: '"JetBrains Mono", "SF Mono", monospace',
-              fontWeight: 700,
-              color: GOLD,
-              border: `1.5px solid ${GOLD_SOFT}`,
-              padding: "6px 14px",
-              borderRadius: 2,
-              letterSpacing: "0.05em",
-            }}
-          >
-            {t}
-          </span>
-        ))}
       </div>
-      <h1
-        style={{
-          marginTop: 44,
-          fontSize: data.title.length > 30 ? 60 : 72,
-          fontWeight: 900,
-          lineHeight: 1.22,
-          letterSpacing: "0.01em",
-          color: TEXT,
-        }}
-      >
-        {data.title}
-      </h1>
-      {data.excerpt ? (
-        <div style={{ marginTop: 52, borderLeft: `4px solid ${GOLD}`, paddingLeft: 28 }}>
-          <span
-            style={{
-              display: "block",
-              fontSize: 14,
-              letterSpacing: "0.32em",
-              color: GOLD,
-              fontWeight: 700,
-              marginBottom: 14,
-            }}
-          >
-            BLUF · BOTTOM LINE UP FRONT
-          </span>
-          <p
-            style={{
-              fontSize: 30,
-              lineHeight: 1.65,
-              color: "#d9d0bd",
-              // 限制到约 4 行
-              display: "-webkit-box",
-              WebkitLineClamp: 5,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {data.excerpt}
-          </p>
-        </div>
+      {right ? (
+        <span style={{ fontSize: 16, color: C.muted, letterSpacing: "0.08em" }}>{right}</span>
       ) : null}
-    </>
+    </div>
   );
 }
 
-function PickBody({ data }: { data: PickPoster }) {
-  const displayPct = data.status === "open" ? data.unrealizedPct : data.realizedPct;
-  const pctLabel = data.status === "open" ? "浮动收益" : "实现收益";
-  const convictionLabel =
-    data.conviction === "high" ? "高信念" : data.conviction === "low" ? "低信念" : "中等信念";
-
+/** 底部金色细线 + 页码标签 */
+function FooterStrip({ pageInfo, hint }: { pageInfo?: string; hint?: string }) {
   return (
-    <>
-      {/* Ticker header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+    <div
+      style={{
+        padding: "0 72px 52px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginTop: "auto",
+      }}
+    >
+      <div
+        style={{
+          height: 2,
+          flex: 1,
+          background: `linear-gradient(90deg, ${C.goldSoft}, transparent 80%)`,
+        }}
+      />
+      <span
+        style={{
+          marginLeft: 20,
+          fontSize: 14,
+          letterSpacing: "0.32em",
+          color: C.gold,
+          fontWeight: 700,
+        }}
+      >
+        {hint ?? "继续滑动 →"}
+      </span>
+      {pageInfo ? (
         <span
           style={{
-            fontSize: 20,
-            fontWeight: 800,
-            letterSpacing: "0.18em",
-            color: INK,
-            background: GOLD,
-            padding: "8px 18px",
-            borderRadius: 2,
+            marginLeft: 20,
+            fontSize: 14,
+            letterSpacing: "0.16em",
+            color: C.muted,
+            fontFamily: FONT_MONO,
+            fontWeight: 600,
           }}
         >
-          OPS PICKS
+          {pageInfo}
         </span>
-        <span
+      ) : null}
+    </div>
+  );
+}
+
+function GoldGlow() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: -240,
+        right: -240,
+        width: 700,
+        height: 700,
+        borderRadius: "50%",
+        background: `radial-gradient(circle, ${C.gold}1f 0%, transparent 60%)`,
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
+
+/* =========================================================================
+ * Slide variants
+ * ======================================================================= */
+
+function PostCover({ slide }: { slide: Extract<Slide, { kind: "post-cover" }> }) {
+  return (
+    <div style={baseStyle}>
+      <GoldGlow />
+      <BrandBar label={slide.brand} right={slide.meta} />
+
+      <div
+        style={{
+          padding: "120px 72px 40px",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          gap: 56,
+        }}
+      >
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+          <span
+            style={{
+              fontSize: 22,
+              fontWeight: 800,
+              letterSpacing: "0.22em",
+              color: C.ink,
+              background: C.gold,
+              padding: "10px 22px",
+            }}
+          >
+            {slide.kindLabel}
+          </span>
+          {slide.tickers.slice(0, 4).map((t) => (
+            <span
+              key={t}
+              style={{
+                fontSize: 22,
+                fontFamily: FONT_MONO,
+                fontWeight: 700,
+                color: C.gold,
+                border: `1.5px solid ${C.goldSoft}`,
+                padding: "8px 18px",
+                letterSpacing: "0.06em",
+              }}
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+
+        <h1
           style={{
+            fontSize: slide.title.length > 28 ? 76 : 92,
+            fontWeight: 900,
+            lineHeight: 1.18,
+            letterSpacing: "0.005em",
+            color: C.text,
+            margin: 0,
+          }}
+        >
+          {slide.title}
+        </h1>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 18,
+            color: C.muted,
             fontSize: 18,
-            fontWeight: 700,
-            color: GOLD,
-            border: `1.5px solid ${GOLD_SOFT}`,
-            padding: "6px 14px",
             letterSpacing: "0.08em",
           }}
         >
-          {convictionLabel}
-        </span>
+          <span style={{ height: 1, width: 60, background: C.goldSoft }} />
+          <span style={{ color: C.gold, fontWeight: 700, letterSpacing: "0.32em" }}>
+            RESEARCH · DISCIPLINE · ALPHA
+          </span>
+        </div>
       </div>
 
-      {/* Ticker + Return hero */}
-      <div style={{ marginTop: 40, display: "flex", alignItems: "flex-end", gap: 40 }}>
-        <div style={{ flex: 1 }}>
-          <div
+      <FooterStrip hint="向右滑动查看 BLUF →" />
+    </div>
+  );
+}
+
+function PickCover({ slide }: { slide: Extract<Slide, { kind: "pick-cover" }> }) {
+  return (
+    <div style={baseStyle}>
+      <GoldGlow />
+      <BrandBar label={slide.brand} right="OPS PICKS" />
+
+      <div
+        style={{
+          padding: "80px 72px 40px",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          gap: 36,
+        }}
+      >
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+          <span
             style={{
-              fontFamily: '"JetBrains Mono", "SF Mono", monospace',
-              fontSize: 140,
+              fontSize: 22,
+              fontWeight: 800,
+              letterSpacing: "0.22em",
+              color: C.ink,
+              background: C.gold,
+              padding: "10px 22px",
+            }}
+          >
+            {slide.statusLabel}
+          </span>
+          <span
+            style={{
+              fontSize: 20,
+              fontWeight: 700,
+              color: C.gold,
+              border: `1.5px solid ${C.goldSoft}`,
+              padding: "8px 18px",
+              letterSpacing: "0.1em",
+            }}
+          >
+            {slide.convictionLabel}
+          </span>
+        </div>
+
+        <div
+          style={{
+            fontFamily: FONT_MONO,
+            fontSize: 220,
+            fontWeight: 900,
+            lineHeight: 0.95,
+            color: C.text,
+            letterSpacing: "-0.03em",
+          }}
+        >
+          {slide.symbol}
+        </div>
+
+        <h1
+          style={{
+            fontSize: 56,
+            fontWeight: 800,
+            lineHeight: 1.25,
+            color: C.text,
+            margin: 0,
+          }}
+        >
+          {slide.title}
+        </h1>
+
+        {slide.subtitle ? (
+          <p
+            style={{
+              fontSize: 28,
+              lineHeight: 1.55,
+              color: C.textDim,
+              margin: 0,
+            }}
+          >
+            {slide.subtitle}
+          </p>
+        ) : null}
+      </div>
+
+      <FooterStrip hint="向右滑动查看仓位数据 →" />
+    </div>
+  );
+}
+
+function Bluf({ slide }: { slide: Extract<Slide, { kind: "bluf" }> }) {
+  return (
+    <div style={baseStyle}>
+      <GoldGlow />
+      <BrandBar label={slide.brand} right="BLUF" />
+
+      <div
+        style={{
+          padding: "80px 72px 40px",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          gap: 48,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          <span style={{ color: C.gold, fontSize: 28 }}>◆</span>
+          <span
+            style={{
+              fontSize: 18,
+              letterSpacing: "0.32em",
+              color: C.gold,
+              fontWeight: 800,
+            }}
+          >
+            BOTTOM LINE UP FRONT
+          </span>
+        </div>
+
+        <h2
+          style={{
+            fontSize: 38,
+            fontWeight: 700,
+            color: C.muted,
+            lineHeight: 1.3,
+            margin: 0,
+          }}
+        >
+          {slide.title}
+        </h2>
+
+        <div style={{ borderLeft: `4px solid ${C.gold}`, paddingLeft: 36 }}>
+          <p
+            style={{
+              fontSize: 44,
+              lineHeight: 1.55,
+              color: C.text,
+              fontWeight: 600,
+              margin: 0,
+              letterSpacing: "0.005em",
+            }}
+          >
+            {slide.bluf}
+          </p>
+        </div>
+
+        {slide.tickers.length > 0 ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+            {slide.tickers.slice(0, 5).map((t) => (
+              <span
+                key={t}
+                style={{
+                  fontSize: 20,
+                  fontFamily: FONT_MONO,
+                  fontWeight: 700,
+                  color: C.gold,
+                  border: `1.5px solid ${C.goldSoft}`,
+                  padding: "8px 18px",
+                  letterSpacing: "0.06em",
+                }}
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <FooterStrip />
+    </div>
+  );
+}
+
+function Stats({ slide }: { slide: Extract<Slide, { kind: "stats" }> }) {
+  return (
+    <div style={baseStyle}>
+      <GoldGlow />
+      <BrandBar label={slide.brand} right="POSITION DATA" />
+
+      <div
+        style={{
+          padding: "80px 72px 40px",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          gap: 60,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 40 }}>
+          <span
+            style={{
+              fontFamily: FONT_MONO,
+              fontSize: 130,
               fontWeight: 900,
               lineHeight: 1,
-              color: TEXT,
+              color: C.text,
               letterSpacing: "-0.02em",
             }}
           >
-            {data.symbol}
+            {slide.symbol}
+          </span>
+          <div style={{ marginLeft: "auto", textAlign: "right" }}>
+            <div
+              style={{
+                fontSize: 18,
+                letterSpacing: "0.28em",
+                color: C.muted,
+                fontWeight: 700,
+                marginBottom: 12,
+              }}
+            >
+              {slide.pctLabel}
+            </div>
+            <div
+              style={{
+                fontFamily: FONT_MONO,
+                fontSize: 130,
+                fontWeight: 900,
+                lineHeight: 1,
+                color: pctColor(slide.pct),
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {fmtPct(slide.pct)}
+            </div>
           </div>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div
-            style={{
-              fontSize: 16,
-              letterSpacing: "0.28em",
-              color: MUTED,
-              fontWeight: 600,
-              marginBottom: 10,
-            }}
-          >
-            {pctLabel}
-          </div>
-          <div
-            style={{
-              fontFamily: '"JetBrains Mono", "SF Mono", monospace',
-              fontSize: 110,
-              fontWeight: 900,
-              lineHeight: 1,
-              color: returnColor(displayPct),
-              letterSpacing: "-0.01em",
-            }}
-          >
-            {fmtPct(displayPct)}
-          </div>
+
+        {/* Price grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr 1fr",
+            border: `1px solid ${C.border}`,
+            background: C.inkPanel,
+          }}
+        >
+          {[
+            { label: "入场价", value: fmtPrice(slide.entry), sub: slide.entryDate, color: C.text },
+            {
+              label: "现价",
+              value: fmtPrice(slide.current),
+              sub: "Live",
+              color: pctColor(slide.pct),
+            },
+            { label: "目标价", value: fmtPrice(slide.target), sub: "Target", color: C.success },
+            { label: "止损价", value: fmtPrice(slide.stop), sub: "Stop", color: C.danger },
+          ].map((cell, i) => (
+            <div
+              key={cell.label}
+              style={{
+                padding: "32px 26px",
+                borderRight: i < 3 ? `1px solid ${C.border}` : undefined,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 14,
+                  letterSpacing: "0.26em",
+                  color: C.muted,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                }}
+              >
+                {cell.label}
+              </div>
+              <div
+                style={{
+                  marginTop: 14,
+                  fontFamily: FONT_MONO,
+                  fontSize: 42,
+                  fontWeight: 800,
+                  color: cell.color,
+                  lineHeight: 1.05,
+                }}
+              >
+                {cell.value}
+              </div>
+              <div style={{ marginTop: 8, fontSize: 14, color: C.mutedSoft }}>{cell.sub}</div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Title */}
-      <h1
-        style={{
-          marginTop: 40,
-          fontSize: 44,
-          fontWeight: 800,
-          lineHeight: 1.3,
-          color: TEXT,
-        }}
-      >
-        {data.title}
-      </h1>
+      <FooterStrip />
+    </div>
+  );
+}
 
-      {/* Price grid */}
+function Body({ slide }: { slide: Extract<Slide, { kind: "body" }> }) {
+  return (
+    <div style={baseStyle}>
+      <GoldGlow />
+      <BrandBar label={slide.brand} right={slide.sectionLabel} />
+
       <div
         style={{
-          marginTop: 56,
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr 1fr",
-          border: `1px solid ${BORDER}`,
-          background: "#0d0c0a",
+          padding: "70px 72px 40px",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          gap: 44,
         }}
       >
-        {[
-          { label: "入场价", value: fmtPrice(data.entryPrice), sub: data.entryDate },
-          {
-            label: "现价",
-            value: fmtPrice(data.currentPrice),
-            sub: "Live",
-            accent: returnColor(displayPct),
-          },
-          { label: "目标价", value: fmtPrice(data.targetPrice), sub: "Target" },
-          { label: "止损价", value: fmtPrice(data.stopPrice), sub: "Stop", accent: DANGER },
-        ].map((cell, i) => (
-          <div
-            key={cell.label}
-            style={{
-              padding: "28px 24px",
-              borderRight: i < 3 ? `1px solid ${BORDER}` : undefined,
-            }}
-          >
+        {slide.heading ? (
+          <div>
             <div
               style={{
                 fontSize: 14,
-                letterSpacing: "0.24em",
-                color: MUTED,
-                fontWeight: 600,
-                textTransform: "uppercase",
+                letterSpacing: "0.32em",
+                color: C.gold,
+                fontWeight: 800,
+                marginBottom: 18,
               }}
             >
-              {cell.label}
+              SECTION
             </div>
+            <h2
+              style={{
+                fontSize: 60,
+                fontWeight: 900,
+                lineHeight: 1.15,
+                color: C.text,
+                margin: 0,
+                letterSpacing: "0.005em",
+              }}
+            >
+              {slide.heading}
+            </h2>
             <div
               style={{
-                marginTop: 10,
-                fontFamily: '"JetBrains Mono", "SF Mono", monospace',
-                fontSize: 38,
-                fontWeight: 800,
-                color: cell.accent ?? TEXT,
-                lineHeight: 1.1,
+                marginTop: 24,
+                height: 2,
+                width: 120,
+                background: C.gold,
+              }}
+            />
+          </div>
+        ) : null}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 32, flex: 1 }}>
+          {slide.paragraphs.map((p, i) => (
+            <p
+              key={i}
+              style={{
+                fontSize: 30,
+                lineHeight: 1.7,
+                color: C.textDim,
+                margin: 0,
+                letterSpacing: "0.005em",
               }}
             >
-              {cell.value}
-            </div>
-            <div style={{ marginTop: 6, fontSize: 14, color: MUTED }}>{cell.sub}</div>
-          </div>
-        ))}
+              {p}
+            </p>
+          ))}
+        </div>
       </div>
-    </>
+
+      <FooterStrip pageInfo={`${slide.pageNum} / ${slide.pageTotal}`} />
+    </div>
   );
+}
+
+function Cta({ slide }: { slide: Extract<Slide, { kind: "cta" }> }) {
+  return (
+    <div style={baseStyle}>
+      <GoldGlow />
+      <BrandBar label={slide.brand} />
+
+      <div
+        style={{
+          padding: "120px 72px 40px",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          gap: 64,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 60 }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 24 }}>
+            <span
+              style={{
+                fontSize: 18,
+                letterSpacing: "0.32em",
+                color: C.gold,
+                fontWeight: 800,
+              }}
+            >
+              SCAN TO UNLOCK
+            </span>
+            <h2
+              style={{
+                fontSize: 56,
+                fontWeight: 900,
+                lineHeight: 1.25,
+                color: C.text,
+                margin: 0,
+                letterSpacing: "0.005em",
+              }}
+            >
+              扫描二维码
+              <br />
+              解锁完整估值模型
+              <br />
+              与机构级交易纪律
+            </h2>
+            <span
+              style={{
+                fontSize: 22,
+                color: C.muted,
+                fontFamily: FONT_MONO,
+                marginTop: 12,
+                letterSpacing: "0.05em",
+              }}
+            >
+              opscapital.com
+            </span>
+          </div>
+          <div
+            style={{
+              background: C.text,
+              padding: 28,
+              borderRadius: 8,
+              lineHeight: 0,
+              flexShrink: 0,
+            }}
+          >
+            <QRCodeSVG
+              value={slide.url}
+              size={300}
+              level="M"
+              includeMargin={false}
+              fgColor={C.ink}
+            />
+          </div>
+        </div>
+
+        <div
+          style={{
+            borderTop: `1px solid ${C.border}`,
+            paddingTop: 32,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <span
+            style={{
+              fontSize: 16,
+              letterSpacing: "0.18em",
+              color: C.goldSoft,
+              fontWeight: 700,
+            }}
+          >
+            RESEARCH-DRIVEN · GLOBAL TECH · DIGITAL ASSETS
+          </span>
+          <span style={{ fontSize: 16, color: C.mutedSoft }}>Singapore · Hong Kong</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Public: render one slide variant */
+export function SlideContent({ slide }: { slide: Slide }) {
+  switch (slide.kind) {
+    case "post-cover":
+      return <PostCover slide={slide} />;
+    case "pick-cover":
+      return <PickCover slide={slide} />;
+    case "bluf":
+      return <Bluf slide={slide} />;
+    case "stats":
+      return <Stats slide={slide} />;
+    case "body":
+      return <Body slide={slide} />;
+    case "cta":
+      return <Cta slide={slide} />;
+  }
 }
