@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { BookmarkButton } from "@/components/bookmark-button";
+import { ShareButton } from "@/components/share/share-button";
 import { getSessionUser } from "@/lib/auth";
 import { isBookmarked, recordRead } from "@/lib/me";
 import { getCurrentUserSubscriptionStatus, getPostBySlug } from "@/lib/posts";
@@ -74,6 +75,20 @@ export default async function AnalysisDetailPage({
           <span className="text-[12px] font-semibold">Ops Alpha AI · 编辑精选</span>
           <span className="mx-2 h-3 w-px bg-border" />
           {user ? <BookmarkButton postId={post.id} initialBookmarked={bookmarked} /> : null}
+          <span className="mx-2 h-3 w-px bg-border" />
+          <ShareButton
+            variant="button"
+            data={{
+              type: "post",
+              kind: "analysis",
+              title: post.title,
+              excerpt: post.excerpt,
+              tickers: tickers.map((t) => t.symbol),
+              createdAt: post.created_at,
+            }}
+            urlPath={`/analysis/${post.slug}`}
+            fileNamePrefix={`ops_alpha_${post.slug}`}
+          />
         </div>
       </header>
 

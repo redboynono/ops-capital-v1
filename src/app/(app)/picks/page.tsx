@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ShareButton } from "@/components/share/share-button";
 import { computeManyPerformance, computePortfolio, listPublishedPicks, type Pick, type PickPerformance } from "@/lib/picks";
 
 export const dynamic = "force-dynamic";
@@ -44,12 +45,37 @@ function returnClass(pct: number | null | undefined): string {
 }
 
 function OpenCard({ pick, perf }: { pick: Pick; perf: PickPerformance }) {
+  const href = `/picks/${pick.slug}`;
   return (
-    <Link
-      href={`/picks/${pick.slug}`}
-      className="card block p-4 transition hover:border-accent hover:-translate-y-0.5"
-    >
-      <div className="flex items-start justify-between gap-3">
+    <div className="card relative block p-4 transition hover:border-accent hover:-translate-y-0.5">
+      {/* Share button sits above the stretched link */}
+      <div className="absolute right-2 top-2 z-10">
+        <ShareButton
+          variant="icon-compact"
+          data={{
+            type: "pick",
+            symbol: pick.ticker_symbol,
+            title: pick.title,
+            subtitle: pick.subtitle,
+            conviction: pick.conviction,
+            status: pick.status,
+            unrealizedPct: perf.unrealizedPct,
+            realizedPct: perf.realizedPct,
+            entryPrice: pick.entry_price,
+            entryDate: new Date(pick.entry_date).toISOString().slice(0, 10),
+            targetPrice: pick.target_price,
+            stopPrice: pick.stop_price,
+            currentPrice: perf.currentPrice,
+          }}
+          urlPath={href}
+          fileNamePrefix={`ops_picks_${pick.ticker_symbol}`}
+        />
+      </div>
+
+      {/* Stretched link covers the card (minus share button area) */}
+      <Link href={href} className="absolute inset-0 z-0" aria-label={pick.title} />
+
+      <div className="relative flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <span className="font-mono text-[16px] font-bold text-accent-strong">{pick.ticker_symbol}</span>
@@ -61,12 +87,12 @@ function OpenCard({ pick, perf }: { pick: Pick; perf: PickPerformance }) {
             <p className="mt-0.5 text-[11px] text-muted">{pick.subtitle}</p>
           ) : null}
         </div>
-        <div className={`text-right font-mono text-[20px] font-bold ${returnClass(perf.unrealizedPct)}`}>
+        <div className={`mr-7 text-right font-mono text-[20px] font-bold ${returnClass(perf.unrealizedPct)}`}>
           {fmtPct(perf.unrealizedPct)}
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-4 gap-2 border-t border-border pt-3 text-[11px]">
+      <div className="relative mt-3 grid grid-cols-4 gap-2 border-t border-border pt-3 text-[11px]">
         <div>
           <p className="label-caps text-[9px]">入场</p>
           <p className="mt-0.5 font-mono font-semibold">{fmtPrice(pick.entry_price)}</p>
@@ -94,7 +120,7 @@ function OpenCard({ pick, perf }: { pick: Pick; perf: PickPerformance }) {
           <p className="font-mono text-[9px] text-muted">{pick.horizon_months}M</p>
         </div>
       </div>
-    </Link>
+    </div>
   );
 }
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ShareButton } from "@/components/share/share-button";
 import { getCurrentUserSubscriptionStatus } from "@/lib/posts";
 import { computePerformance, getPickBySlug } from "@/lib/picks";
 
@@ -72,12 +73,34 @@ export default async function PickDetailPage({
           <span className="mx-1">/</span>
           <span className="font-mono">{pick.ticker_symbol}</span>
         </div>
-        <Link
-          href={toggleHref}
-          className="rounded-sm border border-border px-2 py-0.5 font-mono text-[11px] hover:border-accent hover:text-accent-strong"
-        >
-          {readerMode ? "☾ 终端视图" : "☀ 阅读模式"}
-        </Link>
+        <div className="flex items-center gap-2">
+          <ShareButton
+            variant="button"
+            data={{
+              type: "pick",
+              symbol: pick.ticker_symbol,
+              title: pick.title,
+              subtitle: pick.subtitle,
+              conviction: pick.conviction,
+              status: pick.status,
+              unrealizedPct: perf.unrealizedPct,
+              realizedPct: perf.realizedPct,
+              entryPrice: pick.entry_price,
+              entryDate: new Date(pick.entry_date).toISOString().slice(0, 10),
+              targetPrice: pick.target_price,
+              stopPrice: pick.stop_price,
+              currentPrice: perf.currentPrice,
+            }}
+            urlPath={`/picks/${pick.slug}`}
+            fileNamePrefix={`ops_picks_${pick.ticker_symbol}`}
+          />
+          <Link
+            href={toggleHref}
+            className="rounded-sm border border-border px-2 py-0.5 font-mono text-[11px] hover:border-accent hover:text-accent-strong"
+          >
+            {readerMode ? "☾ 终端视图" : "☀ 阅读模式"}
+          </Link>
+        </div>
       </nav>
 
       <div className={readerMode ? "reader-mode mt-3" : "mt-3"}>

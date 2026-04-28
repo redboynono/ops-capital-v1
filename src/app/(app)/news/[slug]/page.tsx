@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { BookmarkButton } from "@/components/bookmark-button";
+import { ShareButton } from "@/components/share/share-button";
 import { getSessionUser } from "@/lib/auth";
 import { isBookmarked, recordRead } from "@/lib/me";
 import { getPostBySlug } from "@/lib/posts";
@@ -62,11 +63,23 @@ export default async function NewsDetailPage({
           </span>
         </div>
         <h1 className="mt-2 text-2xl font-bold leading-snug text-foreground">{post.title}</h1>
-        {user ? (
-          <div className="mt-2">
-            <BookmarkButton postId={post.id} initialBookmarked={bookmarked} />
-          </div>
-        ) : null}
+        <div className="mt-2 flex items-center gap-2">
+          {user ? <BookmarkButton postId={post.id} initialBookmarked={bookmarked} /> : null}
+          {user ? <span className="mx-1 h-3 w-px bg-border" /> : null}
+          <ShareButton
+            variant="button"
+            data={{
+              type: "post",
+              kind: "news",
+              title: post.title,
+              excerpt: post.excerpt,
+              tickers: tickers.map((t) => t.symbol),
+              createdAt: post.created_at,
+            }}
+            urlPath={`/news/${post.slug}`}
+            fileNamePrefix={`ops_alpha_${post.slug}`}
+          />
+        </div>
       </header>
 
       <article className="prose prose-sm max-w-none py-4">

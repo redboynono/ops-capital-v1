@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ShareButton } from "@/components/share/share-button";
 
 type Post = {
   id: string;
@@ -54,6 +55,20 @@ export function PostRow({ post, dense = false }: { post: Post; dense?: boolean }
             <p className="mt-1 line-clamp-2 text-[13px] text-muted">{post.excerpt}</p>
           ) : null}
         </div>
+
+        <ShareButton
+          variant="icon-compact"
+          data={{
+            type: "post",
+            kind: post.kind,
+            title: post.title,
+            excerpt: post.excerpt,
+            tickers: post.tickers,
+            createdAt: post.created_at,
+          }}
+          urlPath={href}
+          fileNamePrefix={`ops_alpha_${post.slug}`}
+        />
       </div>
     </article>
   );
