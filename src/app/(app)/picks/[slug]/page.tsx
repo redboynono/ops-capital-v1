@@ -41,7 +41,8 @@ export default async function PickDetailPage({
 }) {
   const { slug } = await params;
   const { reader } = await searchParams;
-  const readerMode = reader === "1";
+  // 默认进入阅读模式；?reader=0 才显示终端视图
+  const readerMode = reader !== "0";
 
   const pick = await getPickBySlug(slug);
   if (!pick || !pick.is_published) notFound();
@@ -52,7 +53,7 @@ export default async function PickDetailPage({
   ]);
 
   const canViewFull = !pick.is_premium || subscribed;
-  const toggleHref = readerMode ? `/picks/${pick.slug}` : `/picks/${pick.slug}?reader=1`;
+  const toggleHref = readerMode ? `/picks/${pick.slug}?reader=0` : `/picks/${pick.slug}`;
 
   const statusLabel =
     pick.status === "open" ? "开仓中" : pick.status === "closed" ? "已平仓" : "已止损";

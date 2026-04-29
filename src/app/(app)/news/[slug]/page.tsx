@@ -20,7 +20,8 @@ export default async function NewsDetailPage({
 }) {
   const { slug } = await params;
   const { reader } = await searchParams;
-  const readerMode = reader === "1";
+  // 默认进入阅读模式；?reader=0 才显示终端视图
+  const readerMode = reader !== "0";
   const post = await getPostBySlug(slug);
   if (!post || post.kind !== "news") notFound();
 
@@ -31,7 +32,7 @@ export default async function NewsDetailPage({
   const bookmarked = user ? await isBookmarked(user.id, post.id) : false;
   if (user) recordRead(user.id, post.id).catch(() => null);
 
-  const toggleHref = readerMode ? `/news/${post.slug}` : `/news/${post.slug}?reader=1`;
+  const toggleHref = readerMode ? `/news/${post.slug}?reader=0` : `/news/${post.slug}`;
 
   return (
     <div className="mx-auto w-full max-w-[780px] px-4 py-6 md:px-6">

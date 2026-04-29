@@ -20,7 +20,8 @@ export default async function AnalysisDetailPage({
 }) {
   const { slug } = await params;
   const { reader } = await searchParams;
-  const readerMode = reader === "1";
+  // 默认进入阅读模式；?reader=0 才显示终端视图
+  const readerMode = reader !== "0";
   const post = await getPostBySlug(slug);
   if (!post || post.kind !== "analysis") notFound();
 
@@ -34,7 +35,7 @@ export default async function AnalysisDetailPage({
   const bookmarked = user ? await isBookmarked(user.id, post.id) : false;
   if (user) recordRead(user.id, post.id).catch(() => null);
 
-  const toggleHref = readerMode ? `/analysis/${post.slug}` : `/analysis/${post.slug}?reader=1`;
+  const toggleHref = readerMode ? `/analysis/${post.slug}?reader=0` : `/analysis/${post.slug}`;
 
   return (
     <div className="mx-auto w-full max-w-[840px] px-4 py-6 md:px-6">
