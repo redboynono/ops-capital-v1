@@ -1,21 +1,19 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
+  KeyRound,
   Loader2,
   Mail,
   Phone,
+  RefreshCw,
   ShieldCheck,
   User,
   UserRound,
   Users,
 } from "lucide-react";
-
-/* ------------------------------------------------------------------ */
-/*  Constants                                                          */
-/* ------------------------------------------------------------------ */
 
 const COUNTRY_CODES: { code: string; label: string }[] = [
   { code: "+86", label: "🇨🇳 +86" },
@@ -27,10 +25,8 @@ const COUNTRY_CODES: { code: string; label: string }[] = [
   { code: "+81", label: "🇯🇵 +81" },
 ];
 
-const SMS_COUNTDOWN_SECONDS = 60;
-
 /* ------------------------------------------------------------------ */
-/*  Toast                                                              */
+/*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
 function Toast({ text }: { text: string }) {
@@ -42,42 +38,6 @@ function Toast({ text }: { text: string }) {
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/*  Countdown hook                                                     */
-/* ------------------------------------------------------------------ */
-
-function useCountdown(seconds: number) {
-  const [remaining, setRemaining] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
-
-  const start = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    setRemaining(seconds);
-    timerRef.current = setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          timerRef.current = null;
-          return 0;
-        }
-        return r - 1;
-      });
-    }, 1000);
-  };
-
-  return { remaining, start, active: remaining > 0 };
-}
-
-/* ------------------------------------------------------------------ */
-/*  Reusable input shell                                               */
-/* ------------------------------------------------------------------ */
 
 function FieldShell({
   icon,
@@ -103,7 +63,37 @@ const baseInputClass =
   "w-full bg-transparent text-[13px] text-foreground placeholder:text-muted-soft outline-none";
 
 /* ------------------------------------------------------------------ */
-/*  Main component                                                     */
+/*  Captcha hook                                                       */
+/* ------------------------------------------------------------------ */
+
+function useCaptcha() {
+  const [svg, setSvg] = useState<string>("");
+  const [token, setToken] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/captcha", { cache: "no-store" });
+      const data = (await res.json()) as { svg: string; token: string };
+      setSvg(data.svg);
+      setToken(data.token);
+    } catch {
+      // ignore; user can click refresh
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { svg, token, loading, refresh };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main                                                               */
 /* ------------------------------------------------------------------ */
 
 function LoginInner() {
@@ -118,102 +108,88 @@ function LoginInner() {
 
   const [tab, setTab] = useState<"signin" | "signup">(initialTab);
 
+  // 注册字段
   const [username, setUsername] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [countryCode, setCountryCode] = useState("+86");
   const [phone, setPhone] = useState("");
-  const [smsCode, setSmsCode] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  // 登录字段
+  const [identifier, setIdentifier] = useState(""); // 邮箱或用户名
+
+  // 共享
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [captchaInput, setCaptchaInput] = useState("");
+
+  const captcha = useCaptcha();
 
   const [loading, setLoading] = useState(false);
-  const [smsLoading, setSmsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-
-  const { remaining, start, active } = useCountdown(SMS_COUNTDOWN_SECONDS);
 
   const flashToast = (msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(null), 2200);
   };
 
-  const isPhoneValid = (() => {
-    const digits = phone.replace(/\D/g, "");
-    if (countryCode === "+86") return /^1\d{10}$/.test(digits);
-    return digits.length >= 6 && digits.length <= 15;
-  })();
-
-  const sendSmsCode = async () => {
+  const resetForm = () => {
     setError(null);
-    if (!isPhoneValid) {
-      setError("请输入有效的手机号");
-      return;
-    }
-    setSmsLoading(true);
-    try {
-      const res = await fetch("/api/auth/send-sms-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone: phone.replace(/\D/g, ""),
-          countryCode,
-          purpose: tab,
-        }),
-      });
-      const data = (await res.json()) as { error?: string; devCode?: string };
-      if (!res.ok) {
-        setError(data.error ?? "验证码发送失败");
-        return;
-      }
-      start();
-      flashToast(data.devCode ? `验证码已发送（dev: ${data.devCode}）` : "验证码已发送");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "请求失败");
-    } finally {
-      setSmsLoading(false);
-    }
+    setCaptchaInput("");
+    captcha.refresh();
   };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!isPhoneValid) {
-      setError("请输入有效的手机号");
+    if (!captchaInput.trim()) {
+      setError("请输入图形验证码");
       return;
     }
-    if (!/^\d{4,8}$/.test(smsCode)) {
-      setError("请输入收到的短信验证码");
-      return;
-    }
-    if (tab === "signup") {
-      if (!email.trim()) {
-        setError("请输入邮箱（用于支付与回执）");
+
+    if (tab === "signin") {
+      if (!identifier.trim() || !password) {
+        setError("请填写账号和密码");
         return;
       }
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
-        setError("邮箱格式不正确");
-        return;
+    } else {
+      if (!email.trim()) return setError("请输入邮箱");
+      if (!password || password.length < 6) return setError("密码至少 6 位");
+      if (password !== confirmPassword) return setError("两次密码不一致");
+      const digits = phone.replace(/\D/g, "");
+      if (!digits) return setError("请输入手机号");
+      if (countryCode === "+86" && !/^1\d{10}$/.test(digits)) {
+        return setError("请输入有效的中国大陆手机号");
       }
     }
 
     setLoading(true);
     try {
-      const endpoint = tab === "signin" ? "/api/auth/sms-signin" : "/api/auth/sms-signup";
-      const payload = {
-        countryCode,
-        phone: phone.replace(/\D/g, ""),
-        smsCode: smsCode.trim(),
-        ...(tab === "signup"
+      const endpoint = tab === "signin" ? "/api/auth/signin" : "/api/auth/signup";
+      const payload =
+        tab === "signin"
           ? {
+              identifier: identifier.trim(),
+              password,
+              captcha: captchaInput.trim(),
+              captchaToken: captcha.token,
+            }
+          : {
               email: email.trim().toLowerCase(),
+              password,
+              countryCode,
+              phone: phone.replace(/\D/g, ""),
               username: username.trim() || null,
               firstName: firstName.trim() || null,
               lastName: lastName.trim() || null,
-            }
-          : {}),
-      };
+              captcha: captchaInput.trim(),
+              captchaToken: captcha.token,
+            };
+
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -222,6 +198,11 @@ function LoginInner() {
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
         setError(data.error ?? (tab === "signin" ? "登录失败" : "注册失败"));
+        // 验证码相关错误自动刷新
+        if (data.error?.includes("验证码")) {
+          captcha.refresh();
+          setCaptchaInput("");
+        }
         return;
       }
       flashToast(tab === "signin" ? "欢迎回来" : "注册成功，欢迎加入 OPS Alpha");
@@ -235,8 +216,6 @@ function LoginInner() {
       setLoading(false);
     }
   };
-
-  /* ----------------------------- render ----------------------------- */
 
   return (
     <>
@@ -260,7 +239,7 @@ function LoginInner() {
             {tab === "signin" ? "登录 OPS Alpha" : "注册 OPS Alpha"}
           </h1>
           <p className="mt-2 text-[13px] text-muted">
-            完善信息以快速登录 / 注册
+            {tab === "signin" ? "欢迎回来，继续你的投研工作台" : "完善信息以快速注册"}
           </p>
         </header>
 
@@ -270,7 +249,7 @@ function LoginInner() {
             type="button"
             onClick={() => {
               setTab("signin");
-              setError(null);
+              resetForm();
             }}
             className={`px-4 py-1.5 text-[12px] font-semibold transition ${
               tab === "signin"
@@ -284,7 +263,7 @@ function LoginInner() {
             type="button"
             onClick={() => {
               setTab("signup");
-              setError(null);
+              resetForm();
             }}
             className={`px-4 py-1.5 text-[12px] font-semibold transition ${
               tab === "signup"
@@ -297,131 +276,208 @@ function LoginInner() {
         </div>
 
         <form onSubmit={submit} className="card space-y-4 p-5">
-          {/* 姓名三段式（仅注册） */}
-          {tab === "signup" ? (
+          {tab === "signin" ? (
+            // ----------- 登录 -----------
             <div>
-              <label className="label-caps">姓名</label>
-              <div className="mt-1 space-y-2">
+              <label className="label-caps">账号</label>
+              <div className="mt-1">
                 <FieldShell icon={<User className="h-4 w-4" strokeWidth={1.5} />}>
                   <input
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
                     className={baseInputClass}
-                    placeholder="用户名（可选）"
+                    placeholder="邮箱或用户名"
                     autoComplete="username"
-                  />
-                </FieldShell>
-                <FieldShell icon={<UserRound className="h-4 w-4" strokeWidth={1.5} />}>
-                  <input
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    className={baseInputClass}
-                    placeholder="名"
-                    autoComplete="given-name"
-                  />
-                </FieldShell>
-                <FieldShell icon={<Users className="h-4 w-4" strokeWidth={1.5} />}>
-                  <input
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    className={baseInputClass}
-                    placeholder="姓"
-                    autoComplete="family-name"
-                  />
-                </FieldShell>
-              </div>
-            </div>
-          ) : null}
-
-          {/* 邮箱（仅注册） */}
-          {tab === "signup" ? (
-            <div>
-              <label className="label-caps">邮箱</label>
-              <div className="mt-1">
-                <FieldShell icon={<Mail className="h-4 w-4" strokeWidth={1.5} />}>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={baseInputClass}
-                    placeholder="you@example.com"
-                    autoComplete="email"
                     required
                   />
                 </FieldShell>
               </div>
             </div>
-          ) : null}
+          ) : (
+            // ----------- 注册 -----------
+            <>
+              <div>
+                <label className="label-caps">姓名</label>
+                <div className="mt-1 space-y-2">
+                  <FieldShell icon={<User className="h-4 w-4" strokeWidth={1.5} />}>
+                    <input
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className={baseInputClass}
+                      placeholder="用户名（可选）"
+                      autoComplete="username"
+                    />
+                  </FieldShell>
+                  <FieldShell icon={<UserRound className="h-4 w-4" strokeWidth={1.5} />}>
+                    <input
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      className={baseInputClass}
+                      placeholder="名"
+                      autoComplete="given-name"
+                    />
+                  </FieldShell>
+                  <FieldShell icon={<Users className="h-4 w-4" strokeWidth={1.5} />}>
+                    <input
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className={baseInputClass}
+                      placeholder="姓"
+                      autoComplete="family-name"
+                    />
+                  </FieldShell>
+                </div>
+              </div>
 
-          {/* 手机号 */}
-          <div>
-            <label className="label-caps">手机号</label>
-            <div className="mt-1 flex h-11 items-center gap-2 rounded border border-border bg-surface px-3 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted">
-                <Phone className="h-4 w-4" strokeWidth={1.5} />
-              </span>
-              <select
-                value={countryCode}
-                onChange={(e) => setCountryCode(e.target.value)}
-                className="bg-transparent pr-1 text-[13px] text-foreground outline-none"
-                aria-label="国家区号"
-              >
-                {COUNTRY_CODES.map((c) => (
-                  <option key={c.code} value={c.code} className="bg-surface text-foreground">
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-              <span className="h-4 w-px bg-border" />
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/[^\d\s-]/g, ""))}
-                className={baseInputClass}
-                placeholder={countryCode === "+86" ? "13800138000" : "电话号码"}
-                autoComplete="tel"
-                required
-              />
-            </div>
-          </div>
+              <div>
+                <label className="label-caps">邮箱</label>
+                <div className="mt-1">
+                  <FieldShell icon={<Mail className="h-4 w-4" strokeWidth={1.5} />}>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className={baseInputClass}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                      required
+                    />
+                  </FieldShell>
+                </div>
+              </div>
 
-          {/* 短信验证码 */}
+              <div>
+                <label className="label-caps">手机号</label>
+                <div className="mt-1 flex h-11 items-center gap-2 rounded border border-border bg-surface px-3 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted">
+                    <Phone className="h-4 w-4" strokeWidth={1.5} />
+                  </span>
+                  <select
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
+                    className="bg-transparent pr-1 text-[13px] text-foreground outline-none"
+                    aria-label="国家区号"
+                  >
+                    {COUNTRY_CODES.map((c) => (
+                      <option key={c.code} value={c.code} className="bg-surface text-foreground">
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="h-4 w-px bg-border" />
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/[^\d\s-]/g, ""))}
+                    className={baseInputClass}
+                    placeholder={countryCode === "+86" ? "13800138000" : "电话号码"}
+                    autoComplete="tel"
+                    required
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* 密码 */}
           <div>
-            <label className="label-caps">短信验证码</label>
+            <label className="label-caps">密码</label>
             <div className="mt-1">
               <FieldShell
-                icon={<ShieldCheck className="h-4 w-4" strokeWidth={1.5} />}
+                icon={<KeyRound className="h-4 w-4" strokeWidth={1.5} />}
                 trailing={
                   <button
                     type="button"
-                    disabled={active || smsLoading || !isPhoneValid}
-                    onClick={sendSmsCode}
-                    className="ml-2 rounded border border-accent/60 px-2.5 py-1 text-[12px] font-semibold text-accent transition hover:border-accent hover:bg-accent/10 disabled:cursor-not-allowed disabled:border-border disabled:text-muted-soft disabled:hover:bg-transparent"
+                    onClick={() => setShowPwd((v) => !v)}
+                    className="ml-2 text-[11px] font-semibold text-muted hover:text-accent"
                   >
-                    {smsLoading ? (
-                      <span className="inline-flex items-center gap-1">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        发送中
-                      </span>
-                    ) : active ? (
-                      `${remaining}s 后重试`
-                    ) : (
-                      "获取验证码"
-                    )}
+                    {showPwd ? "隐藏" : "显示"}
                   </button>
                 }
               >
                 <input
-                  inputMode="numeric"
-                  pattern="\d*"
-                  maxLength={8}
-                  value={smsCode}
-                  onChange={(e) => setSmsCode(e.target.value.replace(/\D/g, ""))}
+                  type={showPwd ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className={baseInputClass}
-                  placeholder="请输入收到的验证码"
-                  autoComplete="one-time-code"
+                  placeholder={tab === "signup" ? "至少 6 位" : "请输入密码"}
+                  autoComplete={tab === "signin" ? "current-password" : "new-password"}
+                  required
+                  minLength={tab === "signup" ? 6 : undefined}
                 />
               </FieldShell>
+            </div>
+          </div>
+
+          {tab === "signup" ? (
+            <div>
+              <label className="label-caps">确认密码</label>
+              <div className="mt-1">
+                <FieldShell icon={<KeyRound className="h-4 w-4" strokeWidth={1.5} />}>
+                  <input
+                    type={showPwd ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className={baseInputClass}
+                    placeholder="再输入一次"
+                    autoComplete="new-password"
+                    required
+                    minLength={6}
+                  />
+                </FieldShell>
+              </div>
+            </div>
+          ) : null}
+
+          {/* 图形验证码 */}
+          <div>
+            <label className="label-caps">图形验证码</label>
+            <div className="mt-1 flex h-11 items-center gap-2 rounded border border-border bg-surface px-3 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted">
+                <ShieldCheck className="h-4 w-4" strokeWidth={1.5} />
+              </span>
+              <input
+                value={captchaInput}
+                onChange={(e) => setCaptchaInput(e.target.value.replace(/\s/g, ""))}
+                className={baseInputClass}
+                placeholder="区分大小写不敏感"
+                autoComplete="off"
+                maxLength={6}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setCaptchaInput("");
+                  captcha.refresh();
+                }}
+                disabled={captcha.loading}
+                className="ml-2 flex items-center gap-1 rounded border border-border px-1 py-0.5 text-muted transition hover:border-accent hover:text-accent disabled:opacity-50"
+                aria-label="刷新验证码"
+                title="刷新"
+              >
+                {captcha.loading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCaptchaInput("");
+                  captcha.refresh();
+                }}
+                className="ml-1 h-9 overflow-hidden rounded border border-border transition hover:border-accent"
+                aria-label="点击刷新验证码"
+                title="点击刷新"
+                style={{ width: 96 }}
+                dangerouslySetInnerHTML={{
+                  __html:
+                    captcha.svg ||
+                    `<svg viewBox="0 0 140 44" xmlns="http://www.w3.org/2000/svg"><rect width="140" height="44" fill="#141418"/></svg>`,
+                }}
+              />
             </div>
           </div>
 
@@ -431,7 +487,6 @@ function LoginInner() {
             </p>
           ) : null}
 
-          {/* 主按钮 */}
           <button
             type="submit"
             disabled={loading}
@@ -444,18 +499,20 @@ function LoginInner() {
                 <span>处理中…</span>
               </>
             ) : (
-              <span>登录 / 注册</span>
+              <span>{tab === "signin" ? "登录" : "注册"}</span>
             )}
           </button>
 
-          {/* 切换链接 */}
           <p className="pt-1 text-center text-[12px] text-muted">
             {tab === "signin" ? (
               <>
                 还没有账号？
                 <button
                   type="button"
-                  onClick={() => setTab("signup")}
+                  onClick={() => {
+                    setTab("signup");
+                    resetForm();
+                  }}
                   className="ml-1 font-semibold text-accent hover:text-accent-strong"
                 >
                   立即注册
@@ -466,7 +523,10 @@ function LoginInner() {
                 已有账号？
                 <button
                   type="button"
-                  onClick={() => setTab("signin")}
+                  onClick={() => {
+                    setTab("signin");
+                    resetForm();
+                  }}
                   className="ml-1 font-semibold text-accent hover:text-accent-strong"
                 >
                   返回登录
