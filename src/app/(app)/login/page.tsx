@@ -471,7 +471,7 @@ function LoginInner() {
                 className="ml-1 h-9 overflow-hidden rounded border border-border transition hover:border-accent"
                 aria-label="点击刷新验证码"
                 title="点击刷新"
-                style={{ width: 96 }}
+                style={{ width: 120 }}
                 dangerouslySetInnerHTML={{
                   __html:
                     captcha.svg ||
