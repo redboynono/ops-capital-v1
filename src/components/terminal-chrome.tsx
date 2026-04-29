@@ -241,22 +241,21 @@ export function TerminalTickerTape() {
 }
 
 export function TerminalFunctionBar() {
-  const keys: { k: string; label: string; href: string }[] = [
-    { k: "F1", label: "HOME",  href: "/alpha" },
-    { k: "F2", label: "ANLY",  href: "/analysis" },
-    { k: "F3", label: "NEWS",  href: "/news" },
-    { k: "F4", label: "SCRN",  href: "/tickers" },
-    { k: "F5", label: "WATCH", href: "/dashboard/watchlist" },
-    { k: "F6", label: "ACCT",  href: "/dashboard" },
-    { k: "F7", label: "SUB",   href: "/pricing" },
-    { k: "F8", label: "HELP",  href: "/help" },
+  const items: { label: string; href: string }[] = [
+    { label: "HOME",  href: "/alpha" },
+    { label: "ANLY",  href: "/analysis" },
+    { label: "NEWS",  href: "/news" },
+    { label: "SCRN",  href: "/tickers" },
+    { label: "WATCH", href: "/dashboard/watchlist" },
+    { label: "ACCT",  href: "/dashboard" },
+    { label: "SUB",   href: "/pricing" },
+    { label: "HELP",  href: "/help" },
   ];
   return (
     <div className="term-rail fixed bottom-0 left-0 right-0 z-40 flex h-6 items-center gap-3 border-t px-3 text-[10px]">
-      {keys.map((k) => (
-        <Link key={k.k} href={k.href} className="mono flex items-center gap-1 hover:text-[color:var(--accent)]">
-          <span style={{ color: "var(--accent)" }}>{k.k}</span>
-          <span>{k.label}</span>
+      {items.map((it) => (
+        <Link key={it.href} href={it.href} className="mono hover:text-[color:var(--accent)]">
+          {it.label}
         </Link>
       ))}
       <span className="sep mono hidden md:inline" style={{ marginLeft: "auto" }}>

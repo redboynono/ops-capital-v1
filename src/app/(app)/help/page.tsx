@@ -2,15 +2,15 @@ import Link from "next/link";
 
 export const metadata = { title: "使用说明 · OPS Alpha" };
 
-const pages: { k: string; label: string; href: string; desc: string }[] = [
-  { k: "F1", label: "HOME",  href: "/alpha",               desc: "Alpha 首页：市场快照 + OPS Quant Top + 热门分析 + 今日快讯" },
-  { k: "F2", label: "ANLY",  href: "/analysis",            desc: "机构级深度研报列表（Premium 需订阅）" },
-  { k: "F3", label: "NEWS",  href: "/news",                desc: "市场快讯时间流，全部免费" },
-  { k: "F4", label: "SCRN",  href: "/tickers",             desc: "标的索引：按交易所分组的全部 ticker" },
-  { k: "F5", label: "WATCH", href: "/dashboard/watchlist", desc: "自选股清单" },
-  { k: "F6", label: "ACCT",  href: "/dashboard",           desc: "会员桌面：订阅状态 + 收藏 + 阅读历史 + 自选概览" },
-  { k: "F7", label: "SUB",   href: "/pricing",             desc: "订阅方案（$9.99/月 · $87.99/年，含 1 周免费试用）" },
-  { k: "F8", label: "HELP",  href: "/help",                desc: "本页：使用说明" },
+const pages: { label: string; href: string; desc: string }[] = [
+  { label: "HOME",  href: "/alpha",               desc: "Alpha 首页：市场快照 + OPS Quant Top + 热门分析 + 今日快讯" },
+  { label: "ANLY",  href: "/analysis",            desc: "机构级深度研报列表（Premium 需订阅）" },
+  { label: "NEWS",  href: "/news",                desc: "市场快讯时间流，全部免费" },
+  { label: "SCRN",  href: "/tickers",             desc: "标的索引：按交易所分组的全部 ticker" },
+  { label: "WATCH", href: "/dashboard/watchlist", desc: "自选股清单" },
+  { label: "ACCT",  href: "/dashboard",           desc: "会员桌面：订阅状态 + 收藏 + 阅读历史 + 自选概览" },
+  { label: "SUB",   href: "/pricing",             desc: "订阅方案（$9.99/月 · $87.99/年，含 1 周免费试用）" },
+  { label: "HELP",  href: "/help",                desc: "本页：使用说明" },
 ];
 
 const ratingNotes: { k: string; v: string }[] = [
@@ -42,18 +42,17 @@ export default function HelpPage() {
         <header className="border-b border-border px-4 py-2.5">
           <p className="label-caps">页面导航</p>
           <p className="mt-1 text-[11px] text-muted">
-            底部 Function Bar 上的 F1-F8 标签可直接点击跳转，也可用侧边栏导航。
+            使用侧边栏或底部导航条点击跳转。
           </p>
         </header>
         <div className="divide-y divide-border">
           {pages.map((p) => (
             <Link
-              key={p.k}
+              key={p.href}
               href={p.href}
               className="row-hover flex items-center gap-4 px-4 py-2.5 text-[13px]"
             >
-              <span className="w-12 font-mono font-bold text-accent-strong">{p.k}</span>
-              <span className="w-16 font-mono text-[11px] text-muted">{p.label}</span>
+              <span className="w-16 font-mono font-bold text-accent-strong">{p.label}</span>
               <span className="flex-1 text-foreground-soft">{p.desc}</span>
               <span className="font-mono text-[11px] text-muted-soft">{p.href}</span>
             </Link>
