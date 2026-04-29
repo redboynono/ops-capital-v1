@@ -2,32 +2,32 @@ import Link from "next/link";
 import { getSessionUser } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/admin";
 
-type NavItem = { href: string; label: string; fkey?: string };
+type NavItem = { href: string; label: string };
 
 const sections: { title: string; items: NavItem[] }[] = [
   {
     title: "MARKET",
     items: [
-      { href: "/alpha",    label: "Alpha 首页",   fkey: "F1" },
-      { href: "/picks",    label: "OPS Picks",    fkey: "F2" },
-      { href: "/analysis", label: "分析长文",     fkey: "F3" },
-      { href: "/news",     label: "市场快讯",     fkey: "F4" },
+      { href: "/alpha",    label: "Alpha 首页" },
+      { href: "/picks",    label: "OPS Picks" },
+      { href: "/analysis", label: "分析长文" },
+      { href: "/news",     label: "市场快讯" },
     ],
   },
   {
     title: "SCREEN",
     items: [
-      { href: "/tickers",              label: "标的索引", fkey: "F5" },
-      { href: "/dashboard/watchlist",  label: "自选股",   fkey: "F6" },
+      { href: "/tickers",              label: "标的索引" },
+      { href: "/dashboard/watchlist",  label: "自选股" },
     ],
   },
   {
     title: "ACCOUNT",
     items: [
-      { href: "/dashboard",         label: "会员中心",  fkey: "F7" },
+      { href: "/dashboard",         label: "会员中心" },
       { href: "/dashboard/library", label: "收藏 / 历史" },
       { href: "/dashboard/profile", label: "资料" },
-      { href: "/pricing",           label: "订阅方案",  fkey: "F8" },
+      { href: "/pricing",           label: "订阅方案" },
     ],
   },
 ];
@@ -71,17 +71,9 @@ export async function SideNav() {
                 <Link
                   key={it.href}
                   href={it.href}
-                  className="group flex items-center justify-between px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]"
+                  className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]"
                 >
-                  <span>{it.label}</span>
-                  {it.fkey ? (
-                    <span
-                      className="mono text-[9px] opacity-60 group-hover:opacity-100"
-                      style={{ color: "var(--accent)" }}
-                    >
-                      {it.fkey}
-                    </span>
-                  ) : null}
+                  {it.label}
                 </Link>
               ))}
             </div>
