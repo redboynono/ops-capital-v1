@@ -41,6 +41,10 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
   }>(null);
   const [error, setError] = useState<string | null>(null);
   const [polled, setPolled] = useState<"pending" | "paid" | "failed">("pending");
+  const [pendingRedirect, setPendingRedirect] = useState<null | {
+    url: string;
+    outTradeNo: string;
+  }>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const submit = async (channel: "gumroad" | "alipay" | "wechat") => {
@@ -49,7 +53,13 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
       return;
     }
     setError(null);
+    setPendingRedirect(null);
     setBusy(channel);
+
+    // 先打开一个空白窗口（user gesture 同步触发，避免被弹窗拦截）。
+    // 拿到 payUrl 后再赋值 location.href。
+    const popup = channel === "gumroad" ? window.open("about:blank", "_blank") : null;
+
     try {
       const res = await fetch("/api/pay/create", {
         method: "POST",
@@ -58,16 +68,28 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
       });
       const data: CheckoutResp = await res.json();
       if (!res.ok || "error" in data) {
+        if (popup) popup.close();
         setError("error" in data ? data.error : `HTTP ${res.status}`);
         return;
       }
 
       if (data.checkout.kind === "redirect") {
-        window.location.href = data.checkout.payUrl;
+        // gumroad → 新标签页打开 + 在当前页留兜底链接（国内 Gumroad 慢，避免当前页卡白屏）
+        if (popup) {
+          popup.location.href = data.checkout.payUrl;
+        } else {
+          window.location.href = data.checkout.payUrl;
+          return;
+        }
+        setPendingRedirect({
+          url: data.checkout.payUrl,
+          outTradeNo: data.order.out_trade_no,
+        });
         return;
       }
 
       // qrcode（微信 / mock）
+      if (popup) popup.close();
       setQrDialog({
         codeUrl: data.checkout.codeUrl,
         outTradeNo: data.order.out_trade_no,
@@ -77,6 +99,7 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
       });
       setPolled("pending");
     } catch (e) {
+      if (popup) popup.close();
       setError(e instanceof Error ? e.message : "network error");
     } finally {
       setBusy(null);
@@ -218,6 +241,28 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
         <p className="mt-3 rounded border border-[color:var(--danger)] bg-[color:var(--danger-soft)] px-3 py-2 text-[12px] text-[color:var(--danger)]">
           {error}
         </p>
+      ) : null}
+
+      {pendingRedirect ? (
+        <div className="mt-3 rounded border border-[color:var(--accent)] bg-[color:var(--accent-soft)] px-3 py-3 text-[12px]">
+          <p className="font-bold text-[color:var(--accent-strong)]">
+            ✓ 已为你打开 Gumroad 支付页面（新标签）
+          </p>
+          <p className="mt-1 text-foreground">
+            订单号：<span className="mono">{pendingRedirect.outTradeNo}</span>
+          </p>
+          <p className="mt-1 text-muted">
+            如果新标签页没打开（被浏览器拦截 / 国内访问慢），请手动点：
+          </p>
+          <a
+            href={pendingRedirect.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mt-2 inline-block break-all rounded bg-[color:var(--accent)] px-3 py-1.5 text-[12px] font-semibold text-[color:var(--background)] hover:bg-[color:var(--accent-strong)]"
+          >
+            手动打开 Gumroad 支付页 →
+          </a>
+        </div>
       ) : null}
 
       {/* 微信扫码 Dialog（只在 mock 或 wechat live 时使用） */}
