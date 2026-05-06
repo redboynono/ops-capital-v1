@@ -25,7 +25,8 @@ export default async function AdminEarningsPage() {
             er.revenue_actual, er.revenue_estimate,
             er.post_id,
             p.slug as post_slug,
-            er.generation_attempts, er.last_error
+            er.generation_attempts, er.last_error,
+            er.audit_summary
        from earnings_releases er
        left join posts p on p.id = er.post_id
       order by er.report_date desc, er.symbol`,

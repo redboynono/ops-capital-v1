@@ -19,6 +19,7 @@ export type EarningsAdminRow = {
   post_slug: string | null;
   generation_attempts: number;
   last_error: string | null;
+  audit_summary: string | null;
 };
 
 type Props = {
@@ -225,12 +226,22 @@ export function AdminEarningsPanel({ rows }: Props) {
                   <span className={`font-semibold ${info.cls}`}>{info.label}</span>
                   <span className="truncate text-foreground-soft">
                     {r.post_slug ? (
-                      <Link
-                        href={`/analysis/${r.post_slug}`}
-                        className="text-accent-strong hover:underline"
-                      >
-                        /analysis/{r.post_slug}
-                      </Link>
+                      <span className="flex items-center gap-2">
+                        <Link
+                          href={`/analysis/${r.post_slug}`}
+                          className="truncate text-accent-strong hover:underline"
+                        >
+                          /analysis/{r.post_slug}
+                        </Link>
+                        {r.audit_summary ? (
+                          <span
+                            className="rounded border border-border bg-surface-muted px-1.5 py-0.5 font-mono text-[10px] text-muted"
+                            title="二次 AI 审计：grade · ✓verified ◈inferred ⚠unsupported"
+                          >
+                            {r.audit_summary}
+                          </span>
+                        ) : null}
+                      </span>
                     ) : rowErr ? (
                       <span className="text-[color:var(--danger)]">× {rowErr}</span>
                     ) : r.last_error ? (

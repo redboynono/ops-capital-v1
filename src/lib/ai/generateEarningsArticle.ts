@@ -9,8 +9,16 @@ import { getRating } from "@/lib/ratings";
 import { setPostTickers } from "@/lib/tickers";
 import {
   EARNINGS_SYSTEM_PROMPT,
+  buildEarningsFactsheet,
   buildEarningsUserPrompt,
+  type EarningsPromptInputs,
 } from "@/lib/ai/earningsArticlePrompt";
+import {
+  verifyEarningsArticle,
+  renderAuditMarkdown,
+  buildAuditSummary,
+  type EarningsAudit,
+} from "@/lib/ai/verifyEarningsArticle";
 
 export type GeneratedArticle = {
   symbol: string;
@@ -51,7 +59,7 @@ export async function generateAndSaveEarningsPost(
     getRating(er.symbol).catch(() => null),
   ]);
 
-  const userPrompt = buildEarningsUserPrompt({
+  const promptInputs: EarningsPromptInputs = {
     symbol: er.symbol,
     name: ticker.name,
     sector: ticker.sector,
@@ -74,11 +82,27 @@ export async function generateAndSaveEarningsPost(
             rating.ops_target_price == null ? null : Number(rating.ops_target_price),
         }
       : null,
-  });
+  };
 
+  // ---- 1. 主生成 ----
+  const userPrompt = buildEarningsUserPrompt(promptInputs);
   const raw = await callModel(EARNINGS_SYSTEM_PROMPT, userPrompt);
   const article = parseArticleJson(raw, er);
 
+  // ---- 2. 二次校验（独立 AI fact-check pass） ----
+  const factsheet = buildEarningsFactsheet(promptInputs);
+  let audit: EarningsAudit | null = null;
+  let auditSummary: string | null = null;
+  try {
+    audit = await verifyEarningsArticle(factsheet, article.content);
+    auditSummary = buildAuditSummary(audit);
+    article.content = `${article.content}\n${renderAuditMarkdown(audit)}`;
+  } catch (e) {
+    auditSummary = `审计跳过：${e instanceof Error ? e.message.slice(0, 80) : "unknown"}`;
+    article.content = `${article.content}\n\n---\n\n_⚠ 数据校对：${auditSummary}_\n`;
+  }
+
+  // ---- 3. 写库 ----
   const postId = randomUUID();
   await mysqlQuery(
     `insert into posts (id, title, slug, kind, excerpt, content, is_premium, is_published, author_id)
@@ -99,6 +123,12 @@ export async function generateAndSaveEarningsPost(
 
   await setPostTickers(finalPostId, [er.symbol]);
   await linkEarningsPost(er.id, finalPostId);
+
+  // ---- 4. 把 audit 落库（不阻塞，失败也无所谓） ----
+  await mysqlQuery(
+    "update earnings_releases set audit_summary = ?, audit_json = ? where id = ?",
+    [auditSummary, audit ? JSON.stringify(audit) : null, er.id],
+  ).catch(() => undefined);
 
   return {
     symbol: er.symbol,

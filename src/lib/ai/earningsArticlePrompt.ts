@@ -13,11 +13,18 @@ export const EARNINGS_SYSTEM_PROMPT = `# Role
 你是一名 buy-side 机构投资分析师，为中文付费投研平台 OPS Alpha 撰写美股财报深度解读。
 读者是有专业基础的中国投资者，希望在 5 分钟内读懂"这家公司本季表现如何，下一步怎么操作"。
 
+# 数据使用准则（**最高优先级，违反即为不合格**）
+1. user prompt 里的 **Factsheet** 是本次唯一可信数据源（数字、估值、52W、margin 等）。
+2. **Factsheet 与 news 都没列的数字 → 一律写"未披露"或"未公开数据"**，禁止用训练记忆里的数字伪装成本季实际。
+3. 业务分部的同比 / 产品线增速 / 电话会原话：除非 news headline 明确出现，否则改写成"管理层在公开场合未具体披露 X 数据，业内一致预期为高个位数–中位数增长（仅供参考）"。
+4. 目标价 / 止损位 / 加仓区间属于**主观建议**，必须明确标注 **"OPS 主观建议（非来自 factsheet）"**。
+5. 任何带 "$" 或 "%" 的数字若不是 factsheet 直接给的，必须在该数字后加 *（推断）* 标记。
+
 # 风格
-- **数字驱动**：每个论点必须挂数字（YoY/QoQ、bps、margin）
+- **数字驱动 + 可追溯**：每个论点的数字最好有 factsheet 依据
 - **结构清晰**：小标题 + 要点列表 + 关键表格，不要长段废话
 - **客观平衡**：业绩好也要写隐忧；不及预期也要写下季可能反弹点
-- **可操作**：结尾必给具体 entry / exit / risk 建议
+- **可操作**：结尾给具体 entry / exit / risk 建议（明确标"主观建议"）
 - 中文为主，关键术语保留英文（EPS / FCF / DCF / TAM / GAAP / non-GAAP / guide / beat / miss / consensus）
 
 # 输出格式（极其严格）
@@ -122,7 +129,11 @@ function pickNews(news: EarningsPromptInputs["news"]): string {
     .join("\n");
 }
 
-export function buildEarningsUserPrompt(inputs: EarningsPromptInputs): string {
+/**
+ * Build a structured plain-text factsheet that's the SINGLE SOURCE OF TRUTH
+ * for both article generation and the post-generation fact-check.
+ */
+export function buildEarningsFactsheet(inputs: EarningsPromptInputs): string {
   const epsBeat = (() => {
     if (inputs.eps_actual == null || inputs.eps_estimate == null) return "n/a";
     const diff = inputs.eps_actual - inputs.eps_estimate;
@@ -136,29 +147,58 @@ export function buildEarningsUserPrompt(inputs: EarningsPromptInputs): string {
     return `${diff >= 0 ? "+" : ""}${fmtRevenue(diff)}${pct !== null ? ` (${diff >= 0 ? "+" : ""}${pct.toFixed(1)}%)` : ""}`;
   })();
 
+  const lines: string[] = [
+    "## 公司",
+    `- symbol: ${inputs.symbol}`,
+    `- name: ${inputs.name}`,
+    `- industry: ${inputs.industry ?? inputs.sector ?? "n/a"}`,
+    "",
+    "## 本季财报（Finnhub /calendar/earnings）",
+    `- fiscal_period: ${inputs.fiscal_year}Q${inputs.fiscal_quarter}`,
+    `- report_date: ${inputs.report_date}`,
+    `- hour: ${inputs.hour ?? "n/a"} (bmo=盘前 / amc=盘后 / dmh=盘中)`,
+    `- eps_actual: ${fmtNum(inputs.eps_actual)}`,
+    `- eps_estimate: ${fmtNum(inputs.eps_estimate)}`,
+    `- eps_beat: ${epsBeat}`,
+    `- revenue_actual: ${fmtRevenue(inputs.revenue_actual)}`,
+    `- revenue_estimate: ${fmtRevenue(inputs.revenue_estimate)}`,
+    `- revenue_beat: ${revBeat}`,
+    "",
+    "## 估值与财务（Finnhub /stock/metric basicFinancials）",
+    pickMetrics(inputs.metrics),
+    "",
+    "## 近期 news headlines（Finnhub /company-news，过去 30 天）",
+    pickNews(inputs.news),
+  ];
+  if (inputs.ops_rating && inputs.ops_rating.verdict) {
+    lines.push(
+      "",
+      "## 现有 OPS 评级（来自 ticker_ratings 表）",
+      `- ops_verdict: ${inputs.ops_rating.verdict}`,
+      `- ops_score: ${fmtNum(inputs.ops_rating.score)}`,
+      `- ops_target_price: $${fmtNum(inputs.ops_rating.target_price)}`,
+    );
+  }
+  lines.push(
+    "",
+    "## 注意事项（factsheet 不包含 → 视为未披露）",
+    "- 业务分部营收明细 / 同比增速（除非 news 提到）",
+    "- 电话会原话",
+    "- 下季 / 全年 management guidance",
+    "- 同行 PE / PB 对比（factsheet 仅给本公司）",
+  );
+  return lines.join("\n");
+}
+
+export function buildEarningsUserPrompt(inputs: EarningsPromptInputs): string {
+  const factsheet = buildEarningsFactsheet(inputs);
   return `# 任务
 为 ${inputs.symbol} (${inputs.name}) 撰写 ${inputs.fiscal_year} 财年 Q${inputs.fiscal_quarter} 财报深度文。
 
-# 财报数据
-- 公司：${inputs.name} (${inputs.symbol})
-- 行业：${inputs.industry ?? inputs.sector ?? "n/a"}
-- 报告日：${inputs.report_date}（${inputs.hour === "bmo" ? "盘前" : inputs.hour === "amc" ? "盘后" : inputs.hour ?? "盘中"}）
-- EPS actual: ${fmtNum(inputs.eps_actual)} / consensus: ${fmtNum(inputs.eps_estimate)} / beat: ${epsBeat}
-- Revenue actual: ${fmtRevenue(inputs.revenue_actual)} / consensus: ${fmtRevenue(inputs.revenue_estimate)} / beat: ${revBeat}
-
-# 估值与财务上下文（Finnhub basic financials）
-${pickMetrics(inputs.metrics)}
-
-# 近期相关 news（Finnhub company-news，可作为业务亮点 / 管理层指引参考）
-${pickNews(inputs.news)}
-
-# 现有 OPS 评级（如已有，可与本次财报后做对比）
-${
-  inputs.ops_rating && inputs.ops_rating.verdict
-    ? `- ops_verdict: ${inputs.ops_rating.verdict}\n- ops_score: ${fmtNum(inputs.ops_rating.score)}\n- ops_target_price: $${fmtNum(inputs.ops_rating.target_price)}`
-    : "（暂无既有 OPS 评级）"
-}
+# Factsheet（**唯一权威数据源；未列内容均视为"未披露"**）
+${factsheet}
 
 # 输出
-严格按 system prompt 的 JSON schema 输出。content 至少 1800 字。slug 必须是 \`${inputs.symbol.toLowerCase()}-${inputs.fiscal_year}q${inputs.fiscal_quarter}-earnings\`。`;
+严格按 system prompt 的 JSON schema 输出。content 至少 1800 字。slug 必须是 \`${inputs.symbol.toLowerCase()}-${inputs.fiscal_year}q${inputs.fiscal_quarter}-earnings\`。
+**请逐字遵守 system prompt 中的"数据使用准则"，不要把训练记忆里的过期数据当成本季实际。**`;
 }
