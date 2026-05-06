@@ -6,7 +6,18 @@ import { listAllTickers } from "@/lib/tickers";
 
 export const dynamic = "force-dynamic";
 
-type RatedRow = { symbol: string; quant_score: string | null; ops_verdict: string | null; updated_at: string };
+type RatedRow = { symbol: string; quant_score: string | null; ops_verdict: string | null; updated_at: string; last_refreshed_at: string | null };
+
+function formatAge(ts: string | null): string {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (mins < 60) return `${mins} 分钟前`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} 小时前`;
+  const days = Math.floor(hrs / 24);
+  return `${days} 天前`;
+}
 
 export default async function AdminRatingsIndex() {
   const auth = await requireAdmin();
@@ -22,7 +33,7 @@ export default async function AdminRatingsIndex() {
   const [tickers, rated] = await Promise.all([
     listAllTickers(),
     mysqlQuery<RatedRow[]>(
-      "select symbol, quant_score, ops_verdict, updated_at from ticker_ratings",
+      "select symbol, quant_score, ops_verdict, updated_at, last_refreshed_at from ticker_ratings",
     ),
   ]);
   const ratedMap = new Map(rated.map((r) => [r.symbol, r]));
@@ -59,8 +70,11 @@ export default async function AdminRatingsIndex() {
               {hasRating ? (
                 <>
                   <span className="w-16 font-mono text-[12px] text-foreground">{r?.ops_verdict ?? "—"}</span>
-                  <span className="w-12 font-mono font-bold text-accent-strong">
+                  <span className="w-12 text-right font-mono font-bold text-accent-strong">
                     {r?.quant_score ? Number(r.quant_score).toFixed(2) : "—"}
+                  </span>
+                  <span className="w-24 text-right font-mono text-[11px] text-muted" title="上次刷新">
+                    {formatAge(r?.last_refreshed_at ?? r?.updated_at ?? null)}
                   </span>
                 </>
               ) : (
