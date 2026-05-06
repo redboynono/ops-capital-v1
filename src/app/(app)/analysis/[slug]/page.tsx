@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { BookmarkButton } from "@/components/bookmark-button";
 import { ShareButton } from "@/components/share/share-button";
+import { StickyPaywall } from "@/components/sticky-paywall";
 import { getSessionUser } from "@/lib/auth";
 import { isBookmarked, recordRead } from "@/lib/me";
+import { countRedactions, RedactedMarkdown } from "@/lib/paywall";
 import { getCurrentUserSubscriptionStatus, getPostBySlug } from "@/lib/posts";
 import { listTickersForPost } from "@/lib/tickers";
 
@@ -94,36 +94,17 @@ export default async function AnalysisDetailPage({
         </div>
       </header>
 
-      {canViewFull ? (
-        <article className="prose prose-sm md:prose-base max-w-none py-5">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
-        </article>
-      ) : (
-        <>
-          <article className="prose prose-sm md:prose-base max-w-none py-5">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {post.content.slice(0, 400) + "\n\n..."}
-            </ReactMarkdown>
-          </article>
-          <div className="card mt-4 border-accent/60 p-6" style={{ background: "var(--paywall)" }}>
-            <p className="label-caps">Premium 内容</p>
-            <h3 className="mt-1 text-lg font-bold">订阅后继续阅读完整分析</h3>
-            <p className="mt-1 text-[13px] text-muted">
-              订阅即解锁全部 Premium 分析 + 估值模型 + 每周备忘录。
-            </p>
-            <div className="mt-3 flex gap-2">
-              <Link href="/pricing" className="btn-primary px-3 py-1.5 text-[12px]">
-                查看订阅方案
-              </Link>
-              {!user ? (
-                <Link href="/login" className="btn-outline px-3 py-1.5 text-[12px]">
-                  登录
-                </Link>
-              ) : null}
-            </div>
-          </div>
-        </>
-      )}
+      <article className="prose prose-sm md:prose-base max-w-none py-5">
+        <RedactedMarkdown redact={!canViewFull}>{post.content}</RedactedMarkdown>
+      </article>
+
+      {!canViewFull ? (
+        <StickyPaywall
+          loggedIn={Boolean(user)}
+          redactedCount={countRedactions(post.content)}
+          variant="analysis"
+        />
+      ) : null}
 
       <p className={`mt-8 pt-4 text-[11px] leading-relaxed ${readerMode ? "border-t border-[#d8d0c2] text-[#6b5c3f]" : "border-t border-border text-muted-soft"}`}>
         免责声明：本文由 AI 编辑流水线生成并经人工复核，仅为研究观点，不构成投资建议。

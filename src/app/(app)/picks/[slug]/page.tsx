@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { ShareButton } from "@/components/share/share-button";
+import { StickyPaywall } from "@/components/sticky-paywall";
+import { getSessionUser } from "@/lib/auth";
+import { countRedactions, MaybeBlur, RedactedMarkdown } from "@/lib/paywall";
 import { getCurrentUserSubscriptionStatus } from "@/lib/posts";
 import { computePerformance, getPickBySlug } from "@/lib/picks";
 
@@ -47,9 +48,10 @@ export default async function PickDetailPage({
   const pick = await getPickBySlug(slug);
   if (!pick || !pick.is_published) notFound();
 
-  const [{ subscribed }, perf] = await Promise.all([
+  const [{ subscribed }, perf, user] = await Promise.all([
     getCurrentUserSubscriptionStatus(),
     computePerformance(pick),
+    getSessionUser(),
   ]);
 
   const canViewFull = !pick.is_premium || subscribed;
@@ -146,13 +148,15 @@ export default async function PickDetailPage({
             </div>
             <div>
               <p className="label-caps text-[10px]">目标价</p>
-              <p className="mt-0.5 font-mono text-[17px] font-bold">{fmtPrice(pick.target_price)}</p>
+              <p className="mt-0.5 font-mono text-[17px] font-bold">
+                <MaybeBlur value={fmtPrice(pick.target_price)} redact={!canViewFull} />
+              </p>
               <p className="font-mono text-[10px] text-muted">{pick.horizon_months}M 期限</p>
             </div>
             <div>
               <p className="label-caps text-[10px]">止损</p>
               <p className="mt-0.5 font-mono text-[17px] font-bold text-[color:var(--danger)]">
-                {fmtPrice(pick.stop_price)}
+                <MaybeBlur value={fmtPrice(pick.stop_price)} redact={!canViewFull} />
               </p>
               <p className="font-mono text-[10px] text-muted">
                 {pick.conviction === "high" ? "高信念" : pick.conviction === "low" ? "低信念" : "中等"}
@@ -169,38 +173,25 @@ export default async function PickDetailPage({
         </header>
 
         {/* Body */}
-        {canViewFull ? (
-          <div className="space-y-6 py-5">
-            <Section title="投资逻辑" md={pick.thesis_md} />
-            <Section title="催化剂" md={pick.catalysts_md} />
-            <Section title="风险提示" md={pick.risks_md} />
-            <Section title="估值分析" md={pick.valuation_md} />
-            <Section title="退出纪律" md={pick.sell_discipline_md} />
-          </div>
-        ) : (
-          <>
-            <article className="prose prose-sm md:prose-base max-w-none py-5">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {pick.thesis_md.slice(0, 420) + "\n\n..."}
-              </ReactMarkdown>
-            </article>
-            <div
-              className="card mt-4 border-accent/60 p-6"
-              style={{ background: readerMode ? "#efe8dc" : "var(--paywall)" }}
-            >
-              <p className="label-caps">Premium · OPS Picks</p>
-              <h3 className="mt-1 text-lg font-bold">订阅后解锁完整投资逻辑</h3>
-              <p className="mt-1 text-[13px] text-muted">
-                目标价、催化剂、止损逻辑、退出纪律与组合历史业绩均为 Premium 内容。
-              </p>
-              <div className="mt-3 flex gap-2">
-                <Link href="/pricing" className="btn-primary px-3 py-1.5 text-[12px]">
-                  查看订阅方案
-                </Link>
-              </div>
-            </div>
-          </>
-        )}
+        <div className="space-y-6 py-5">
+          <Section title="投资逻辑" md={pick.thesis_md} redact={!canViewFull} />
+          <Section title="催化剂" md={pick.catalysts_md} redact={!canViewFull} />
+          <Section title="风险提示" md={pick.risks_md} redact={!canViewFull} />
+          <Section title="估值分析" md={pick.valuation_md} redact={!canViewFull} />
+          <Section title="退出纪律" md={pick.sell_discipline_md} redact={!canViewFull} />
+        </div>
+
+        {!canViewFull ? (
+          <StickyPaywall
+            loggedIn={Boolean(user)}
+            redactedCount={countRedactions(
+              [pick.thesis_md, pick.catalysts_md, pick.risks_md, pick.valuation_md, pick.sell_discipline_md]
+                .filter(Boolean)
+                .join("\n\n"),
+            )}
+            variant="picks"
+          />
+        ) : null}
 
         <p className={`mt-8 pt-4 text-[11px] leading-relaxed ${readerMode ? "border-t border-[#d8d0c2] text-[#6b5c3f]" : "border-t border-border text-muted-soft"}`}>
           免责声明：本 OPS Pick 为研究观点，不构成投资建议。入场价与目标价为发布时刻基于公开信息的量化模型判断。
@@ -210,13 +201,13 @@ export default async function PickDetailPage({
   );
 }
 
-function Section({ title, md }: { title: string; md: string | null }) {
+function Section({ title, md, redact }: { title: string; md: string | null; redact: boolean }) {
   if (!md || md.trim().length === 0) return null;
   return (
     <section>
       <h2 className="mb-2 text-lg font-bold">{title}</h2>
       <article className="prose prose-sm md:prose-base max-w-none">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
+        <RedactedMarkdown redact={redact}>{md}</RedactedMarkdown>
       </article>
     </section>
   );
