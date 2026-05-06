@@ -41,6 +41,11 @@ export default async function AdminHome() {
           <h2 className="mt-1 text-lg font-bold">月度精选荐股</h2>
           <p className="mt-1 text-[13px] text-muted">发布 / 平仓 / 止损 Picks，前台自动计算实时收益 + 组合绩效。</p>
         </Link>
+        <Link href="/admin/earnings" className="card p-4 hover:border-accent">
+          <p className="label-caps">Earnings Pipeline</p>
+          <h2 className="mt-1 text-lg font-bold">财报流水线</h2>
+          <p className="mt-1 text-[13px] text-muted">覆盖标的财报自动触发深度文章生成，支持手动扫描 + 重试失败。</p>
+        </Link>
         <Link href="/analysis" className="card p-4 hover:border-accent">
           <p className="label-caps">内容库</p>
           <h2 className="mt-1 text-lg font-bold">查看已发布内容</h2>
