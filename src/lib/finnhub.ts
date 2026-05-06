@@ -102,3 +102,81 @@ export async function getQuote(symbol: string): Promise<FinnhubQuote | null> {
   const map = await getQuotes([symbol]);
   return map[symbol];
 }
+
+// ====================================================================
+// Earnings calendar / company news / basic financials
+// (用于自动深度文章 pipeline)
+// ====================================================================
+
+export type FinnhubEarningRow = {
+  symbol: string;
+  date: string;                  // YYYY-MM-DD
+  hour: string | null;           // 'bmo' / 'amc' / 'dmh' / null
+  quarter: number;               // 1-4
+  year: number;
+  epsActual: number | null;
+  epsEstimate: number | null;
+  revenueActual: number | null;
+  revenueEstimate: number | null;
+};
+
+/**
+ * 拉取一段时间的全市场财报日历。Free tier 不能按 symbol 过滤过去日期，
+ * 但可以拿全市场一天 1500+ 条，本地按我们的 ticker 集合过滤即可。
+ */
+export async function fetchEarningsCalendar(
+  fromISO: string,
+  toISO: string,
+): Promise<FinnhubEarningRow[]> {
+  const url = `https://finnhub.io/api/v1/calendar/earnings?from=${fromISO}&to=${toISO}&token=${token()}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`finnhub earnings ${res.status}`);
+  const data = (await res.json()) as { earningsCalendar?: FinnhubEarningRow[] };
+  return Array.isArray(data.earningsCalendar) ? data.earningsCalendar : [];
+}
+
+export type FinnhubNewsItem = {
+  category: string;
+  datetime: number;             // unix seconds
+  headline: string;
+  id: number;
+  image?: string;
+  related?: string;
+  source: string;
+  summary: string;
+  url: string;
+};
+
+export async function fetchCompanyNews(
+  symbol: string,
+  fromISO: string,
+  toISO: string,
+  limit = 8,
+): Promise<FinnhubNewsItem[]> {
+  const url = `https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(symbol)}&from=${fromISO}&to=${toISO}&token=${token()}`;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as FinnhubNewsItem[];
+    return Array.isArray(data) ? data.slice(0, limit) : [];
+  } catch {
+    return [];
+  }
+}
+
+export type FinnhubBasicFinancials = {
+  metric?: Record<string, number | null>;
+  metricType?: string;
+};
+
+export async function fetchBasicFinancials(symbol: string): Promise<FinnhubBasicFinancials | null> {
+  const url = `https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all&token=${token()}`;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as FinnhubBasicFinancials;
+  } catch {
+    return null;
+  }
+}
+
