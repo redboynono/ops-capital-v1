@@ -8,6 +8,13 @@ import {
   getQuote,
 } from "@/lib/finnhub";
 import {
+  fetchYahooFundamentals,
+  getQuote as getYahooQuote,
+  isHkSymbol,
+  toYahooSymbol,
+  yahooToFinnhubMetric,
+} from "@/lib/yahoo";
+import {
   CORE_FACTORS,
   DIVIDEND_FACTORS,
   type FactorKey,
@@ -118,17 +125,49 @@ export async function generateAndSaveRating(
   source: "AI" | "CRON" | "MANUAL" = "AI",
 ): Promise<GenerateRatingResult> {
   // ---- 1. pull factsheet data in parallel ----
+  // HK tickers (5-digit codes) are not on Finnhub free tier; fall back to Yahoo.
   const newsFrom = new Date();
   newsFrom.setUTCDate(newsFrom.getUTCDate() - 30);
   const newsTo = new Date();
-
   const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 
-  const [quote, fin, news] = await Promise.all([
-    getQuote(symbol).catch(() => null),
-    fetchBasicFinancials(symbol).catch(() => null),
-    fetchCompanyNews(symbol, isoDate(newsFrom), isoDate(newsTo), 6).catch(() => []),
-  ]);
+  let quote: Awaited<ReturnType<typeof getQuote>> | null = null;
+  let metrics: Record<string, unknown> | null = null;
+  let news: Awaited<ReturnType<typeof fetchCompanyNews>> = [];
+
+  if (isHkSymbol(symbol)) {
+    const ySym = toYahooSymbol(symbol);
+    const [yQuote, yFund] = await Promise.all([
+      getYahooQuote(ySym).catch(() => null),
+      fetchYahooFundamentals(ySym).catch(() => null),
+    ]);
+    if (yQuote) {
+      quote = {
+        symbol,
+        displaySymbol: yQuote.displaySymbol,
+        c: yQuote.c,
+        d: yQuote.d,
+        dp: yQuote.dp,
+        h: yQuote.h,
+        l: yQuote.l,
+        o: yQuote.o,
+        pc: yQuote.pc,
+        t: yQuote.t,
+        stale: yQuote.stale,
+      };
+    }
+    if (yFund) metrics = yahooToFinnhubMetric(yFund);
+    // Finnhub /company-news doesn't cover HK on free tier → leave news empty
+  } else {
+    const [fhQuote, fin, fhNews] = await Promise.all([
+      getQuote(symbol).catch(() => null),
+      fetchBasicFinancials(symbol).catch(() => null),
+      fetchCompanyNews(symbol, isoDate(newsFrom), isoDate(newsTo), 6).catch(() => []),
+    ]);
+    quote = fhQuote;
+    metrics = fin?.metric ?? null;
+    news = fhNews;
+  }
 
   // ---- 2. build grounded prompt ----
   const userPrompt = buildRatingsUserPromptWithFactsheet({
@@ -136,7 +175,7 @@ export async function generateAndSaveRating(
     name: ticker.name,
     sector: ticker.sector,
     quote,
-    metrics: fin?.metric ?? null,
+    metrics,
     news,
   });
 
