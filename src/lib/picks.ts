@@ -122,6 +122,18 @@ export async function upsertPick(input: UpsertPickInput): Promise<{ id: string }
   );
   const id = existing[0]?.id ?? input.id ?? randomUUID();
 
+  // Sync ticker into the index automatically. If the symbol isn't in `tickers`
+  // yet, insert a stub row so the Pick page links resolve and the daily ratings
+  // cron picks it up. Idempotent — existing rows keep their richer metadata
+  // (exchange/sector) untouched.
+  const sym = input.ticker_symbol.toUpperCase();
+  const nm = (input.ticker_name && input.ticker_name.trim()) || sym;
+  await mysqlQuery(
+    `insert into tickers (symbol, name) values (?, ?)
+     on duplicate key update name = if(values(name) = symbol, name, values(name))`,
+    [sym, nm],
+  );
+
   const values = [
     input.slug,
     input.ticker_symbol.toUpperCase(),

@@ -40,10 +40,12 @@ const MYSQL_URL = process.env.MYSQL_URL;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL ?? "https://api.minimaxi.com/v1").replace(/\/$/, "");
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "MiniMax-M2.7-highspeed";
-const OPENAI_MAX_TOKENS = Number(process.env.OPENAI_MAX_TOKENS ?? 16000);
+const OPENAI_MAX_TOKENS = Number(process.env.OPENAI_MAX_TOKENS ?? 32000);
+const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY ?? process.env.FINNHUB_TOKEN ?? "";
 
 if (!MYSQL_URL) throw new Error("MYSQL_URL not set");
 if (!OPENAI_API_KEY && !DRY_RUN) throw new Error("OPENAI_API_KEY not set (use --dry-run to preview selection only)");
+if (!FINNHUB_API_KEY && !DRY_RUN) throw new Error("FINNHUB_API_KEY not set — cannot fetch real-time factsheet");
 
 // ============================== prompts ============================== //
 
@@ -71,7 +73,15 @@ const SYSTEM_PROMPT = `# Role: 华尔街顶级对冲基金首席投资官 (CIO) 
 ## Guardrails:
 - 禁止保证收益、禁止投资承诺语
 - 必须披露主要风险与不确定性
-- 必须给出时间窗口（3-6 个月 / 12-18 个月）`;
+- 必须给出时间窗口（3-6 个月 / 12-18 个月）
+
+## 数据使用准则（最高优先级，违反即为不合格）
+1. user prompt 里的 **Factsheet** 是唯一可信数据源，包含 **实时股价、市值、估值倍数、IPO 日期、CEO、近 14 天 news**。
+2. **写到当前股价 / 市值 / 52W 高低 / PE / PS 时，必须严格使用 factsheet 里的数字，禁止依赖训练记忆**。训练截止后发生的价格变动（例如 IPO 后几倍上涨） 是常态。
+3. 计算上涨 / 下跌 / NTM PE / 估值重估时，始终以 factsheet 的 **current_price** 为错起点。
+4. 公司主营业务以 factsheet 的 industry / weburl / news headlines 为准。如果 factsheet 的 ipo 日期距今不到 18 个月，明确标注 "近期 IPO、公开财务数据有限"。
+5. **factsheet 未列的数字一律写 "未公开披露"**，或在该数字后加 *（推断）* 标注。
+6. 严禁把同名旧标的（如 "CRCL" 在 2024 以前训练语料里可能是其他公司）误配成当前 ticker。以 factsheet 的 name + ipo 为准。`;
 
 // 行业 × 主题矩阵：随机组合生成当日 focus，避免每次都写"长期定价权"
 const SECTOR_THEMES = {
@@ -136,6 +146,122 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// ============================== finnhub factsheet ============================== //
+
+async function fhGet(path, query = {}) {
+  const u = new URL(`https://finnhub.io/api/v1/${path}`);
+  for (const [k, v] of Object.entries(query)) u.searchParams.set(k, String(v));
+  u.searchParams.set("token", FINNHUB_API_KEY);
+  const res = await fetch(u.toString(), { cache: "no-store" });
+  if (!res.ok) throw new Error(`finnhub ${path} ${res.status}`);
+  return res.json();
+}
+
+function fmtMoney(v) {
+  if (v == null || !Number.isFinite(v)) return "n/a";
+  if (Math.abs(v) >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
+  if (Math.abs(v) >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+  if (Math.abs(v) >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+  return `$${v.toFixed(2)}`;
+}
+function fmtNum(v, d = 2) {
+  if (v == null || !Number.isFinite(v)) return "n/a";
+  return Number(v).toFixed(d);
+}
+
+async function buildFactsheet(ticker) {
+  const sym = ticker.symbol;
+  const today = new Date();
+  const past = new Date(today);
+  past.setUTCDate(past.getUTCDate() - 14);
+  const isoFrom = past.toISOString().slice(0, 10);
+  const isoTo = today.toISOString().slice(0, 10);
+
+  const safe = (p) => p.catch((e) => { console.warn(`  [factsheet warn] ${e.message}`); return null; });
+  const [profile, quote, fin, news] = await Promise.all([
+    safe(fhGet("stock/profile2", { symbol: sym })),
+    safe(fhGet("quote", { symbol: sym })),
+    safe(fhGet("stock/metric", { symbol: sym, metric: "all" })),
+    safe(fhGet("company-news", { symbol: sym, from: isoFrom, to: isoTo })),
+  ]);
+
+  const m = fin?.metric ?? {};
+  const lines = [];
+  lines.push("## 公司概况");
+  lines.push(`- symbol: ${sym}`);
+  lines.push(`- name: ${profile?.name ?? ticker.name ?? sym}`);
+  if (profile?.finnhubIndustry) lines.push(`- industry: ${profile.finnhubIndustry}`);
+  if (profile?.country) lines.push(`- country: ${profile.country}`);
+  if (profile?.exchange) lines.push(`- exchange: ${profile.exchange}`);
+  if (profile?.ipo) {
+    const months = Math.round((today.getTime() - new Date(profile.ipo).getTime()) / (30 * 86400000));
+    lines.push(`- ipo_date: ${profile.ipo} (距今约 ${months} 个月)`);
+  }
+  if (profile?.weburl) lines.push(`- weburl: ${profile.weburl}`);
+  if (profile?.shareOutstanding) lines.push(`- shares_outstanding: ${profile.shareOutstanding}M`);
+  if (profile?.marketCapitalization) lines.push(`- market_cap (profile): ${fmtMoney(profile.marketCapitalization * 1e6)}`);
+
+  lines.push("");
+  lines.push("## 实时报价（Finnhub /quote，本封取数于 " + isoTo + "）");
+  if (quote && Number.isFinite(quote.c)) {
+    lines.push(`- current_price: $${fmtNum(quote.c)}`);
+    lines.push(`- change_today: $${fmtNum(quote.d)} (${fmtNum(quote.dp)}%)`);
+    lines.push(`- prev_close: $${fmtNum(quote.pc)}`);
+    lines.push(`- day_high: $${fmtNum(quote.h)}`);
+    lines.push(`- day_low: $${fmtNum(quote.l)}`);
+    lines.push(`- open: $${fmtNum(quote.o)}`);
+  } else {
+    lines.push("- (实时报价获取失败)");
+  }
+
+  lines.push("");
+  lines.push("## 估值与财务（Finnhub /stock/metric basicFinancials）");
+  const metricKeys = [
+    ["52WeekHigh", "52W 高"],
+    ["52WeekLow", "52W 低"],
+    ["52WeekPriceReturnDaily", "52W 价格回报%"],
+    ["peNormalizedAnnual", "PE (normalized TTM)"],
+    ["peTTM", "PE TTM"],
+    ["psTTM", "PS TTM"],
+    ["pbAnnual", "PB"],
+    ["epsGrowth5Y", "EPS 5Y CAGR"],
+    ["revenueGrowth5Y", "营收 5Y CAGR"],
+    ["revenuePerShareTTM", "RevPerShare TTM"],
+    ["epsTTM", "EPS TTM"],
+    ["grossMarginTTM", "毛利率 TTM%"],
+    ["operatingMarginTTM", "营业利润率 TTM%"],
+    ["netProfitMarginTTM", "净利率 TTM%"],
+    ["roeTTM", "ROE TTM%"],
+    ["currentRatioAnnual", "流动比率"],
+    ["totalDebt/totalEquityAnnual", "Debt/Equity"],
+    ["dividendYieldIndicatedAnnual", "股息率 %"],
+    ["beta", "Beta"],
+    ["marketCapitalization", "市值 (M USD)"],
+  ];
+  let metricCount = 0;
+  for (const [k, label] of metricKeys) {
+    const v = m[k];
+    if (v == null || !Number.isFinite(v)) continue;
+    lines.push(`- ${label}: ${fmtNum(v)}`);
+    metricCount++;
+  }
+  if (metricCount === 0) lines.push("- (财务指标全空或 fetch 失败)");
+
+  lines.push("");
+  lines.push(`## 近 14 天 news headlines（Finnhub /company-news，${isoFrom} → ${isoTo}）`);
+  if (Array.isArray(news) && news.length > 0) {
+    for (const n of news.slice(0, 8)) {
+      const date = new Date(n.datetime * 1000).toISOString().slice(0, 10);
+      lines.push(`- [${date}] ${n.headline}（${n.source ?? "?"}）`);
+      if (n.summary) lines.push(`  ${String(n.summary).slice(0, 180)}`);
+    }
+  } else {
+    lines.push("- (近期无 news 或 fetch 失败)");
+  }
+
+  return lines.join("\n");
+}
+
 function buildFocus(ticker) {
   const themes = SECTOR_THEMES[ticker.sector] ?? SECTOR_THEMES.GENERIC;
   const theme1 = pick(themes);
@@ -176,8 +302,27 @@ function parseOutput(raw) {
   return { title, body: cleaned, excerpt };
 }
 
-async function callMiniMax(target, focus, attempt = 1) {
-  const userPrompt = `请分析以下标的并输出机构级 Markdown 研报：\n标的：${target}\n用户关注点：${focus}\n今日日期：${todayISO()}\n首行为 # 标题。文章 1500-2500 字。`;
+async function callModel(target, focus, factsheet, attempt = 1) {
+  const userPrompt = `请基于下方 Factsheet 撰写一篇机构级 Markdown 研报。
+
+# 标的
+${target}
+
+# 今日日期
+${todayISO()}
+
+# 用户关注点
+${focus}
+
+# Factsheet（唯一权威数据源；实时股价 / 市值 / 52W / IPO 与 news 仅以此为准）
+${factsheet}
+
+# 输出要求
+- 首行为 # 标题（<=40 字，含公司名 / ticker）
+- 第一段 BLUF：一句话结论 + 明确依据 factsheet 的 current_price 给出目标价 / 估值预期
+- 文章 1500-2500 字
+- 所有带 $ 或 % 的数字，如不来自 factsheet，必须加 *（推断）* 标注、或写 "未公开披露"
+- **不要写 "当前股价在 \$X 附近徘徊" 这类句子除非你使用的是 factsheet.current_price**`;
 
   const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
     method: "POST",
@@ -198,7 +343,7 @@ async function callMiniMax(target, focus, attempt = 1) {
     if ((res.status === 529 || res.status === 429) && attempt < 3) {
       console.warn(`  [${res.status}] retry ${attempt}/2 in 10s...`);
       await sleep(10000);
-      return callMiniMax(target, focus, attempt + 1);
+      return callModel(target, focus, factsheet, attempt + 1);
     }
     throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
   }
@@ -209,7 +354,7 @@ async function callMiniMax(target, focus, attempt = 1) {
     if (data.base_resp.status_code === 2064 && attempt < 3) {
       console.warn(`  [overloaded:2064] retry ${attempt}/2 in 12s...`);
       await sleep(12000);
-      return callMiniMax(target, focus, attempt + 1);
+      return callModel(target, focus, factsheet, attempt + 1);
     }
     throw new Error(`MiniMax error ${data.base_resp.status_code}: ${msg}`);
   }
@@ -336,8 +481,10 @@ async function main() {
     }
 
     try {
-      console.log(`${tag} generating — focus: ${focus}`);
-      const raw = await callMiniMax(target, focus);
+      console.log(`${tag} fetching factsheet…`);
+      const factsheet = await buildFactsheet(t);
+      console.log(`${tag} generating — focus: ${focus} (factsheet ${factsheet.length} chars)`);
+      const raw = await callModel(target, focus, factsheet);
       const { title, body, excerpt } = parseOutput(raw);
       if (!title || !body || body.length < 400) {
         console.warn(`${tag} output too short (${body?.length ?? 0} chars), skipping`);
