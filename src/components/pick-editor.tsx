@@ -56,8 +56,76 @@ export function PickEditor({ initial, mode }: Props) {
   const [isPublished, setIsPublished] = useState<boolean>(initial?.is_published === 1);
 
   const [saving, setSaving] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  const onAiGenerate = async () => {
+    setError(null);
+    setMessage(null);
+    const sym = tickerSymbol.trim().toUpperCase();
+    if (!sym) {
+      setError("请先填 Ticker（如 AMD），AI 会根据最新 factsheet + 评级一键生成草稿");
+      return;
+    }
+    if (
+      thesis.trim().length > 0 &&
+      !confirm(`AI 将基于 ${sym} 的最新 factsheet + 评级生成完整草稿，覆盖当前所有内容字段。继续？`)
+    ) {
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const res = await fetch("/api/admin/picks/ai-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: sym }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? data.error ?? "AI 生成失败");
+      const d = data.draft as {
+        title: string;
+        subtitle: string | null;
+        thesis_md: string;
+        catalysts_md: string | null;
+        risks_md: string | null;
+        valuation_md: string | null;
+        sell_discipline_md: string | null;
+        entry_price: number;
+        target_price: number | null;
+        stop_price: number | null;
+        horizon_months: number;
+        conviction: "high" | "medium" | "low";
+        tags: string | null;
+        ticker_symbol: string;
+        ticker_name: string;
+        source_summary: string;
+      };
+      setTickerSymbol(d.ticker_symbol);
+      if (!tickerName) setTickerName(d.ticker_name);
+      setTitle(d.title);
+      setSubtitle(d.subtitle ?? "");
+      setThesis(d.thesis_md);
+      setCatalysts(d.catalysts_md ?? "");
+      setRisks(d.risks_md ?? "");
+      setValuation(d.valuation_md ?? "");
+      setSellDiscipline(d.sell_discipline_md ?? "");
+      if (d.entry_price > 0) setEntryPrice(String(d.entry_price));
+      if (d.target_price != null) setTargetPrice(String(d.target_price));
+      if (d.stop_price != null) setStopPrice(String(d.stop_price));
+      setHorizonMonths(String(d.horizon_months));
+      setConviction(d.conviction);
+      if (d.tags) setTags(d.tags);
+      if (!slug) {
+        setSlug(slugify(`${d.ticker_symbol.toLowerCase()}-${d.title}`));
+      }
+      setMessage(`AI 生成完成 · ${d.source_summary}`);
+    } catch (e) {
+      setError(`AI 生成失败：${e instanceof Error ? e.message : "未知错误"}`);
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   const input =
     "w-full rounded border border-border bg-surface px-3 py-2 text-[13px] outline-none placeholder:text-muted-soft focus:border-accent";
@@ -154,6 +222,30 @@ export function PickEditor({ initial, mode }: Props) {
           {message}
         </p>
       ) : null}
+
+      {/* AI 一键生成 */}
+      <section className="card flex flex-wrap items-center gap-3 border-accent/40 bg-accent/5 p-3">
+        <div className="flex-1 min-w-0">
+          <p className="label-caps text-accent-strong">⚡ AI 一键生成草稿</p>
+          <p className="mt-0.5 text-[12px] text-muted">
+            基于该标的最新 factsheet（实时报价 + 财务 + 30 天 news）+ OPS 评级 + 因子档位，AI 起草完整 Pick（含目标价、止损、退出纪律）。约需 30–60 秒。
+          </p>
+        </div>
+        <input
+          value={tickerSymbol}
+          onChange={(e) => setTickerSymbol(e.target.value.toUpperCase())}
+          placeholder="Ticker"
+          className="w-28 rounded border border-border bg-surface px-3 py-1.5 font-mono text-[13px] outline-none focus:border-accent"
+        />
+        <button
+          type="button"
+          onClick={onAiGenerate}
+          disabled={aiBusy || saving}
+          className="rounded-sm border border-accent bg-accent px-4 py-1.5 font-mono text-[12px] font-bold text-white hover:bg-accent-strong disabled:opacity-50"
+        >
+          {aiBusy ? "生成中…（30–60 秒）" : "⚡ AI 生成"}
+        </button>
+      </section>
 
       {/* Basic info */}
       <section className="card p-4 grid gap-3 md:grid-cols-2">
