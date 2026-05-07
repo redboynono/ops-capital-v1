@@ -180,3 +180,67 @@ export async function fetchBasicFinancials(symbol: string): Promise<FinnhubBasic
   }
 }
 
+// ---- /search ----------------------------------------------------------
+export type FinnhubSearchHit = {
+  symbol: string;          // Finnhub canonical e.g. "CRCL"
+  displaySymbol: string;   // exchange-prefixed e.g. "CRCL"
+  description: string;     // company name
+  type: string;            // Common Stock / ADR / ETP / ...
+};
+
+/**
+ * Best-effort search for a free-text query (symbol or company name).
+ * Returns Finnhub matches; empty array on any error.
+ */
+export async function searchSymbols(q: string, limit = 8): Promise<FinnhubSearchHit[]> {
+  const trimmed = q.trim();
+  if (!trimmed) return [];
+  const url = `https://finnhub.io/api/v1/search?q=${encodeURIComponent(trimmed)}&token=${token()}`;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { count?: number; result?: FinnhubSearchHit[] };
+    const hits = Array.isArray(data?.result) ? data.result : [];
+    // Prefer Common Stock / ADR over OTC / future / fund
+    const ranked = [...hits].sort((a, b) => {
+      const score = (h: FinnhubSearchHit) =>
+        h.type === "Common Stock" ? 0 :
+        h.type === "ADR" ? 1 :
+        h.type === "ETP" || h.type === "ETF" ? 2 : 3;
+      return score(a) - score(b) || a.symbol.length - b.symbol.length;
+    });
+    return ranked.slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+// ---- /stock/profile2 --------------------------------------------------
+export type FinnhubCompanyProfile = {
+  ticker: string;
+  name: string;
+  exchange: string;          // "NEW YORK STOCK EXCHANGE, INC."
+  currency: string;          // "USD"
+  country: string;           // "US"
+  ipo: string;               // "2025-06-05"
+  marketCapitalization: number;
+  shareOutstanding: number;
+  finnhubIndustry: string;   // sector label
+  weburl: string;
+  logo: string;
+  phone: string;
+};
+
+export async function fetchCompanyProfile(symbol: string): Promise<FinnhubCompanyProfile | null> {
+  const url = `https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(symbol)}&token=${token()}`;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Partial<FinnhubCompanyProfile>;
+    if (!data?.ticker && !data?.name) return null;
+    return data as FinnhubCompanyProfile;
+  } catch {
+    return null;
+  }
+}
+

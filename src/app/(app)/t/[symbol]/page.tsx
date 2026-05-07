@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { PostRow } from "@/components/post-row";
 import { FactorGrades, QuantRanking, RatingsSummary } from "@/components/rating-panels";
+import { UnlistedTickerView } from "@/components/unlisted-ticker-view";
 import { WatchlistToggle } from "@/components/watchlist-toggle";
 import { isAdminEmail } from "@/lib/admin";
 import { getSessionUser } from "@/lib/auth";
@@ -39,7 +39,13 @@ export default async function TickerPage({
   const { symbol: raw } = await params;
   const symbol = raw.toUpperCase();
   const ticker = await getTickerBySymbol(symbol);
-  if (!ticker) notFound();
+
+  // Unlisted: fall back to live Finnhub preview instead of 404. Lets users
+  // search any ticker (e.g. fresh IPOs like CRCL) and still see real data.
+  if (!ticker) {
+    const u = await getSessionUser();
+    return <UnlistedTickerView symbol={symbol} isAdmin={isAdminEmail(u?.email)} />;
+  }
 
   const { tab } = await searchParams;
   const active = tab === "news" ? "news" : "analysis";
