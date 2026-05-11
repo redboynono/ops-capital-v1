@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { AskAI } from "@/components/ask-ai";
 import { BookmarkButton } from "@/components/bookmark-button";
 import { ShareButton } from "@/components/share/share-button";
 import { getSessionUser } from "@/lib/auth";
@@ -87,6 +88,8 @@ export default async function NewsDetailPage({
       <article className="prose prose-sm max-w-none py-4">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
       </article>
+
+      <AskAI context={{ kind: "post", slug: post.slug }} loggedIn={Boolean(user)} />
 
       <p className={`mt-6 pt-3 text-[11px] leading-relaxed ${readerMode ? "border-t border-[#d8d0c2] text-[#6b5c3f]" : "border-t border-border text-muted-soft"}`}>
         免责声明：本快讯由 AI 编辑流水线生成，仅供参考，不构成投资建议。

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AskAI } from "@/components/ask-ai";
 import { BookmarkButton } from "@/components/bookmark-button";
 import { ShareButton } from "@/components/share/share-button";
 import { StickyPaywall } from "@/components/sticky-paywall";
@@ -104,6 +105,10 @@ export default async function AnalysisDetailPage({
           redactedCount={countRedactions(post.content)}
           variant="analysis"
         />
+      ) : null}
+
+      {canViewFull ? (
+        <AskAI context={{ kind: "post", slug: post.slug }} loggedIn={Boolean(user)} />
       ) : null}
 
       <p className={`mt-8 pt-4 text-[11px] leading-relaxed ${readerMode ? "border-t border-[#d8d0c2] text-[#6b5c3f]" : "border-t border-border text-muted-soft"}`}>

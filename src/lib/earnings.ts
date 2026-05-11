@@ -84,6 +84,50 @@ export async function linkEarningsPost(earningsId: string, postId: string): Prom
   );
 }
 
+/**
+ * 给 /earnings 日历页用：拉取一段时间范围的财报记录（包含已生成文章的链接）。
+ * 不限制 generation_attempts / post_id，估值阶段（actual 还没出）也会显示。
+ */
+export type EarningsCalendarRow = EarningsRow & {
+  ticker_name: string | null;
+  ticker_exchange: string | null;
+  post_slug: string | null;
+  post_kind: string | null;
+};
+
+export async function listEarningsCalendar(
+  fromISO: string,
+  toISO: string,
+): Promise<EarningsCalendarRow[]> {
+  const rows = await mysqlQuery<EarningsCalendarRow[]>(
+    `select e.id, e.symbol, e.fiscal_year, e.fiscal_quarter,
+            cast(e.report_date as char) as report_date, e.hour,
+            e.eps_actual, e.eps_estimate, e.revenue_actual, e.revenue_estimate,
+            e.post_id, e.generation_attempts, e.last_error,
+            t.name as ticker_name, t.exchange as ticker_exchange,
+            p.slug as post_slug, p.kind as post_kind
+       from earnings_releases e
+       left join tickers t on t.symbol = e.symbol
+       left join posts p on p.id = e.post_id
+      where e.report_date between ? and ?
+      order by e.report_date asc, e.symbol`,
+    [fromISO, toISO],
+  );
+  // mysql2 把 decimal/bigint 当字符串返回；统一强制转 number 或 null。
+  const num = (v: unknown): number | null => {
+    if (v == null) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  return rows.map((r) => ({
+    ...r,
+    eps_actual: num(r.eps_actual),
+    eps_estimate: num(r.eps_estimate),
+    revenue_actual: num(r.revenue_actual),
+    revenue_estimate: num(r.revenue_estimate),
+  }));
+}
+
 export async function recordGenerationFailure(
   earningsId: string,
   errorMessage: string,

@@ -12,11 +12,14 @@ const sections: { title: string; items: NavItem[] }[] = [
       { href: "/picks",    label: "OPS Picks" },
       { href: "/analysis", label: "分析长文" },
       { href: "/news",     label: "市场快讯" },
+      { href: "/earnings", label: "财报日历" },
     ],
   },
   {
     title: "SCREEN",
     items: [
+      { href: "/screener",             label: "选股器" },
+      { href: "/compare",              label: "对比" },
       { href: "/tickers",              label: "标的索引" },
       { href: "/dashboard/watchlist",  label: "自选股" },
     ],

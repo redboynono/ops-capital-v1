@@ -39,10 +39,12 @@ const MYSQL_URL = process.env.MYSQL_URL;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL ?? "https://api.minimaxi.com/v1").replace(/\/$/, "");
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "MiniMax-M2.7-highspeed";
-const OPENAI_MAX_TOKENS = Number(process.env.OPENAI_NEWS_MAX_TOKENS ?? 2000);
+const OPENAI_MAX_TOKENS = Number(process.env.OPENAI_NEWS_MAX_TOKENS ?? 16000);
+const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY ?? process.env.FINNHUB_TOKEN ?? "";
 
 if (!MYSQL_URL) throw new Error("MYSQL_URL not set");
 if (!OPENAI_API_KEY && !DRY_RUN) throw new Error("OPENAI_API_KEY not set (use --dry-run to preview)");
+if (!FINNHUB_API_KEY && !DRY_RUN) throw new Error("FINNHUB_API_KEY not set — cannot fetch real-time factsheet");
 
 // ============================== prompts ============================== //
 
@@ -64,7 +66,14 @@ const SYSTEM_PROMPT = `# Role: 一线交易台资深市场快讯撰稿人
 ## Tone
 - 冷酷、点到即止、像 Bloomberg terminal 上的 desk note
 - 数字第一，叙事第二
-- 严禁出现"我认为""请注意""综上所述""总而言之"这类口水话`;
+- 严禁出现"我认为""请注意""综上所述""总而言之"这类口水话
+
+## 数据使用准则（违反即为不合格）
+1. user prompt 里的 **Factsheet** 包含最新股价 (current_price)、今日涨跌、近 14 天 news。**只能用这些数据**。
+2. 写到当前股价 / 今日涨跌 / 52W 高低时，严格使用 factsheet 里的数字，禁止依赖训练记忆。训练截止后发生的价格变动是常态。
+3. 任何带 $ 或 % 的数字，不来自 factsheet 的必须加 *（推断）* 标注或写"未公开披露"。
+4. "事件"部分必须基于 factsheet 里的 news headlines；如果 news 为空，明说"近期无重大公开事件"，不要捏造事件。
+5. 如 ipo_date 距今不足 18 个月，明确指出"近期 IPO、财务数据有限"。`;
 
 // 行业 × 视角矩阵：让快讯有切入角度，不是干巴巴"今天涨了"
 const NEWS_ANGLES = {
@@ -130,6 +139,94 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// ============================== finnhub factsheet ============================== //
+
+async function fhGet(path, query = {}) {
+  const u = new URL(`https://finnhub.io/api/v1/${path}`);
+  for (const [k, v] of Object.entries(query)) u.searchParams.set(k, String(v));
+  u.searchParams.set("token", FINNHUB_API_KEY);
+  const res = await fetch(u.toString(), { cache: "no-store" });
+  if (!res.ok) throw new Error(`finnhub ${path} ${res.status}`);
+  return res.json();
+}
+
+function fmtNum(v, d = 2) {
+  if (v == null || !Number.isFinite(v)) return "n/a";
+  return Number(v).toFixed(d);
+}
+
+/** 轻量级 factsheet：quote + 几个关键估值 + 近 14 天 top 6 news。保持 short 然后足以锁住实时价格。*/
+async function buildNewsFactsheet(ticker) {
+  const sym = ticker.symbol;
+  const today = new Date();
+  const past = new Date(today);
+  past.setUTCDate(past.getUTCDate() - 14);
+  const isoFrom = past.toISOString().slice(0, 10);
+  const isoTo = today.toISOString().slice(0, 10);
+
+  const safe = (p) => p.catch((e) => { console.warn(`  [factsheet warn] ${e.message}`); return null; });
+  const [profile, quote, fin, news] = await Promise.all([
+    safe(fhGet("stock/profile2", { symbol: sym })),
+    safe(fhGet("quote", { symbol: sym })),
+    safe(fhGet("stock/metric", { symbol: sym, metric: "all" })),
+    safe(fhGet("company-news", { symbol: sym, from: isoFrom, to: isoTo })),
+  ]);
+
+  const m = fin?.metric ?? {};
+  const lines = [];
+  lines.push("## 公司");
+  lines.push(`- symbol: ${sym}`);
+  lines.push(`- name: ${profile?.name ?? ticker.name ?? sym}`);
+  if (profile?.finnhubIndustry) lines.push(`- industry: ${profile.finnhubIndustry}`);
+  if (profile?.ipo) {
+    const months = Math.round((today.getTime() - new Date(profile.ipo).getTime()) / (30 * 86400000));
+    lines.push(`- ipo_date: ${profile.ipo} (距今约 ${months} 个月)`);
+  }
+
+  lines.push("");
+  lines.push(`## 实时报价（Finnhub /quote, ${isoTo}）`);
+  if (quote && Number.isFinite(quote.c)) {
+    lines.push(`- current_price: $${fmtNum(quote.c)}`);
+    lines.push(`- change_today: $${fmtNum(quote.d)} (${fmtNum(quote.dp)}%)`);
+    lines.push(`- prev_close: $${fmtNum(quote.pc)}, day_high: $${fmtNum(quote.h)}, day_low: $${fmtNum(quote.l)}`);
+  } else {
+    lines.push("- (实时报价获取失败)");
+  }
+
+  const keyMetrics = [
+    ["52WeekHigh", "52W 高"],
+    ["52WeekLow", "52W 低"],
+    ["peTTM", "PE TTM"],
+    ["psTTM", "PS TTM"],
+    ["beta", "Beta"],
+    ["marketCapitalization", "市值 (M USD)"],
+  ];
+  const metricLines = [];
+  for (const [k, label] of keyMetrics) {
+    const v = m[k];
+    if (v == null || !Number.isFinite(v)) continue;
+    metricLines.push(`${label}=${fmtNum(v)}`);
+  }
+  if (metricLines.length > 0) {
+    lines.push("");
+    lines.push(`## 关键估值指标：${metricLines.join(" / ")}`);
+  }
+
+  lines.push("");
+  lines.push(`## 近 14 天 news headlines (${isoFrom} → ${isoTo})`);
+  if (Array.isArray(news) && news.length > 0) {
+    for (const n of news.slice(0, 6)) {
+      const date = new Date(n.datetime * 1000).toISOString().slice(0, 10);
+      lines.push(`- [${date}] ${n.headline}（${n.source ?? "?"}）`);
+      if (n.summary) lines.push(`  ${String(n.summary).slice(0, 140)}`);
+    }
+  } else {
+    lines.push("- (近 14 天无 news 或 fetch 失败)");
+  }
+
+  return lines.join("\n");
+}
+
 function buildAngle(ticker) {
   const sectorAngles = NEWS_ANGLES[ticker.sector] ?? NEWS_ANGLES.GENERIC;
   return pick(sectorAngles);
@@ -168,8 +265,26 @@ function parseOutput(raw) {
   return { title, body: cleaned, excerpt };
 }
 
-async function callMiniMax(target, angle, attempt = 1) {
-  const userPrompt = `请为以下标的撰写一条市场快讯（盘中 desk note 风格）：\n标的：${target}\n切入角度：${angle}\n今日日期：${todayISO()}\n严格按 system prompt 的"事件 / 解读 / 对标的的影响"三段式，正文 400-700 字。首行为 # 标题。`;
+async function callModel(target, angle, factsheet, attempt = 1) {
+  const userPrompt = `请为以下标的撰写一条市场快讯（盘中 desk note 风格）。
+
+# 标的
+${target}
+
+# 今日日期
+${todayISO()}
+
+# 切入角度
+${angle}
+
+# Factsheet（唯一权威数据源；实时股价 / 52W / news 只以此为准）
+${factsheet}
+
+# 输出要求
+- 首行 # 标题（<=30 字，含具体动作或数据点）
+- 正文 400-700 字，三段式：事件 / 解读 / 对标的的影响
+- 引用股价时使用 factsheet 的 current_price 与 change_today
+- 事件部分只能取自 factsheet 的 news headlines；如为空则明说"近期无重大公开事件"`;
 
   const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
     method: "POST",
@@ -190,7 +305,7 @@ async function callMiniMax(target, angle, attempt = 1) {
     if ((res.status === 529 || res.status === 429) && attempt < 3) {
       console.warn(`  [${res.status}] retry ${attempt}/2 in 10s...`);
       await sleep(10000);
-      return callMiniMax(target, angle, attempt + 1);
+      return callModel(target, angle, factsheet, attempt + 1);
     }
     throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
   }
@@ -201,9 +316,9 @@ async function callMiniMax(target, angle, attempt = 1) {
     if (data.base_resp.status_code === 2064 && attempt < 3) {
       console.warn(`  [overloaded:2064] retry ${attempt}/2 in 12s...`);
       await sleep(12000);
-      return callMiniMax(target, angle, attempt + 1);
+      return callModel(target, angle, factsheet, attempt + 1);
     }
-    throw new Error(`MiniMax error ${data.base_resp.status_code}: ${msg}`);
+    throw new Error(`upstream error ${data.base_resp.status_code}: ${msg}`);
   }
   const content = data?.choices?.[0]?.message?.content;
   if (!content || typeof content !== "string") throw new Error("empty content");
@@ -314,8 +429,10 @@ async function main() {
     }
 
     try {
-      console.log(`${tag} generating — angle: ${angle}`);
-      const raw = await callMiniMax(target, angle);
+      console.log(`${tag} fetching factsheet…`);
+      const factsheet = await buildNewsFactsheet(t);
+      console.log(`${tag} generating — angle: ${angle} (factsheet ${factsheet.length} chars)`);
+      const raw = await callModel(target, angle, factsheet);
       const { title, body, excerpt } = parseOutput(raw);
       if (!title || !body || body.length < 200) {
         console.warn(`${tag} output too short (${body?.length ?? 0} chars), skipping`);

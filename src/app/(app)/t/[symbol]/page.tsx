@@ -4,6 +4,7 @@ import { FactorGrades, QuantRanking, RatingsSummary } from "@/components/rating-
 import { UnlistedTickerView } from "@/components/unlisted-ticker-view";
 import { WatchlistToggle } from "@/components/watchlist-toggle";
 import { isAdminEmail } from "@/lib/admin";
+import { AskAI } from "@/components/ask-ai";
 import { getSessionUser } from "@/lib/auth";
 import { mysqlQuery } from "@/lib/mysql";
 import { listPosts } from "@/lib/posts";
@@ -158,6 +159,8 @@ export default async function TickerPage({
           </section>
         </aside>
       </div>
+
+      <AskAI context={{ kind: "ticker", symbol }} loggedIn={Boolean(user)} />
     </div>
   );
 }
