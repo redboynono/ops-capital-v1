@@ -9,7 +9,8 @@ const sections: { title: string; items: NavItem[] }[] = [
     title: "MARKET",
     items: [
       { href: "/alpha",    label: "Alpha 首页" },
-      { href: "/picks",    label: "OPS Picks" },
+      { href: "/picks",      label: "OPS Picks" },
+      { href: "/conviction", label: "Conviction" },
       { href: "/analysis", label: "分析长文" },
       { href: "/news",     label: "市场快讯" },
       { href: "/earnings", label: "财报日历" },
@@ -27,9 +28,12 @@ const sections: { title: string; items: NavItem[] }[] = [
   {
     title: "ACCOUNT",
     items: [
-      { href: "/dashboard",         label: "会员中心" },
-      { href: "/dashboard/library", label: "收藏 / 历史" },
-      { href: "/dashboard/profile", label: "资料" },
+      { href: "/dashboard",           label: "会员中心" },
+      { href: "/dashboard/briefing",  label: "每日简报" },
+      { href: "/dashboard/portfolio", label: "模拟盘" },
+      { href: "/dashboard/alerts",    label: "实时提醒" },
+      { href: "/dashboard/library",   label: "收藏 / 历史" },
+      { href: "/dashboard/profile",   label: "资料" },
       { href: "/pricing",           label: "订阅方案" },
     ],
   },

@@ -10,6 +10,7 @@ create table if not exists users (
   password_reset_expires_at datetime null,
   subscription_status enum('inactive','active') not null default 'inactive',
   subscription_end_date datetime null,
+  email_briefing_enabled tinyint(1) not null default 0,
   created_at datetime not null default current_timestamp
 );
 
@@ -215,4 +216,96 @@ create table if not exists orders (
   key idx_orders_user (user_id, created_at desc),
   key idx_orders_status (status),
   constraint fk_orders_user foreign key (user_id) references users(id) on delete cascade
+);
+
+-- ============================================================
+-- alert_rules：用户自定义价格 / 涨跌幅触发提醒，cron 命中后发邮件
+-- ============================================================
+create table if not exists alert_rules (
+  id char(36) not null,
+  user_id char(36) not null,
+  symbol varchar(32) not null,
+  rule_type enum('price_above','price_below','move_above','move_below') not null,
+  threshold decimal(12,4) not null,
+  is_active tinyint(1) not null default 1,
+  cooldown_minutes int not null default 60,
+  last_triggered_at datetime null,
+  created_at datetime not null default current_timestamp,
+  updated_at datetime not null default current_timestamp on update current_timestamp,
+  primary key (id),
+  key idx_user_active (user_id, is_active),
+  key idx_symbol_active (symbol, is_active),
+  constraint fk_alert_user foreign key (user_id) references users(id) on delete cascade,
+  constraint fk_alert_ticker foreign key (symbol) references tickers(symbol) on delete cascade
+);
+
+-- ============================================================
+-- conviction_lists / conviction_picks：月度高信念榜单 + 净值跟踪
+-- ============================================================
+create table if not exists conviction_lists (
+  id char(36) not null,
+  period_label varchar(64) not null,
+  publish_date date not null,
+  end_date date null,
+  thesis text null,
+  is_active tinyint(1) not null default 1,
+  created_at datetime not null default current_timestamp,
+  updated_at datetime not null default current_timestamp on update current_timestamp,
+  primary key (id),
+  unique key uk_period (period_label),
+  key idx_publish (publish_date desc)
+);
+
+create table if not exists conviction_picks (
+  id char(36) not null,
+  list_id char(36) not null,
+  symbol varchar(32) not null,
+  entry_price decimal(12,4) not null,
+  weight decimal(6,4) not null default 0.1,
+  thesis text null,
+  sort_order int not null default 0,
+  created_at datetime not null default current_timestamp,
+  primary key (id),
+  unique key uk_list_sym (list_id, symbol),
+  key idx_list (list_id, sort_order),
+  constraint fk_cv_list foreign key (list_id) references conviction_lists(id) on delete cascade,
+  constraint fk_cv_ticker foreign key (symbol) references tickers(symbol) on delete cascade
+);
+
+-- ============================================================
+-- positions：用户模拟盘持仓（一只 ticker 一行，按 (user, symbol) 唯一）
+-- ============================================================
+create table if not exists positions (
+  id char(36) not null,
+  user_id char(36) not null,
+  symbol varchar(32) not null,
+  qty decimal(18,6) not null,
+  avg_cost decimal(12,4) not null,
+  opened_at date null,
+  notes varchar(500) null,
+  created_at datetime not null default current_timestamp,
+  updated_at datetime not null default current_timestamp on update current_timestamp,
+  primary key (id),
+  unique key uk_user_symbol (user_id, symbol),
+  key idx_user_created (user_id, created_at),
+  constraint fk_pos_user foreign key (user_id) references users(id) on delete cascade,
+  constraint fk_pos_ticker foreign key (symbol) references tickers(symbol) on delete cascade
+);
+
+-- ============================================================
+-- daily_briefings：每日个人化 watchlist 摘要
+-- ============================================================
+create table if not exists daily_briefings (
+  id char(36) not null,
+  user_id char(36) not null,
+  brief_date date not null,
+  content_markdown mediumtext not null,
+  ticker_count smallint not null default 0,
+  email_sent_at datetime null,
+  created_at datetime not null default current_timestamp,
+  updated_at datetime not null default current_timestamp on update current_timestamp,
+  primary key (id),
+  unique key uk_user_date (user_id, brief_date),
+  key idx_user_created (user_id, created_at),
+  constraint fk_briefings_user foreign key (user_id) references users(id) on delete cascade
 );

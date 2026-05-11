@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { BriefingToggle } from "@/components/briefing-toggle";
 import { ProfileForm } from "@/components/profile-form";
 import { getSessionUser } from "@/lib/auth";
 
@@ -27,6 +28,11 @@ export default async function DashboardProfilePage() {
           </div>
         </dl>
       </div>
+
+      <section className="card mt-4 p-4">
+        <h2 className="mb-1 text-[13px] font-bold text-foreground">通知偏好</h2>
+        <BriefingToggle initialEnabled={user.emailBriefingEnabled} />
+      </section>
 
       <ProfileForm initialFullName={user.fullName ?? ""} />
     </div>
