@@ -38,6 +38,11 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
 const RESEND_FROM = process.env.RESEND_FROM_EMAIL ?? "";
 const SITE_URL = process.env.SITE_URL ?? "https://opscapital.com";
 
+// AI 总结（可选；缺 key 时跳过 LLM 改写，保持纯模板）
+const AI_KEY = process.env.OPENAI_API_KEY ?? "";
+const AI_BASE = (process.env.OPENAI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai").replace(/\/$/, "");
+const AI_MODEL = process.env.OPENAI_MODEL ?? "gemini-3.1-pro-preview";
+
 if (!MYSQL_URL) throw new Error("MYSQL_URL not set");
 if (!FINNHUB_API_KEY && !DRY_RUN) throw new Error("FINNHUB_API_KEY not set");
 
@@ -89,6 +94,62 @@ async function getNews(symbol, fromISO, toISO) {
       source: n.source ?? "",
       datetime: Number(n.datetime ?? 0),
     }));
+}
+
+// ============================== AI summary ============================== //
+
+/**
+ * 让 Gemini 把当日 watchlist 的数据浓缩成 2-3 句中文开场白：
+ *   - 必须 grounded 在传入的事实里，不许臆造
+ *   - 没有"投资建议"语气，只点出"今天值得注意的事"
+ *   - 失败/超时返回 null，调用方退回模板版
+ */
+async function generateAiIntro(facts) {
+  if (!AI_KEY) return null;
+  const prompt = `# Role
+你是 OPS Alpha 投研终端的"今日要点"编辑。
+
+# 任务
+基于下面的 facts JSON，写 2-3 句中文的开场白，给一个有 ${facts.watchlist_size} 只自选股的用户看。
+
+# 要求
+- **只能用 facts 里的数字 / 名字**。禁止臆测 / 引用未出现的事件。
+- 优先级：财报今天/明天 > 大幅价格变动 (|dp%| ≥ 3) > 新闻动量 > OPS 平台新文章
+- 直击重点，不写"早上好"、"投资有风险"这种废话
+- 如果是平淡的一天，就直说"今日自选无显著事件"
+- 控制在 80-150 个汉字内
+- 直接输出文本，不要 Markdown 标题，不要 bullet
+
+# Facts (JSON)
+${JSON.stringify(facts, null, 0)}`;
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    const res = await fetch(`${AI_BASE}/chat/completions`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        temperature: 0.4,
+        max_tokens: Number(process.env.OPENAI_BRIEFING_MAX_TOKENS ?? 4000),
+        messages: [
+          { role: "system", content: "你是数据驱动的二级市场编辑。简短、精准、不臆测。" },
+          { role: "user", content: prompt },
+        ],
+      }),
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const j = await res.json();
+    const raw = j?.choices?.[0]?.message?.content ?? "";
+    const cleaned = String(raw).replace(/<think>[\s\S]*?<\/think>\s*/gi, "").trim();
+    if (!cleaned || cleaned.length < 10) return null;
+    return cleaned;
+  } catch {
+    return null;
+  }
 }
 
 // ============================== content builder ============================== //
@@ -155,13 +216,56 @@ async function buildBriefingForUser(conn, user, today) {
     symbols,
   );
 
+  // ========== 让 Gemini 写 2-3 句开场白 ==========
+  const facts = {
+    date: today,
+    watchlist_size: watchRows.length,
+    movers: enriched
+      .filter((e) => e.quote)
+      .map((e) => ({
+        symbol: e.symbol,
+        name: e.name,
+        price: e.quote.c,
+        dp: e.quote.dp,
+      }))
+      .sort((a, b) => Math.abs(b.dp ?? 0) - Math.abs(a.dp ?? 0))
+      .slice(0, 8),
+    news_count_by_symbol: enriched
+      .filter((e) => e.news.length > 0)
+      .map((e) => ({
+        symbol: e.symbol,
+        n: e.news.length,
+        top_headline: e.news[0]?.headline ?? null,
+      })),
+    upcoming_earnings: earningsRows.map((r) => ({
+      symbol: r.symbol,
+      date: r.report_date,
+      hour: r.hour,
+    })),
+    new_ops_articles: postRows.map((p) => ({
+      title: p.title,
+      kind: p.kind,
+      symbols: p.symbols,
+    })),
+  };
+  const aiIntro = await generateAiIntro(facts);
+
   // ========== render markdown ==========
   const md = [];
   const dateLabel = today.replace(/-/g, "/");
   md.push(`# 今日简报 · ${dateLabel}`);
   md.push("");
-  md.push(`你的自选清单 **${watchRows.length} 个标的** · 自动汇总，无需通读市场。`);
-  md.push("");
+  if (aiIntro) {
+    md.push("## 今日要点");
+    md.push("");
+    md.push(aiIntro);
+    md.push("");
+    md.push(`*自选清单 ${watchRows.length} 个标的 · 详情见下方分区。*`);
+    md.push("");
+  } else {
+    md.push(`你的自选清单 **${watchRows.length} 个标的** · 自动汇总，无需通读市场。`);
+    md.push("");
+  }
 
   // -- Section 1: price movers
   const withQuote = enriched.filter((e) => e.quote);

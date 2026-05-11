@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 
+import { getSessionUser } from "@/lib/auth";
 import { listEarningsCalendar, type EarningsCalendarRow } from "@/lib/earnings";
+import { listWatchlist } from "@/lib/tickers";
 
 export const dynamic = "force-dynamic";
 
@@ -170,13 +173,75 @@ function EarningsRowItem({ row, today }: { row: EarningsCalendarRow; today: stri
   );
 }
 
-export default async function EarningsCalendarPage() {
-  const today = new Date();
-  const fromISO = isoOffset(today, -14);
-  const toISO = isoOffset(today, 30);
+/** 把"周一"作为周首日，根据偏移量返回 [周一 00:00, 周日 23:59) 的 ISO 字符串。 */
+function weekRange(weekOffset: number): {
+  fromISO: string;
+  toISO: string;
+  label: string;
+  anchorMonday: Date;
+} {
+  const now = new Date();
+  // UTC 周一 = (day - 1 + 7) % 7
+  const dayUTC = now.getUTCDay();
+  const daysFromMonday = (dayUTC + 6) % 7;
+  const thisMonday = new Date(now);
+  thisMonday.setUTCDate(now.getUTCDate() - daysFromMonday);
+  thisMonday.setUTCHours(0, 0, 0, 0);
+  const target = new Date(thisMonday);
+  target.setUTCDate(thisMonday.getUTCDate() + weekOffset * 7);
+  const end = new Date(target);
+  end.setUTCDate(target.getUTCDate() + 6);
+  const fromISO = target.toISOString().slice(0, 10);
+  const toISO = end.toISOString().slice(0, 10);
 
-  const rows = await listEarningsCalendar(fromISO, toISO);
+  let label: string;
+  if (weekOffset === 0) label = "本周";
+  else if (weekOffset === -1) label = "上周";
+  else if (weekOffset === 1) label = "下周";
+  else if (weekOffset < 0) label = `${-weekOffset} 周前`;
+  else label = `${weekOffset} 周后`;
+  return { fromISO, toISO, label, anchorMonday: target };
+}
+
+export default async function EarningsCalendarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string; mine?: string }>;
+}) {
+  const sp = await searchParams;
+  const weekOffset = (() => {
+    const n = parseInt(sp.week ?? "0", 10);
+    if (Number.isNaN(n)) return 0;
+    return Math.max(-26, Math.min(26, n));
+  })();
+  const onlyMine = sp.mine === "1";
+
+  const { fromISO, toISO, label: weekLabel, anchorMonday } = weekRange(weekOffset);
+  const allRows = await listEarningsCalendar(fromISO, toISO);
+
+  // 只看自选时拉 watchlist，再过滤
+  const user = await getSessionUser();
+  let watchlistSymbols: Set<string> = new Set();
+  if (user) {
+    const wl = await listWatchlist(user.id);
+    watchlistSymbols = new Set(wl.map((t) => t.symbol));
+  }
+  const rows = onlyMine ? allRows.filter((r) => watchlistSymbols.has(r.symbol)) : allRows;
   const { released, upcoming, today: todayISO } = bucket(rows);
+
+  // 链接小工具
+  const buildHref = (overrides: { week?: number; mine?: boolean }) => {
+    const w = overrides.week ?? weekOffset;
+    const m = overrides.mine ?? onlyMine;
+    const params = new URLSearchParams();
+    if (w !== 0) params.set("week", String(w));
+    if (m) params.set("mine", "1");
+    const q = params.toString();
+    return q ? `/earnings?${q}` : "/earnings";
+  };
+
+  const fromLabel = `${fromISO.slice(5)}`;
+  const toLabel = `${toISO.slice(5)}`;
 
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 md:px-6">
@@ -184,9 +249,74 @@ export default async function EarningsCalendarPage() {
         <span className="label-caps">Earnings</span>
         <h1 className="mt-1 text-2xl font-bold text-foreground">财报日历</h1>
         <p className="mt-1 text-[13px] text-muted">
-          覆盖所有 OPS Alpha 标的 · 过去 14 天 + 未来 30 天 · 已发财报自动生成 AI 解读
+          覆盖所有 OPS Alpha 标的 · 周维度浏览 · 已发财报自动生成 AI 解读
         </p>
       </header>
+
+      {/* 周导航 + 筛选 */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Link
+          href={buildHref({ week: weekOffset - 1 })}
+          className="inline-flex h-8 items-center gap-1 rounded border border-border bg-surface px-2 text-[12px] hover:border-accent hover:text-accent-strong"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />
+          上一周
+        </Link>
+        <span className="inline-flex h-8 items-center gap-2 rounded border border-border bg-surface-muted px-3 mono text-[12px]">
+          <Calendar className="h-3.5 w-3.5 text-accent-strong" strokeWidth={1.8} />
+          <span className="font-bold text-foreground">{weekLabel}</span>
+          <span className="text-muted">
+            {fromLabel} – {toLabel}
+          </span>
+        </span>
+        <Link
+          href={buildHref({ week: weekOffset + 1 })}
+          className="inline-flex h-8 items-center gap-1 rounded border border-border bg-surface px-2 text-[12px] hover:border-accent hover:text-accent-strong"
+        >
+          下一周
+          <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
+        </Link>
+        {weekOffset !== 0 ? (
+          <Link
+            href={buildHref({ week: 0 })}
+            className="ml-1 text-[11px] text-muted hover:text-accent-strong"
+          >
+            回到本周
+          </Link>
+        ) : null}
+
+        <span className="mx-2 hidden h-5 w-px bg-border md:inline-block" />
+
+        {user ? (
+          <Link
+            href={buildHref({ mine: !onlyMine })}
+            className={`inline-flex h-8 items-center gap-1 rounded border px-3 text-[12px] ${
+              onlyMine
+                ? "border-[color:var(--accent)] bg-[color:var(--accent)] text-[#0a0a0d] font-bold"
+                : "border-border bg-surface text-foreground-soft hover:border-accent hover:text-accent-strong"
+            }`}
+          >
+            {onlyMine ? "✓ 只看自选" : "只看自选"}
+          </Link>
+        ) : (
+          <Link
+            href="/login?redirect=/earnings"
+            className="inline-flex h-8 items-center rounded border border-border bg-surface px-3 text-[12px] text-muted hover:text-accent-strong"
+            title="登录后可按自选股过滤"
+          >
+            登录后过滤自选
+          </Link>
+        )}
+
+        {onlyMine ? (
+          <span className="text-[10px] text-muted">
+            · 自选 {watchlistSymbols.size} 只 · 匹配 {rows.length} 条
+          </span>
+        ) : null}
+
+        {/* 防止 unused */}
+        <span className="hidden">{anchorMonday.toISOString()}</span>
+      </div>
 
       {rows.length === 0 ? (
         <div className="card py-10 text-center text-[13px] text-muted">
@@ -237,7 +367,7 @@ export default async function EarningsCalendarPage() {
       )}
 
       <p className="mt-6 border-t border-border pt-3 text-[11px] leading-relaxed text-muted-soft">
-        数据来源：Finnhub earnings calendar，每 4 小时由 cron 同步入库。BEAT/MISS 标签基于 EPS 实绩 vs 一致预期；REV 为完整财报营收。
+        数据来源：Finnhub earnings calendar，每 4 小时由 cron 同步入库。当前显示一周（周一→周日）；用导航键前后翻周，最多 ±26 周。BEAT/MISS 标签基于 EPS 实绩 vs 一致预期。
       </p>
     </div>
   );

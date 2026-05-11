@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Bell, BellOff, Plus, Search, Trash2, X } from "lucide-react";
+import { Bell, BellOff, Mail, Plus, Search, Trash2, X } from "lucide-react";
 
 import type { AlertRule, AlertRuleType } from "@/lib/alerts";
 
@@ -56,6 +56,21 @@ export function AlertsManager({ initialAlerts }: { initialAlerts: AlertRule[] })
     await fetch(`/api/me/alerts/${id}`, { method: "DELETE" });
     setBusy(null);
     refresh();
+  }
+
+  async function testSend(id: string) {
+    setBusy(id);
+    try {
+      const res = await fetch(`/api/me/alerts/${id}/test`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(`发送失败：${data?.error ?? `HTTP ${res.status}`}`);
+      } else {
+        alert(`已发送测试邮件至 ${data?.sentTo ?? "你的注册邮箱"}`);
+      }
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
@@ -150,15 +165,27 @@ export function AlertsManager({ initialAlerts }: { initialAlerts: AlertRule[] })
                       </button>
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => remove(a.id, label)}
-                        disabled={busy === a.id}
-                        className="text-muted hover:text-[color:var(--danger)] disabled:opacity-50"
-                        aria-label="删除"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-                      </button>
+                      <div className="inline-flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => testSend(a.id)}
+                          disabled={busy === a.id}
+                          className="text-muted hover:text-accent-strong disabled:opacity-50"
+                          aria-label="测试发送"
+                          title="测试发送一封示例邮件（不进入冷却期）"
+                        >
+                          <Mail className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => remove(a.id, label)}
+                          disabled={busy === a.id}
+                          className="text-muted hover:text-[color:var(--danger)] disabled:opacity-50"
+                          aria-label="删除"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

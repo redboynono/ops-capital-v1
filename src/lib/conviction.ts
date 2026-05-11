@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { getQuotes, type FinnhubQuote } from "@/lib/finnhub";
 import { mysqlQuery } from "@/lib/mysql";
+import { getPriceHistory } from "@/lib/price-history";
 import { upsertTicker } from "@/lib/tickers";
 
 export type ConvictionList = {
@@ -40,6 +41,9 @@ export type ListPerformance = {
   best: EnrichedPick | null;
   worst: EnrichedPick | null;
   unpriced_count: number;
+  // SPY 同期回报，用 publish_date 之后第一根可得收盘 vs 最新收盘
+  benchmark: { symbol: "SPY"; return_pct: number | null } | null;
+  alpha_pct: number | null; // list - benchmark
 };
 
 export async function listAllConvictionLists(): Promise<ConvictionList[]> {
@@ -96,6 +100,8 @@ export async function getListPerformance(id: string): Promise<ListPerformance | 
       best: null,
       worst: null,
       unpriced_count: 0,
+      benchmark: null,
+      alpha_pct: null,
     };
   }
 
@@ -135,6 +141,10 @@ export async function getListPerformance(id: string): Promise<ListPerformance | 
     ? priced.reduce((a, b) => ((a.return_pct ?? Infinity) <= (b.return_pct ?? Infinity) ? a : b))
     : null;
 
+  // SPY 同期回报：用 publish_date 之后第一个交易日的 close 作为基准锚点
+  const benchmarkReturn = await computeSpyBenchmark(list.publish_date);
+  const alpha = totalReturn != null && benchmarkReturn != null ? totalReturn - benchmarkReturn : null;
+
   return {
     list,
     picks: enriched,
@@ -142,7 +152,28 @@ export async function getListPerformance(id: string): Promise<ListPerformance | 
     best,
     worst,
     unpriced_count: unpriced,
+    benchmark: { symbol: "SPY", return_pct: benchmarkReturn },
+    alpha_pct: alpha,
   };
+}
+
+/**
+ * 计算 SPY 从 publishDate（含）到最新可得收盘的总回报。
+ * 用 Yahoo 5y 月线（够用，sparkline 已缓存），找到第一个 t >= publishDate 的 close。
+ */
+async function computeSpyBenchmark(publishDate: string): Promise<number | null> {
+  const startMs = new Date(publishDate + "T00:00:00Z").getTime();
+  if (Number.isNaN(startMs)) return null;
+  const ageDays = (Date.now() - startMs) / 86_400_000;
+  // 选最贴近的 range：榜单越早越用粗粒度
+  const range = ageDays <= 30 ? "1mo" : ageDays <= 90 ? "3mo" : ageDays <= 365 ? "1y" : "5y";
+  const history = await getPriceHistory("SPY", range);
+  if (!history || history.points.length < 2) return null;
+  const anchor = history.points.find((p) => p.t * 1000 >= startMs);
+  if (!anchor) return null;
+  const last = history.points[history.points.length - 1];
+  if (anchor.c <= 0) return null;
+  return last.c / anchor.c - 1;
 }
 
 // ---------------- admin write helpers ----------------

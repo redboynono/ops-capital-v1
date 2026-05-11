@@ -64,7 +64,7 @@ export default async function ConvictionIndexPage() {
 }
 
 function ListCard({ perf }: { perf: ListPerformance }) {
-  const { list, picks, total_return_pct, best, worst } = perf;
+  const { list, picks, total_return_pct, best, worst, benchmark, alpha_pct } = perf;
   const active = list.is_active === 1 && !list.end_date;
   return (
     <Link
@@ -79,9 +79,14 @@ function ListCard({ perf }: { perf: ListPerformance }) {
           </p>
           <h2 className="mt-0.5 text-[16px] font-bold text-foreground">{list.period_label}</h2>
         </div>
-        <div className={`text-right mono ${pnlClass(total_return_pct)}`}>
-          <p className="text-[10px] text-muted">当期净值</p>
-          <p className="text-xl font-bold">{fmtPct(total_return_pct)}</p>
+        <div className="text-right mono">
+          <p className={`text-[10px] ${pnlClass(total_return_pct)}`}>当期净值</p>
+          <p className={`text-xl font-bold ${pnlClass(total_return_pct)}`}>{fmtPct(total_return_pct)}</p>
+          {benchmark && benchmark.return_pct != null ? (
+            <p className={`mt-0.5 text-[10px] ${pnlClass(alpha_pct)}`}>
+              vs SPY · α {fmtPct(alpha_pct)}
+            </p>
+          ) : null}
         </div>
       </header>
 

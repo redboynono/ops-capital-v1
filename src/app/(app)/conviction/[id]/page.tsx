@@ -30,7 +30,7 @@ export default async function ConvictionDetailPage({
   const perf = await getListPerformance(id);
   if (!perf) notFound();
 
-  const { list, picks, total_return_pct } = perf;
+  const { list, picks, total_return_pct, benchmark, alpha_pct } = perf;
   const active = list.is_active === 1 && !list.end_date;
 
   return (
@@ -53,9 +53,23 @@ export default async function ConvictionDetailPage({
             </p>
             <h1 className="mt-1 text-2xl font-bold text-foreground">{list.period_label}</h1>
           </div>
-          <div className={`text-right mono ${pnlClass(total_return_pct)}`}>
-            <p className="label-caps text-[10px]">当期加权净值</p>
-            <p className="text-3xl font-bold">{fmtPct(total_return_pct)}</p>
+          <div className="flex flex-wrap items-start gap-x-6 gap-y-2 text-right mono">
+            <div className={pnlClass(total_return_pct)}>
+              <p className="label-caps text-[10px]">当期加权净值</p>
+              <p className="text-3xl font-bold">{fmtPct(total_return_pct)}</p>
+            </div>
+            {benchmark ? (
+              <div className={pnlClass(benchmark.return_pct)}>
+                <p className="label-caps text-[10px]">SPY 同期</p>
+                <p className="text-xl font-semibold">{fmtPct(benchmark.return_pct)}</p>
+              </div>
+            ) : null}
+            {alpha_pct != null ? (
+              <div className={pnlClass(alpha_pct)}>
+                <p className="label-caps text-[10px]">超额收益 α</p>
+                <p className="text-xl font-semibold">{fmtPct(alpha_pct)}</p>
+              </div>
+            ) : null}
           </div>
         </div>
         {list.thesis ? (

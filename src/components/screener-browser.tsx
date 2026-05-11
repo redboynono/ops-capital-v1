@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Filter, RotateCcw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Bookmark, ChevronDown, ChevronUp, Filter, RotateCcw, Save, Trash2 } from "lucide-react";
 
 import type { ScreenerRow } from "@/lib/screener";
 import type { FactorKey, Grade, Verdict } from "@/lib/ratings";
@@ -74,6 +74,57 @@ type SortKey =
 
 type SortDir = "asc" | "desc";
 
+// 一份预设 = 一份完整的筛选 + 排序状态
+type Preset = {
+  name: string;
+  exchanges: string[];
+  verdicts: Verdict[];
+  sectors: string[];
+  factorMin: Record<(typeof CORE_FACTORS)[number], number>;
+  minQuant: number;
+  hasDividend: "any" | "yes" | "no";
+  sortKey: SortKey;
+  sortDir: SortDir;
+};
+
+const EMPTY_FACTOR: Preset["factorMin"] = {
+  VALUATION: 0, GROWTH: 0, PROFITABILITY: 0, MOMENTUM: 0, REVISIONS: 0,
+};
+
+// 内置精选预设（不可删除）
+const BUILTIN_PRESETS: Preset[] = [
+  {
+    name: "🌱 高成长强买",
+    exchanges: [], verdicts: ["STRONG_BUY", "BUY"], sectors: [],
+    factorMin: { ...EMPTY_FACTOR, GROWTH: 3.7 },
+    minQuant: 3.5, hasDividend: "any",
+    sortKey: "quant_score", sortDir: "desc",
+  },
+  {
+    name: "💰 高股息 A 级盈利",
+    exchanges: [], verdicts: [], sectors: [],
+    factorMin: { ...EMPTY_FACTOR, PROFITABILITY: 3.7 },
+    minQuant: 0, hasDividend: "yes",
+    sortKey: "PROFITABILITY", sortDir: "desc",
+  },
+  {
+    name: "📉 超跌价值",
+    exchanges: [], verdicts: [], sectors: [],
+    factorMin: { ...EMPTY_FACTOR, VALUATION: 3.7 },
+    minQuant: 0, hasDividend: "any",
+    sortKey: "MOMENTUM", sortDir: "asc", // 动能差 = 跌得多
+  },
+  {
+    name: "⭐ 全 A 标的",
+    exchanges: [], verdicts: ["STRONG_BUY", "BUY"], sectors: [],
+    factorMin: { VALUATION: 3.7, GROWTH: 3.7, PROFITABILITY: 3.7, MOMENTUM: 3.7, REVISIONS: 3.7 },
+    minQuant: 4.0, hasDividend: "any",
+    sortKey: "quant_score", sortDir: "desc",
+  },
+];
+
+const PRESETS_KEY = "ops-screener-presets-v1";
+
 function gradeColor(g: Grade | null | undefined): string {
   if (!g) return "text-muted";
   if (g.startsWith("A")) return "text-emerald-500";
@@ -112,6 +163,69 @@ export function ScreenerBrowser({ rows }: Props) {
   const [hasDividend, setHasDividend] = useState<"any" | "yes" | "no">("any");
   const [sortKey, setSortKey] = useState<SortKey>("quant_score");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // --- 预设 ---
+  const [customPresets, setCustomPresets] = useState<Preset[]>([]);
+  // 从 localStorage 恢复
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PRESETS_KEY);
+      if (raw) setCustomPresets(JSON.parse(raw) as Preset[]);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  function persistCustom(next: Preset[]) {
+    setCustomPresets(next);
+    try {
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(next));
+    } catch {
+      /* quota */
+    }
+  }
+
+  function applyPreset(p: Preset) {
+    setExchanges(new Set(p.exchanges));
+    setVerdicts(new Set(p.verdicts));
+    setSectors(new Set(p.sectors));
+    setFactorMin({ ...EMPTY_FACTOR, ...p.factorMin });
+    setMinQuant(p.minQuant);
+    setHasDividend(p.hasDividend);
+    setSortKey(p.sortKey);
+    setSortDir(p.sortDir);
+  }
+
+  function currentSnapshot(name: string): Preset {
+    return {
+      name,
+      exchanges: [...exchanges],
+      verdicts: [...verdicts],
+      sectors: [...sectors],
+      factorMin: { ...factorMin },
+      minQuant,
+      hasDividend,
+      sortKey,
+      sortDir,
+    };
+  }
+
+  function saveCustomPreset() {
+    const name = prompt("命名这套筛选（例如：科技 + 强买 + 高 ROE）")?.trim();
+    if (!name) return;
+    if (BUILTIN_PRESETS.some((b) => b.name === name)) {
+      alert("名称与内置预设冲突，请换一个");
+      return;
+    }
+    const next = customPresets.filter((p) => p.name !== name);
+    next.unshift(currentSnapshot(name));
+    persistCustom(next.slice(0, 12)); // 最多 12 份
+  }
+
+  function deleteCustomPreset(name: string) {
+    if (!confirm(`删除预设「${name}」？`)) return;
+    persistCustom(customPresets.filter((p) => p.name !== name));
+  }
 
   const allSectors = useMemo(() => {
     const set = new Set<string>();
@@ -203,6 +317,67 @@ export function ScreenerBrowser({ rows }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* ---------- 预设 ---------- */}
+      <section className="card p-3">
+        <header className="mb-2 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
+            <Bookmark className="h-3.5 w-3.5" strokeWidth={1.8} />
+            预设
+            <span className="text-[10px] font-normal text-muted">
+              · 一键应用，本地保存
+            </span>
+          </h2>
+          <button
+            type="button"
+            onClick={saveCustomPreset}
+            disabled={!hasAnyFilter}
+            className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-accent-strong disabled:opacity-40"
+            title={hasAnyFilter ? "把当前筛选保存为新预设" : "先选点筛选再保存"}
+          >
+            <Save className="h-3 w-3" strokeWidth={1.8} />
+            保存当前
+          </button>
+        </header>
+        <div className="flex flex-wrap gap-1.5">
+          {BUILTIN_PRESETS.map((p) => (
+            <button
+              key={p.name}
+              type="button"
+              onClick={() => applyPreset(p)}
+              className="rounded border border-border bg-surface px-2.5 py-1 text-[11px] text-foreground-soft hover:border-accent hover:text-accent-strong"
+            >
+              {p.name}
+            </button>
+          ))}
+          {customPresets.length > 0 ? (
+            <span className="mx-1 text-[10px] text-muted self-center">|</span>
+          ) : null}
+          {customPresets.map((p) => (
+            <span
+              key={p.name}
+              className="group relative inline-flex items-center rounded border border-border bg-surface text-[11px]"
+            >
+              <button
+                type="button"
+                onClick={() => applyPreset(p)}
+                className="px-2.5 py-1 text-foreground-soft hover:text-accent-strong"
+                title={p.name}
+              >
+                {p.name}
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteCustomPreset(p.name)}
+                className="border-l border-border px-1 py-1 text-muted hover:text-[color:var(--danger)]"
+                aria-label="删除"
+              >
+                <Trash2 className="h-2.5 w-2.5" strokeWidth={1.8} />
+              </button>
+            </span>
+          ))}
+        </div>
+      </section>
+
       {/* ---------- 筛选面板 ---------- */}
       <section className="card p-4">
         <header className="mb-3 flex items-center justify-between">
