@@ -23,6 +23,7 @@ if [ ! -f "$SCRIPT" ]; then
   exit 1
 fi
 
+docker cp "$(dirname "$SCRIPT")/lib" "${CONTAINER}:/app/lib" 2>>"$LOG"
 docker cp "$SCRIPT" "${CONTAINER}:/app/daily-briefing.mjs"
 docker exec -w /app "${CONTAINER}" node daily-briefing.mjs >> "$LOG" 2>&1 || {
   echo "[$(ts)] ERROR: node exec failed (exit $?)" >> "$LOG"

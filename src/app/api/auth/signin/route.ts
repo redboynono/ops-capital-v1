@@ -3,6 +3,7 @@ import { mysqlQuery } from "@/lib/mysql";
 import { verifyPassword } from "@/lib/password";
 import { setUserSession } from "@/lib/auth";
 import { verifyCaptcha } from "@/lib/captcha";
+import { logEvent } from "@/lib/observability";
 
 type Payload = {
   identifier?: string; // 邮箱 或 用户名
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
     }
 
     await setUserSession(user.id, user.email);
+    logEvent("user_login", { userId: user.id });
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

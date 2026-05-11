@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { requireAdmin } from "@/lib/admin";
+import { runJobTs } from "@/lib/observability";
 import { listAllTickers } from "@/lib/tickers";
 import { generateAndSaveRating } from "@/lib/ai/generateRating";
 
@@ -42,31 +43,35 @@ async function handle(req: Request): Promise<NextResponse> {
   const limit = limitStr ? Math.max(1, Math.min(200, Number(limitStr))) : 200;
   const onlySymbol = url.searchParams.get("symbol");
 
-  const tickers = await listAllTickers();
-  const targets = onlySymbol
-    ? tickers.filter((t) => t.symbol === onlySymbol.toUpperCase())
-    : tickers.slice(0, limit);
+  const out = await runJobTs({ jobName: "ratings-refresh" }, async (ctx) => {
+    const tickers = await listAllTickers();
+    const targets = onlySymbol
+      ? tickers.filter((t) => t.symbol === onlySymbol.toUpperCase())
+      : tickers.slice(0, limit);
 
-  const out: Out = { total: targets.length, refreshed: 0, skipped: 0, failures: [] };
-
-  // sequential to stay under AI rate limit
-  for (const t of targets) {
-    try {
-      await generateAndSaveRating(
-        t.symbol,
-        { name: t.name, sector: t.sector },
-        "CRON",
-      );
-      out.refreshed++;
-      // tiny delay so we don't hammer upstream
-      await new Promise((r) => setTimeout(r, 500));
-    } catch (e) {
-      out.failures.push({
-        symbol: t.symbol,
-        error: e instanceof Error ? e.message.slice(0, 200) : "unknown",
-      });
+    const o: Out = { total: targets.length, refreshed: 0, skipped: 0, failures: [] };
+    for (const t of targets) {
+      try {
+        await generateAndSaveRating(
+          t.symbol,
+          { name: t.name, sector: t.sector },
+          "CRON",
+        );
+        o.refreshed++;
+        await new Promise((r) => setTimeout(r, 500));
+      } catch (e) {
+        o.failures.push({
+          symbol: t.symbol,
+          error: e instanceof Error ? e.message.slice(0, 200) : "unknown",
+        });
+      }
     }
-  }
+    ctx.itemsTotal = o.total;
+    ctx.itemsOk = o.refreshed;
+    ctx.itemsFailed = o.failures.length;
+    ctx.meta = { onlySymbol, limit };
+    return o;
+  });
 
   return NextResponse.json(out);
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth";
 import { buildTickerFactsheet } from "@/lib/ai/factsheet";
+import { logEvent } from "@/lib/observability";
 import { getPostBySlug } from "@/lib/posts";
 import { listTickersForPost } from "@/lib/tickers";
 
@@ -122,6 +123,18 @@ export async function POST(req: Request) {
   if (!apiKey) {
     return NextResponse.json({ error: "OPENAI_API_KEY not configured" }, { status: 500 });
   }
+
+  // 埋点：记录每次 AI 问询，便于按用户 / 标的 / 时段统计
+  logEvent("ai_query", {
+    userId: user.id,
+    symbol: body.kind === "ticker" ? body.symbol : null,
+    meta: {
+      kind: body.kind,
+      qLen: question.length,
+      contextLen: context?.length ?? 0,
+      slug: body.kind === "post" ? body.slug : undefined,
+    },
+  });
 
   const history = Array.isArray(body.history) ? body.history.slice(-6) : [];
   const messages: ChatMessage[] | { role: "system" | "user" | "assistant"; content: string }[] = [

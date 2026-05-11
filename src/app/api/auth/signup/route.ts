@@ -4,6 +4,7 @@ import { hashPassword } from "@/lib/password";
 import { mysqlQuery } from "@/lib/mysql";
 import { setUserSession } from "@/lib/auth";
 import { verifyCaptcha } from "@/lib/captcha";
+import { logEvent } from "@/lib/observability";
 
 type Payload = {
   email?: string;
@@ -92,6 +93,7 @@ export async function POST(req: Request) {
     );
 
     await setUserSession(userId, email);
+    logEvent("user_signup", { userId, meta: { hasUsername: !!username, cc } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

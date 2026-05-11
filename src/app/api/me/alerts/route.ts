@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAlert, isAlertType, listAlertsForUser } from "@/lib/alerts";
 import { getSessionUser } from "@/lib/auth";
+import { logEvent } from "@/lib/observability";
 
 export async function GET() {
   const user = await getSessionUser();
@@ -43,6 +44,7 @@ export async function POST(req: Request) {
       threshold,
       cooldownMinutes: body.cooldownMinutes ?? 60,
     });
+    logEvent("alert_create", { userId: user.id, symbol, meta: { ruleType, threshold } });
     return NextResponse.json({ id });
   } catch (err) {
     return NextResponse.json(

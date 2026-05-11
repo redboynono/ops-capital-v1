@@ -21,6 +21,7 @@
 
 import mysql from "mysql2/promise";
 import crypto from "node:crypto";
+import { runJob } from "./lib/job-runner.mjs";
 
 // ============================== args ============================== //
 
@@ -435,7 +436,7 @@ async function selectManual(pool, symbols) {
 
 // ============================== main ============================== //
 
-async function main() {
+async function main(ctx) {
   console.log(`> OPS Alpha daily content generator`);
   console.log(`> date=${todayISO()}  count=${COUNT}  dryRun=${DRY_RUN}  manual=${MANUAL_TICKERS ? MANUAL_TICKERS.join(",") : "(auto)"}`);
   const pool = mysql.createPool(MYSQL_URL);
@@ -515,9 +516,16 @@ async function main() {
   console.log(`\n===== done =====`);
   console.log(`inserted: ${inserted}`);
   console.log(`failed:   ${failed}`);
+
+  if (ctx) {
+    ctx.itemsTotal = candidates.length;
+    ctx.itemsOk = inserted;
+    ctx.itemsFailed = failed;
+    ctx.meta = { count: COUNT, manual: !!MANUAL_TICKERS, dryRun: DRY_RUN };
+  }
 }
 
-main().catch((e) => {
+runJob({ jobName: "daily-content", mysqlUrl: MYSQL_URL }, main).catch((e) => {
   console.error(e);
   process.exit(1);
 });

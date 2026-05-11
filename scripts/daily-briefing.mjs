@@ -18,6 +18,7 @@
 
 import mysql from "mysql2/promise";
 import crypto from "node:crypto";
+import { runJob } from "./lib/job-runner.mjs";
 
 // ============================== args ============================== //
 
@@ -405,7 +406,7 @@ async function sendBriefingEmail({ to, content, dateLabel }) {
 
 // ============================== main ============================== //
 
-async function main() {
+async function main(ctx) {
   const conn = await mysql.createConnection(MYSQL_URL);
   const today = todayISO();
 
@@ -465,6 +466,12 @@ async function main() {
           await conn.execute("update daily_briefings set email_sent_at = current_timestamp where id = ?", [briefingId]);
           mailed++;
           console.log(`    ↳ email sent`);
+          await conn
+            .execute(
+              `insert into events (event_type, user_id, meta_json) values (?, ?, ?)`,
+              ["briefing_email_sent", u.id, JSON.stringify({ tickerCount: result.tickerCount })],
+            )
+            .catch(() => {});
         } else {
           console.log(`    ↳ email FAILED`);
         }
@@ -476,9 +483,16 @@ async function main() {
 
   console.log(`[daily-briefing] done. briefings=${made}, emails=${mailed}`);
   await conn.end();
+
+  if (ctx) {
+    ctx.itemsTotal = users.length;
+    ctx.itemsOk = made;
+    ctx.itemsFailed = users.length - made;
+    ctx.meta = { mailed, dryRun: DRY_RUN, userFilter: USER_FILTER };
+  }
 }
 
-main().catch((e) => {
+runJob({ jobName: "daily-briefing", mysqlUrl: MYSQL_URL }, main).catch((e) => {
   console.error("[daily-briefing] FATAL:", e);
   process.exit(1);
 });

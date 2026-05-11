@@ -16,6 +16,7 @@
  */
 
 import mysql from "mysql2/promise";
+import { runJob } from "./lib/job-runner.mjs";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -132,7 +133,7 @@ async function sendAlertEmail({ to, rule, quote }) {
   return res.ok;
 }
 
-async function main() {
+async function main(ctx) {
   const conn = await mysql.createConnection(MYSQL_URL);
 
   const [rules] = await conn.execute(
@@ -178,14 +179,39 @@ async function main() {
       "update alert_rules set last_triggered_at = current_timestamp where id = ?",
       [rule.id],
     );
+    // 事件埋点 — 触发即记录，无论邮件是否成功
+    await conn
+      .execute(
+        `insert into events (event_type, user_id, symbol, meta_json) values (?, ?, ?, ?)`,
+        [
+          "alert_trigger",
+          rule.user_id,
+          rule.symbol,
+          JSON.stringify({
+            ruleType: rule.rule_type,
+            threshold: Number(rule.threshold),
+            price: q.c,
+            dp: q.dp,
+            mailed: !!ok,
+          }),
+        ],
+      )
+      .catch(() => {});
     if (ok) mailed++;
   }
 
   console.log(`[alerts] done. triggered=${triggered}, mailed=${mailed}`);
   await conn.end();
+
+  if (ctx) {
+    ctx.itemsTotal = rules.length;
+    ctx.itemsOk = triggered;
+    ctx.itemsFailed = triggered - mailed;
+    ctx.meta = { mailed, dryRun: DRY_RUN, uniqueSymbols: symbols.length };
+  }
 }
 
-main().catch((e) => {
+runJob({ jobName: "check-alerts", mysqlUrl: MYSQL_URL }, main).catch((e) => {
   console.error("[alerts] FATAL:", e);
   process.exit(1);
 });

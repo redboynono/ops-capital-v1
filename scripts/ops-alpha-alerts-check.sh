@@ -19,6 +19,7 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
 fi
 [ -f "$SCRIPT" ] || { echo "[$(ts)] ERROR: script not found: $SCRIPT" >> "$LOG"; exit 1; }
 
+docker cp "$(dirname "$SCRIPT")/lib" "${CONTAINER}:/app/lib" 2>>"$LOG"
 docker cp "$SCRIPT" "${CONTAINER}:/app/check-alerts.mjs" >/dev/null
 echo "[$(ts)] ===== alerts check =====" >> "$LOG"
 docker exec -w /app "${CONTAINER}" node check-alerts.mjs >> "$LOG" 2>&1 || {

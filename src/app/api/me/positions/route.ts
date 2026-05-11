@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth";
+import { logEvent } from "@/lib/observability";
 import { listPositions, upsertPosition } from "@/lib/portfolio";
 
 export async function GET() {
@@ -45,6 +46,7 @@ export async function POST(req: Request) {
       openedAt: body.openedAt ?? null,
       notes: body.notes?.slice(0, 500) ?? null,
     });
+    logEvent("position_add", { userId: user.id, symbol, meta: { qty, avgCost } });
     return NextResponse.json({ id, symbol });
   } catch (err) {
     return NextResponse.json(

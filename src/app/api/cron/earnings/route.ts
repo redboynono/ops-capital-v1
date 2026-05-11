@@ -9,6 +9,7 @@ import {
 import { generateAndSaveEarningsPost } from "@/lib/ai/generateEarningsArticle";
 import { isAdminEmail } from "@/lib/admin";
 import { getSessionUser } from "@/lib/auth";
+import { runJobTs } from "@/lib/observability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,76 +64,100 @@ export async function POST(req: Request) {
   const fromISO = isoDate(past);
   const toISO = isoDate(today);
 
-  const out: ScanResult = {
-    ok: true,
-    scanned_window: { from: fromISO, to: toISO },
-    finnhub_total: 0,
-    matched_our_tickers: 0,
-    upserted: 0,
-    pending: 0,
-    generated: [],
-    failures: [],
-  };
+  type RunOutcome =
+    | { kind: "ok"; payload: ScanResult & { sample?: unknown[] } }
+    | { kind: "finnhub_fail"; detail: string };
 
-  // ----- step 1: pull whole-market earnings calendar -----
-  let calendar;
-  try {
-    calendar = await fetchEarningsCalendar(fromISO, toISO);
-  } catch (e) {
+  const outcome = await runJobTs<RunOutcome>(
+    { jobName: "earnings-scan" },
+    async (ctx) => {
+      const out: ScanResult = {
+        ok: true,
+        scanned_window: { from: fromISO, to: toISO },
+        finnhub_total: 0,
+        matched_our_tickers: 0,
+        upserted: 0,
+        pending: 0,
+        generated: [],
+        failures: [],
+      };
+
+      // ----- step 1: pull whole-market earnings calendar -----
+      let calendar;
+      try {
+        calendar = await fetchEarningsCalendar(fromISO, toISO);
+      } catch (e) {
+        const detail = e instanceof Error ? e.message : String(e);
+        ctx.itemsFailed = 1;
+        ctx.meta = { stage: "finnhub_fetch", fromISO, toISO };
+        return { kind: "finnhub_fail" as const, detail };
+      }
+      out.finnhub_total = calendar.length;
+
+      // ----- step 2: filter to our covered tickers -----
+      const ours = await mysqlQuery<{ symbol: string }[]>("select symbol from tickers");
+      const ourSet = new Set(ours.map((r) => r.symbol.toUpperCase()));
+      const matched = calendar.filter((c) => c.symbol && ourSet.has(c.symbol.toUpperCase()));
+      out.matched_our_tickers = matched.length;
+
+      if (dryRun) {
+        ctx.itemsTotal = out.matched_our_tickers;
+        ctx.itemsOk = 0;
+        ctx.itemsFailed = 0;
+        ctx.meta = { dryRun: true, fromISO, toISO };
+        return { kind: "ok" as const, payload: { ...out, sample: matched.slice(0, 10) } };
+      }
+
+      // ----- step 3: upsert -----
+      for (const row of matched) {
+        try {
+          await upsertEarningsRelease(row);
+          out.upserted++;
+        } catch (e) {
+          out.failures.push({
+            symbol: row.symbol,
+            year: row.year,
+            quarter: row.quarter,
+            error: `upsert: ${e instanceof Error ? e.message : "unknown"}`,
+          });
+        }
+      }
+
+      // ----- step 4: pull pending -----
+      const symbols = Array.from(ourSet);
+      const pending = await listPendingEarnings(symbols);
+      out.pending = pending.length;
+
+      // ----- step 5: generate articles sequentially -----
+      for (const er of pending) {
+        try {
+          const r = await generateAndSaveEarningsPost(er);
+          out.generated.push(r);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          await recordGenerationFailure(er.id, msg);
+          out.failures.push({
+            symbol: er.symbol,
+            year: er.fiscal_year,
+            quarter: er.fiscal_quarter,
+            error: msg,
+          });
+        }
+      }
+
+      ctx.itemsTotal = out.matched_our_tickers;
+      ctx.itemsOk = out.upserted + out.generated.length;
+      ctx.itemsFailed = out.failures.length;
+      ctx.meta = { fromISO, toISO, pending: out.pending, generated: out.generated.length };
+      return { kind: "ok" as const, payload: out };
+    },
+  );
+
+  if (outcome.kind === "finnhub_fail") {
     return NextResponse.json(
-      { error: "finnhub failed", detail: e instanceof Error ? e.message : String(e) },
+      { error: "finnhub failed", detail: outcome.detail },
       { status: 502 },
     );
   }
-  out.finnhub_total = calendar.length;
-
-  // ----- step 2: filter to our covered tickers -----
-  const ours = await mysqlQuery<{ symbol: string }[]>("select symbol from tickers");
-  const ourSet = new Set(ours.map((r) => r.symbol.toUpperCase()));
-  const matched = calendar.filter((c) => c.symbol && ourSet.has(c.symbol.toUpperCase()));
-  out.matched_our_tickers = matched.length;
-
-  if (dryRun) {
-    return NextResponse.json({ ...out, sample: matched.slice(0, 10) });
-  }
-
-  // ----- step 3: upsert earnings rows (only those with eps_actual or revenue_actual non-null
-  //               also store estimates-only rows so we know they are scheduled) -----
-  for (const row of matched) {
-    try {
-      await upsertEarningsRelease(row);
-      out.upserted++;
-    } catch (e) {
-      out.failures.push({
-        symbol: row.symbol,
-        year: row.year,
-        quarter: row.quarter,
-        error: `upsert: ${e instanceof Error ? e.message : "unknown"}`,
-      });
-    }
-  }
-
-  // ----- step 4: pull pending (released but no article) -----
-  const symbols = Array.from(ourSet);
-  const pending = await listPendingEarnings(symbols);
-  out.pending = pending.length;
-
-  // ----- step 5: generate one-by-one (sequential to avoid AI rate limit) -----
-  for (const er of pending) {
-    try {
-      const result = await generateAndSaveEarningsPost(er);
-      out.generated.push(result);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      await recordGenerationFailure(er.id, msg);
-      out.failures.push({
-        symbol: er.symbol,
-        year: er.fiscal_year,
-        quarter: er.fiscal_quarter,
-        error: msg,
-      });
-    }
-  }
-
-  return NextResponse.json(out);
+  return NextResponse.json(outcome.payload);
 }
