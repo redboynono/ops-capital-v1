@@ -8,6 +8,7 @@ import {
   type FinnhubNewsItem,
   type FinnhubQuote,
 } from "@/lib/finnhub";
+import { getPriceHistory, type PriceHistory } from "@/lib/price-history";
 import { getRating, getFactorGrades, type FactorKey, type Grade, type Verdict } from "@/lib/ratings";
 import { getTickerBySymbol, type TickerRow } from "@/lib/tickers";
 
@@ -29,6 +30,7 @@ export type CompareColumn = {
     industry: string | null;
   } | null;
   grades: Partial<Record<FactorKey, Grade | null>>;
+  history: PriceHistory | null; // 1Y 周线
 };
 
 /** Parse `?symbols=A,B,C` 形式（去重 / 大写 / 截断到 COMPARE_MAX）。 */
@@ -53,7 +55,7 @@ export async function loadCompareData(symbols: string[]): Promise<CompareColumn[
   return Promise.all(
     symbols.map(async (sym) => {
       const safe = <T,>(p: Promise<T>) => p.catch(() => null) as Promise<T | null>;
-      const [ticker, profile, quote, metric, news, rating, gradesMap] = await Promise.all([
+      const [ticker, profile, quote, metric, news, rating, gradesMap, history] = await Promise.all([
         safe(getTickerBySymbol(sym)),
         safe(fetchCompanyProfile(sym)),
         safe(getQuote(sym)),
@@ -61,6 +63,7 @@ export async function loadCompareData(symbols: string[]): Promise<CompareColumn[
         fetchCompanyNews(sym, isoFrom, isoTo, 4).catch(() => [] as FinnhubNewsItem[]),
         safe(getRating(sym)),
         safe(getFactorGrades(sym)),
+        safe(getPriceHistory(sym, "1y")),
       ]);
 
       const grades: Partial<Record<FactorKey, Grade | null>> = {};
@@ -88,6 +91,7 @@ export async function loadCompareData(symbols: string[]): Promise<CompareColumn[
             }
           : null,
         grades,
+        history: history ?? null,
       } satisfies CompareColumn;
     }),
   );

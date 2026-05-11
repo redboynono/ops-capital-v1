@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ComparePicker } from "@/components/compare-picker";
+import { Sparkline } from "@/components/sparkline";
 import { COMPARE_MAX, loadCompareData, parseCompareSymbols, type CompareColumn } from "@/lib/compare";
 import type { FactorKey, Grade, Verdict } from "@/lib/ratings";
 
@@ -92,7 +93,7 @@ function MetricRow({ label, children }: { label: string; children: React.ReactNo
 }
 
 function ColumnCard({ col }: { col: CompareColumn }) {
-  const { symbol, profile, quote, metric, news, rating, grades, ticker } = col;
+  const { symbol, profile, quote, metric, news, rating, grades, ticker, history } = col;
   const m = metric?.metric ?? {};
   const change = quote?.dp ?? null;
   const changeClass =
@@ -137,6 +138,17 @@ function ColumnCard({ col }: { col: CompareColumn }) {
           日内 {fmtMoney(quote?.l)} – {fmtMoney(quote?.h)}
           {quote?.pc ? <> · 前收 {fmtMoney(quote.pc)}</> : null}
         </p>
+        {/* 1Y sparkline */}
+        <div className="mt-2 flex items-center justify-between">
+          <span className="label-caps text-[9px]">1Y 走势</span>
+        </div>
+        {history && history.points.length > 1 ? (
+          <Sparkline points={history.points} width={240} height={44} />
+        ) : (
+          <div className="mt-0.5 flex h-11 items-center justify-center text-[10px] text-muted">
+            无价格历史
+          </div>
+        )}
       </section>
 
       {/* Valuation / financials */}

@@ -37,8 +37,9 @@ export function AskAI({ context, loggedIn }: { context: Context; loggedIn: boole
 
     setLoading(true);
     setError(null);
-    const next: ChatMessage[] = [...messages, { role: "user", content: question }];
-    setMessages(next);
+    // 在 user msg 后面预占一个空 assistant 槽，流式 chunk 直接 append 进去
+    const baseHistory: ChatMessage[] = [...messages, { role: "user", content: question }];
+    setMessages([...baseHistory, { role: "assistant", content: "" }]);
     setDraft("");
 
     try {
@@ -51,15 +52,36 @@ export function AskAI({ context, loggedIn }: { context: Context; loggedIn: boole
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) {
+
+      // 错误响应（仍然是 JSON，不是 stream）
+      const ct = res.headers.get("content-type") ?? "";
+      if (!res.ok || !res.body || ct.includes("application/json")) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error ?? `HTTP ${res.status}`);
       }
-      const data = (await res.json()) as { answer: string };
-      setMessages([...next, { role: "assistant", content: data.answer }]);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        if (!chunk) continue;
+        acc += chunk;
+        // 实时回填最后一个 assistant message
+        setMessages((prev) => {
+          const out = [...prev];
+          const last = out[out.length - 1];
+          if (last && last.role === "assistant") {
+            out[out.length - 1] = { role: "assistant", content: acc };
+          }
+          return out;
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "请求失败");
-      setMessages(next); // keep user msg, drop assistant
+      setMessages(baseHistory); // keep user msg, drop assistant placeholder
     } finally {
       setLoading(false);
     }
@@ -85,15 +107,18 @@ export function AskAI({ context, loggedIn }: { context: Context; loggedIn: boole
       {/* 历史 */}
       {messages.length > 0 ? (
         <div className="mb-3 space-y-3 max-h-[480px] overflow-y-auto rounded border border-border bg-surface-muted p-3">
-          {messages.map((m, i) => (
-            <Bubble key={i} role={m.role} content={m.content} />
-          ))}
-          {loading ? (
-            <div className="flex items-center gap-2 text-[11px] text-muted">
-              <Sparkles className="h-3 w-3 animate-pulse text-accent-strong" strokeWidth={2} />
-              AI 正在思考…
-            </div>
-          ) : null}
+          {messages.map((m, i) => {
+            const isLast = i === messages.length - 1;
+            const isStreamingAssistant = isLast && m.role === "assistant" && loading;
+            return (
+              <Bubble
+                key={i}
+                role={m.role}
+                content={m.content}
+                streaming={isStreamingAssistant}
+              />
+            );
+          })}
         </div>
       ) : null}
 
@@ -161,7 +186,15 @@ export function AskAI({ context, loggedIn }: { context: Context; loggedIn: boole
   );
 }
 
-function Bubble({ role, content }: { role: "user" | "assistant"; content: string }) {
+function Bubble({
+  role,
+  content,
+  streaming = false,
+}: {
+  role: "user" | "assistant";
+  content: string;
+  streaming?: boolean;
+}) {
   if (role === "user") {
     return (
       <div className="flex items-start gap-2">
@@ -172,16 +205,29 @@ function Bubble({ role, content }: { role: "user" | "assistant"; content: string
       </div>
     );
   }
+  // assistant
+  const empty = !content;
   return (
     <div className="flex items-start gap-2">
       <span
-        className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full"
+        className={`mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full ${
+          streaming ? "animate-pulse" : ""
+        }`}
         style={{ background: "var(--accent)" }}
       >
         <Sparkles className="h-3 w-3 text-[#0a0a0d]" strokeWidth={2.4} />
       </span>
       <div className="flex-1 whitespace-pre-wrap text-[12px] leading-relaxed text-foreground-soft">
-        {content}
+        {empty && streaming ? (
+          <span className="text-muted">AI 正在思考…</span>
+        ) : (
+          <>
+            {content}
+            {streaming ? (
+              <span className="ml-0.5 inline-block h-3 w-1.5 translate-y-0.5 animate-pulse bg-accent-strong" />
+            ) : null}
+          </>
+        )}
       </div>
     </div>
   );

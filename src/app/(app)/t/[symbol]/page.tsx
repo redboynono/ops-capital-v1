@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PostRow } from "@/components/post-row";
 import { FactorGrades, QuantRanking, RatingsSummary } from "@/components/rating-panels";
 import { UnlistedTickerView } from "@/components/unlisted-ticker-view";
+import { QuickAddPosition } from "@/components/quick-add-position";
 import { WatchlistToggle } from "@/components/watchlist-toggle";
 import { isAdminEmail } from "@/lib/admin";
 import { AskAI } from "@/components/ask-ai";
@@ -91,7 +92,10 @@ export default async function TickerPage({
               <p className="mt-0.5 text-[12px] text-muted">行业：{ticker.sector}</p>
             ) : null}
           </div>
-          <WatchlistToggle symbol={symbol} initialInWatchlist={inWatchlist} />
+          <div className="flex flex-wrap items-center gap-2">
+            <WatchlistToggle symbol={symbol} initialInWatchlist={inWatchlist} />
+            <QuickAddPosition symbol={symbol} loggedIn={Boolean(user)} />
+          </div>
         </div>
         <div className="mt-3 flex items-center gap-4 text-[12px] text-muted">
           <span>
