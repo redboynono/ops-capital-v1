@@ -17,7 +17,7 @@ export function StickyPaywall({
 }) {
   const headline =
     variant === "picks"
-      ? "OPS Picks · 解锁目标价 / 止损 / 完整逻辑"
+      ? "OPS 精选 · 解锁目标价 / 止损 / 完整逻辑"
       : "Premium 分析 · 解锁完整数据";
   const sub =
     redactedCount > 0

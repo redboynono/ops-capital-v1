@@ -28,12 +28,12 @@ export default async function AdminConvictionPage() {
       <nav className="text-[12px] text-muted">
         <Link href="/admin" className="hover:text-accent-strong">Admin</Link>
         <span className="mx-1">/</span>
-        <span>Conviction Picks</span>
+        <span>OPS 榜单</span>
       </nav>
 
       <header className="mt-3 mb-4 border-b border-border pb-3">
-        <span className="label-caps">Admin · Conviction</span>
-        <h1 className="mt-1 text-2xl font-bold text-foreground">月度高信念榜单</h1>
+        <span className="label-caps">Admin · OPS Rankings</span>
+        <h1 className="mt-1 text-2xl font-bold text-foreground">OPS 榜单 管理</h1>
         <p className="mt-1 text-[13px] text-muted">
           创建 / 关闭榜单，添加 / 删除 picks，公开页：
           <Link href="/conviction" className="ml-1 text-accent-strong hover:underline">

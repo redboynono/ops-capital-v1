@@ -3,7 +3,7 @@ import { ShareButton } from "@/components/share/share-button";
 import { computeManyPerformance, computePortfolio, listPublishedPicks, type Pick, type PickPerformance } from "@/lib/picks";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "OPS Picks · 月度精选荐股" };
+export const metadata = { title: "OPS 精选 · 月度精选荐股" };
 
 function fmtPct(n: number | null | undefined): string {
   if (n == null || !isFinite(n)) return "—";
@@ -158,7 +158,7 @@ export default async function PicksPage() {
           <span className="label-caps">OPS Picks</span>
           <span className="badge-premium">PRO</span>
         </div>
-        <h1 className="mt-1 text-3xl font-bold text-foreground">月度精选荐股</h1>
+        <h1 className="mt-1 text-3xl font-bold text-foreground">OPS 精选</h1>
         <p className="mt-1 max-w-2xl text-[13px] text-muted">
           OPS 编辑团队基于 OPS Quant Score + 因子评级 + 基本面复核，每月挑选 2-3 个高信念仓位，
           给出入场价、目标价、止损、催化剂、风险与退出纪律。对标 Seeking Alpha Alpha Picks。
@@ -275,7 +275,7 @@ export default async function PicksPage() {
 
       {/* Disclaimer */}
       <p className="mt-8 border-t border-border pt-4 text-[11px] leading-relaxed text-muted-soft">
-        免责声明：OPS Picks 为基于公开信息与量化模型的研究观点，不构成任何证券、加密资产或衍生品的买卖建议。
+        免责声明：OPS 精选 为基于公开信息与量化模型的研究观点，不构成任何证券、加密资产或衍生品的买卖建议。
         入场 / 目标 / 止损价为发布时刻的判断，实际成交可能存在滑点与流动性差异。投资有风险，决策需谨慎。
       </p>
     </div>

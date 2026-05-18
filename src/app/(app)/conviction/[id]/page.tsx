@@ -37,7 +37,7 @@ export default async function ConvictionDetailPage({
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 md:px-6">
       <nav className="text-[12px] text-muted">
         <Link href="/conviction" className="hover:text-accent-strong">
-          Conviction Picks
+          OPS 榜单
         </Link>
         <span className="mx-1">/</span>
         <span>{list.period_label}</span>

@@ -72,7 +72,7 @@ export default async function PickDetailPage({
     <div className="mx-auto w-full max-w-[880px] px-4 py-6 md:px-6">
       <nav className="flex items-center justify-between text-[12px] text-muted">
         <div>
-          <Link href="/picks" className="hover:text-accent-strong">OPS Picks</Link>
+          <Link href="/picks" className="hover:text-accent-strong">OPS 精选</Link>
           <span className="mx-1">/</span>
           <span className="font-mono">{pick.ticker_symbol}</span>
         </div>

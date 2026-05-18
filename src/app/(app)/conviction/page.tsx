@@ -9,7 +9,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Conviction Picks · OPS Alpha",
+  title: "OPS 榜单 · OPS Alpha",
   description: "OPS Alpha 月度高信念榜单 — 公开记录，实时跟踪净值表现。",
 };
 
@@ -36,8 +36,8 @@ export default async function ConvictionIndexPage() {
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 md:px-6">
       <header className="mb-4 border-b border-border pb-3">
-        <span className="label-caps">Conviction Picks</span>
-        <h1 className="mt-1 text-2xl font-bold text-foreground">高信念榜单</h1>
+        <span className="label-caps">OPS Rankings</span>
+        <h1 className="mt-1 text-2xl font-bold text-foreground">OPS 榜单</h1>
         <p className="mt-1 text-[13px] text-muted">
           OPS Alpha 每月精选 5–10 只最高信念标的，公开记录建仓价格、权重与逻辑，实时跟踪净值。
         </p>
@@ -46,7 +46,7 @@ export default async function ConvictionIndexPage() {
       {enriched.length === 0 ? (
         <div className="card px-4 py-12 text-center text-[13px] text-muted">
           <p className="mb-1 text-[16px] font-semibold text-foreground">尚未发布榜单</p>
-          <p>第一期 Conviction Picks 即将发布。</p>
+          <p>第一期 OPS 榜单即将发布。</p>
         </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">

@@ -9,8 +9,8 @@ const sections: { title: string; items: NavItem[] }[] = [
     title: "MARKET",
     items: [
       { href: "/alpha",    label: "Alpha 首页" },
-      { href: "/picks",      label: "OPS Picks" },
-      { href: "/conviction", label: "Conviction" },
+      { href: "/picks",      label: "OPS 精选" },
+      { href: "/conviction", label: "OPS 榜单" },
       { href: "/analysis", label: "分析长文" },
       { href: "/news",     label: "市场快讯" },
       { href: "/earnings", label: "财报日历" },
@@ -103,7 +103,7 @@ export async function SideNav() {
                 评级管理
               </Link>
               <Link href="/admin/picks" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
-                OPS Picks 管理
+                OPS 精选 管理
               </Link>
             </div>
           </div>

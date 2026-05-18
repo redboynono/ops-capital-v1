@@ -30,7 +30,7 @@ export default async function EditPickPage({
       <nav className="text-[12px] text-muted">
         <Link href="/admin" className="hover:text-accent-strong">后台</Link>
         <span className="mx-1">/</span>
-        <Link href="/admin/picks" className="hover:text-accent-strong">OPS Picks</Link>
+        <Link href="/admin/picks" className="hover:text-accent-strong">OPS 精选</Link>
         <span className="mx-1">/</span>
         <span className="font-mono">{pick.ticker_symbol}</span>
       </nav>

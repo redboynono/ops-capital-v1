@@ -21,14 +21,14 @@ export default async function NewPickPage() {
       <nav className="text-[12px] text-muted">
         <Link href="/admin" className="hover:text-accent-strong">后台</Link>
         <span className="mx-1">/</span>
-        <Link href="/admin/picks" className="hover:text-accent-strong">OPS Picks</Link>
+        <Link href="/admin/picks" className="hover:text-accent-strong">OPS 精选</Link>
         <span className="mx-1">/</span>
         <span>新建</span>
       </nav>
 
       <header className="mt-3 mb-4 border-b border-border pb-3">
         <span className="label-caps">OPS Picks · 新建</span>
-        <h1 className="mt-1 text-2xl font-bold">发布一条月度精选</h1>
+        <h1 className="mt-1 text-2xl font-bold">发布一条 OPS 精选</h1>
         <p className="mt-1 text-[13px] text-muted">
           填写入场 / 目标 / 止损 / 投资逻辑。勾「已发布」后才对前台可见。
         </p>

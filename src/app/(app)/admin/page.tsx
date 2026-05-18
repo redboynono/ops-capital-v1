@@ -38,13 +38,13 @@ export default async function AdminHome() {
         </Link>
         <Link href="/admin/picks" className="card p-4 hover:border-accent">
           <p className="label-caps">OPS Picks</p>
-          <h2 className="mt-1 text-lg font-bold">月度精选荐股</h2>
+          <h2 className="mt-1 text-lg font-bold">OPS 精选</h2>
           <p className="mt-1 text-[13px] text-muted">发布 / 平仓 / 止损 Picks，前台自动计算实时收益 + 组合绩效。</p>
         </Link>
         <Link href="/admin/conviction" className="card p-4 hover:border-accent">
-          <p className="label-caps">Conviction</p>
-          <h2 className="mt-1 text-lg font-bold">月度高信念榜单</h2>
-          <p className="mt-1 text-[13px] text-muted">创建月度 conviction list，添加 picks，公开页实时跟踪净值。</p>
+          <p className="label-caps">OPS Rankings</p>
+          <h2 className="mt-1 text-lg font-bold">OPS 榜单</h2>
+          <p className="mt-1 text-[13px] text-muted">创建月度榜单，添加 picks，公开页实时跟踪净值。</p>
         </Link>
         <Link href="/admin/earnings" className="card p-4 hover:border-accent">
           <p className="label-caps">Earnings Pipeline</p>

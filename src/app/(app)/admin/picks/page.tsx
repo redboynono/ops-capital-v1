@@ -23,13 +23,13 @@ export default async function AdminPicksList() {
       <nav className="text-[12px] text-muted">
         <Link href="/admin" className="hover:text-accent-strong">后台</Link>
         <span className="mx-1">/</span>
-        <span>OPS Picks 管理</span>
+        <span>OPS 精选 管理</span>
       </nav>
 
       <header className="mt-3 mb-4 flex items-end justify-between border-b border-border pb-3">
         <div>
           <span className="label-caps">OPS Picks</span>
-          <h1 className="mt-1 text-2xl font-bold">月度精选荐股管理</h1>
+          <h1 className="mt-1 text-2xl font-bold">OPS 精选 管理</h1>
           <p className="mt-1 text-[13px] text-muted">
             共 {picks.length} 条 · 开仓 {picks.filter((p) => p.status === "open").length} · 已平仓 {picks.filter((p) => p.status !== "open").length}
           </p>

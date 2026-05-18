@@ -9,7 +9,7 @@ export const metadata = { title: "订阅方案 · Ops Alpha" };
 
 const benefits = [
   "完整 Premium 分析（含估值模型）",
-  "每月 OPS Picks 精选荐股（含目标价、止损与退出纪律）",
+  "每月 OPS 精选 荐股（含目标价、止损与退出纪律）",
   "每日 2-3 篇 AI 机构级深度研报",
   "全部标的的分析/快讯聚合页",
   "自选股桌面 + 收藏 + 阅读历史",
