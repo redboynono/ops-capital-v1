@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AgentLauncher, type AgentCardData } from "@/components/agent-launcher";
 import { PostRow } from "@/components/post-row";
 import { FactorGrades, QuantRanking, RatingsSummary } from "@/components/rating-panels";
 import { UnlistedTickerView } from "@/components/unlisted-ticker-view";
@@ -6,6 +7,7 @@ import { QuickAddPosition } from "@/components/quick-add-position";
 import { WatchlistToggle } from "@/components/watchlist-toggle";
 import { isAdminEmail } from "@/lib/admin";
 import { AskAI } from "@/components/ask-ai";
+import { listAgentsByInput } from "@/lib/agents/registry";
 import { getSessionUser } from "@/lib/auth";
 import { mysqlQuery } from "@/lib/mysql";
 import { listPosts } from "@/lib/posts";
@@ -163,6 +165,20 @@ export default async function TickerPage({
           </section>
         </aside>
       </div>
+
+      <AgentLauncher
+        symbol={symbol}
+        loggedIn={Boolean(user)}
+        agents={listAgentsByInput("ticker").map<AgentCardData>((a) => ({
+          id: a.id,
+          name: a.name,
+          emoji: a.emoji,
+          category: a.category,
+          short: a.short,
+          description: a.description,
+          estimatedSeconds: a.estimatedSeconds,
+        }))}
+      />
 
       <AskAI context={{ kind: "ticker", symbol }} loggedIn={Boolean(user)} />
     </div>

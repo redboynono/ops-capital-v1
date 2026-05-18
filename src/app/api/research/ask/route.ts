@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth";
 import { buildTickerFactsheet } from "@/lib/ai/factsheet";
+import { getAIConfig, proxyChatCompletionStream } from "@/lib/ai/stream";
 import { logEvent } from "@/lib/observability";
 import { getPostBySlug } from "@/lib/posts";
 import { listTickersForPost } from "@/lib/tickers";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _AskPayloadKept = ChatMessage;
 
 type AskPayload =
   | {
@@ -116,11 +120,8 @@ export async function POST(req: Request) {
     );
   }
 
-  // 调 Gemini（OpenAI-compat）
-  const apiKey = process.env.OPENAI_API_KEY;
-  const model = process.env.OPENAI_MODEL ?? "gemini-3.1-pro-preview";
-  const baseUrl = (process.env.OPENAI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai").replace(/\/$/, "");
-  if (!apiKey) {
+  const ai = getAIConfig();
+  if (!ai) {
     return NextResponse.json({ error: "OPENAI_API_KEY not configured" }, { status: 500 });
   }
 
@@ -137,119 +138,19 @@ export async function POST(req: Request) {
   });
 
   const history = Array.isArray(body.history) ? body.history.slice(-6) : [];
-  const messages: ChatMessage[] | { role: "system" | "user" | "assistant"; content: string }[] = [
-    { role: "system", content: SYSTEM_PROMPT },
-    {
-      role: "user",
-      content: `# Factsheet\n${context}\n\n----\n\n# 用户问题\n${question}`,
-    },
-    ...history,
-  ];
-
-  // ---- streaming proxy ----
-  // 上游 SSE → 下游 plain-text 增量
-  let upstream: Response;
-  try {
-    upstream = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        temperature: 0.3,
-        max_tokens: Number(process.env.OPENAI_QA_MAX_TOKENS ?? 12000),
-        stream: true,
-        messages,
-      }),
-    });
-  } catch (err) {
-    return NextResponse.json(
-      { error: "AI request failed", detail: err instanceof Error ? err.message : "unknown" },
-      { status: 500 },
-    );
-  }
-
-  if (!upstream.ok || !upstream.body) {
-    const detail = await upstream.text().catch(() => "");
-    return NextResponse.json(
-      { error: "AI upstream error", detail: detail.slice(0, 300) },
-      { status: 502 },
-    );
-  }
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const encoder = new TextEncoder();
-      const decoder = new TextDecoder();
-      const reader = upstream.body!.getReader();
-      let buf = "";
-      let inThink = false;
-      let totalEmitted = 0;
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          // SSE 按 \n 分隔；data: {...}\n\n
-          const lines = buf.split("\n");
-          buf = lines.pop() ?? "";
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith("data:")) continue;
-            const payload = trimmed.slice(5).trim();
-            if (!payload || payload === "[DONE]") continue;
-            try {
-              const json = JSON.parse(payload) as {
-                choices?: { delta?: { content?: string } }[];
-              };
-              let delta = json.choices?.[0]?.delta?.content ?? "";
-              if (!delta) continue;
-              // 过滤 <think>...</think>（跨 chunk 也要稳）
-              if (inThink) {
-                const end = delta.indexOf("</think>");
-                if (end === -1) continue;
-                delta = delta.slice(end + 8);
-                inThink = false;
-              }
-              while (true) {
-                const start = delta.indexOf("<think>");
-                if (start === -1) break;
-                const end = delta.indexOf("</think>", start);
-                if (end === -1) {
-                  delta = delta.slice(0, start);
-                  inThink = true;
-                  break;
-                }
-                delta = delta.slice(0, start) + delta.slice(end + 8);
-              }
-              if (delta) {
-                controller.enqueue(encoder.encode(delta));
-                totalEmitted += delta.length;
-              }
-            } catch {
-              /* malformed chunk, skip */
-            }
-          }
-        }
-        if (totalEmitted === 0) {
-          controller.enqueue(encoder.encode("（AI 返回为空，请重试）"));
-        }
-      } catch (err) {
-        controller.enqueue(
-          encoder.encode(
-            `\n\n[stream error: ${err instanceof Error ? err.message : "unknown"}]`,
-          ),
-        );
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      "X-Accel-Buffering": "no",
-    },
+  return proxyChatCompletionStream({
+    apiKey: ai.apiKey,
+    baseUrl: ai.baseUrl,
+    model: ai.model,
+    temperature: 0.3,
+    maxTokens: Number(process.env.OPENAI_QA_MAX_TOKENS ?? 12000),
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: `# Factsheet\n${context}\n\n----\n\n# 用户问题\n${question}`,
+      },
+      ...history,
+    ],
   });
 }
