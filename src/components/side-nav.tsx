@@ -45,7 +45,7 @@ export async function SideNav() {
   const isAdmin = isAdminEmail(user?.email);
 
   return (
-    <aside className="sticky top-[calc(28px+27px)] hidden h-[calc(100vh-61px-24px)] w-56 shrink-0 flex-col border-r border-border bg-surface px-3 py-4 md:flex">
+    <aside className="sticky top-[55px] hidden h-[calc(100dvh-55px-24px)] w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface px-3 py-4 md:flex">
       <div>
         <Link href="/alpha" className="flex items-center gap-2 text-[15px] font-bold tracking-tight text-foreground">
           <span

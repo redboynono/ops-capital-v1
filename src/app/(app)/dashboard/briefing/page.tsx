@@ -91,7 +91,7 @@ export default async function BriefingPage({
                     <p className="text-[10px] text-muted">已发送邮件</p>
                   ) : null}
                 </header>
-                <div className="prose prose-sm max-w-none">
+                <div className="prose prose-sm prose-invert max-w-none">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {selected.content_markdown}
                   </ReactMarkdown>

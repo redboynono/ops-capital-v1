@@ -203,7 +203,7 @@ export function AgentRunner({
               <span className="ml-0.5 inline-block h-3 w-1.5 translate-y-0.5 animate-pulse bg-accent-strong" />
             </pre>
           ) : (
-            <article className="prose prose-sm max-w-none agent-output">
+            <article className="prose prose-sm prose-invert max-w-none agent-output">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{output}</ReactMarkdown>
             </article>
           )

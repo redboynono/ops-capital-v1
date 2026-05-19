@@ -92,7 +92,7 @@ export default async function AgentRunDetailPage({
       ) : null}
 
       {run.output_md ? (
-        <article className="card mt-3 prose prose-sm max-w-none p-5 agent-output">
+        <article className="card mt-3 prose prose-sm prose-invert max-w-none p-5 agent-output">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{run.output_md}</ReactMarkdown>
         </article>
       ) : run.status === "running" ? (

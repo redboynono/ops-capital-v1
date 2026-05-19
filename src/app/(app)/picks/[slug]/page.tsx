@@ -174,11 +174,11 @@ export default async function PickDetailPage({
 
         {/* Body */}
         <div className="space-y-6 py-5">
-          <Section title="投资逻辑" md={pick.thesis_md} redact={!canViewFull} />
-          <Section title="催化剂" md={pick.catalysts_md} redact={!canViewFull} />
-          <Section title="风险提示" md={pick.risks_md} redact={!canViewFull} />
-          <Section title="估值分析" md={pick.valuation_md} redact={!canViewFull} />
-          <Section title="退出纪律" md={pick.sell_discipline_md} redact={!canViewFull} />
+          <Section title="投资逻辑" md={pick.thesis_md} redact={!canViewFull} readerMode={readerMode} />
+          <Section title="催化剂" md={pick.catalysts_md} redact={!canViewFull} readerMode={readerMode} />
+          <Section title="风险提示" md={pick.risks_md} redact={!canViewFull} readerMode={readerMode} />
+          <Section title="估值分析" md={pick.valuation_md} redact={!canViewFull} readerMode={readerMode} />
+          <Section title="退出纪律" md={pick.sell_discipline_md} redact={!canViewFull} readerMode={readerMode} />
         </div>
 
         {!canViewFull ? (
@@ -201,12 +201,12 @@ export default async function PickDetailPage({
   );
 }
 
-function Section({ title, md, redact }: { title: string; md: string | null; redact: boolean }) {
+function Section({ title, md, redact, readerMode }: { title: string; md: string | null; redact: boolean; readerMode: boolean }) {
   if (!md || md.trim().length === 0) return null;
   return (
     <section>
       <h2 className="mb-2 text-lg font-bold">{title}</h2>
-      <article className="prose prose-sm md:prose-base max-w-none">
+      <article className={`prose prose-sm md:prose-base max-w-none ${readerMode ? "" : "prose-invert"}`}>
         <RedactedMarkdown redact={redact}>{md}</RedactedMarkdown>
       </article>
     </section>

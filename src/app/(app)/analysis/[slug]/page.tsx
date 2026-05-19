@@ -108,7 +108,7 @@ export default async function AnalysisDetailPage({
       </header>
 
       <div className={`flex gap-8 ${showToc ? "xl:pr-0" : ""}`}>
-        <article className="prose prose-sm md:prose-base min-w-0 max-w-none flex-1 py-5">
+        <article className={`prose prose-sm md:prose-base min-w-0 max-w-none flex-1 py-5 ${readerMode ? "" : "prose-invert"}`}>
           <RedactedMarkdown redact={!canViewFull} tocItems={showToc ? tocItems : undefined}>
             {post.content}
           </RedactedMarkdown>

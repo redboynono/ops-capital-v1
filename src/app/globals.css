@@ -370,6 +370,17 @@ ol.sa-list > li::before {
    Bloomberg Terminal theme — scoped to .terminal wrapper
    Applied to /(app)/** via its layout. Marketing / keeps Bridgewater theme.
    ======================================================================== */
+/* Tailwind @theme 在 :root 绑定 --color-surface，需强制 .terminal 内语义色继承 */
+.terminal .bg-surface {
+  background-color: var(--surface);
+}
+.terminal .bg-surface-muted {
+  background-color: var(--surface-muted);
+}
+.terminal aside {
+  background-color: var(--surface);
+}
+
 .terminal {
   --background: #0a0a0d;
   --surface: #141418;
@@ -390,6 +401,8 @@ ol.sa-list > li::before {
   color: var(--foreground);
   font-family: var(--font-mono), var(--font-body-sans);
   font-feature-settings: "tnum" 1;
+  min-height: 100vh;
+  padding-bottom: 1.5rem; /* 为底部 fixed FunctionBar (h-6) 留白 */
 }
 
 /* CJK chars stay in sans (mono fonts render CJK poorly); numbers + latin stay mono */

@@ -97,7 +97,7 @@ export default async function NewsDetailPage({
       </header>
 
       <div className="flex gap-8">
-        <article className="prose prose-sm min-w-0 max-w-none flex-1 py-4">
+        <article className={`prose prose-sm min-w-0 max-w-none flex-1 py-4 ${readerMode ? "" : "prose-invert"}`}>
           <RedactedMarkdown redact={false} tocItems={showToc ? tocItems : undefined}>
             {post.content}
           </RedactedMarkdown>
