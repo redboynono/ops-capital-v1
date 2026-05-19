@@ -53,9 +53,27 @@ export async function POST(req: Request) {
     [symbol, name, exchange, sector],
   );
 
+  // Trigger async generation in the background
+  const cookieHeader = req.headers.get("cookie");
+  const internalUrl = "http://localhost:3000/api/admin/tickers/async-generate";
+  console.log(`[add] Triggering async generation for ${symbol} at ${internalUrl}`);
+  fetch(internalUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(cookieHeader ? { cookie: cookieHeader } : {}),
+    },
+    body: JSON.stringify({ symbol }),
+  }).then(async (res) => {
+    console.log(`[add] Async generation trigger response: ${res.status} ${await res.text()}`);
+  }).catch((err) => console.error("[add] Failed to trigger async generation:", err));
+
   // Redirect back to the ticker page (form submit) or return JSON
   if (ct.includes("application/json")) {
     return NextResponse.json({ ok: true, symbol });
   }
-  return NextResponse.redirect(new URL(`/t/${encodeURIComponent(symbol)}`, req.url), 303);
+  return new NextResponse(null, {
+    status: 303,
+    headers: { Location: `/t/${encodeURIComponent(symbol)}` },
+  });
 }
