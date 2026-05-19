@@ -1,16 +1,25 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { AskAI } from "@/components/ask-ai";
+import { ArticleToc } from "@/components/article-toc";
 import { BookmarkButton } from "@/components/bookmark-button";
 import { ShareButton } from "@/components/share/share-button";
 import { getSessionUser } from "@/lib/auth";
 import { isBookmarked, recordRead } from "@/lib/me";
+import { extractTocFromMarkdown, shouldShowToc } from "@/lib/markdown-toc";
+import { buildPostMetadata } from "@/lib/post-metadata";
+import { RedactedMarkdown } from "@/lib/paywall";
 import { getPostBySlug } from "@/lib/posts";
 import { listTickersForPost } from "@/lib/tickers";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const post = await getPostBySlug(slug);
+  if (!post || post.kind !== "news") return { title: "快讯 · OPS Alpha" };
+  return buildPostMetadata(post, "news");
+}
 
 export default async function NewsDetailPage({
   params,
@@ -34,6 +43,8 @@ export default async function NewsDetailPage({
   if (user) recordRead(user.id, post.id).catch(() => null);
 
   const toggleHref = readerMode ? `/news/${post.slug}?reader=0` : `/news/${post.slug}`;
+  const tocItems = extractTocFromMarkdown(post.content);
+  const showToc = readerMode && shouldShowToc(post.content, 800);
 
   return (
     <div className="mx-auto w-full max-w-[780px] px-4 py-6 md:px-6">
@@ -85,9 +96,14 @@ export default async function NewsDetailPage({
         </div>
       </header>
 
-      <article className="prose prose-sm max-w-none py-4">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
-      </article>
+      <div className="flex gap-8">
+        <article className="prose prose-sm min-w-0 max-w-none flex-1 py-4">
+          <RedactedMarkdown redact={false} tocItems={showToc ? tocItems : undefined}>
+            {post.content}
+          </RedactedMarkdown>
+        </article>
+        {showToc ? <ArticleToc items={tocItems} readerMode /> : null}
+      </div>
 
       <AskAI context={{ kind: "post", slug: post.slug }} loggedIn={Boolean(user)} />
 

@@ -180,7 +180,21 @@ export default async function TickerPage({
         }))}
       />
 
-      <AskAI context={{ kind: "ticker", symbol }} loggedIn={Boolean(user)} />
+      <AskAI
+        context={{
+          kind: "ticker",
+          symbol,
+          suggestions: [
+            `按 Factsheet：${symbol} 当前估值水平如何？`,
+            "OPS 评级各因子强弱项？",
+            "与 Street 一致预期主要分歧？",
+            "下季度财报前最该盯什么？",
+          ],
+        }}
+        loggedIn={Boolean(user)}
+        title="用数据问 AI"
+        subtitle="仅基于本页 Factsheet · 数字句末带 [来源] 脚注"
+      />
     </div>
   );
 }

@@ -1,16 +1,24 @@
 import Link from "next/link";
+import { AnalysisFilters } from "@/components/analysis-filters";
 import { PostRow } from "@/components/post-row";
-import { listPosts } from "@/lib/posts";
+import { listPostSectors, listPosts, type PostPeriod } from "@/lib/posts";
 
 export const dynamic = "force-dynamic";
 
 export default async function AnalysisListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ symbol?: string }>;
+  searchParams: Promise<{ symbol?: string; sector?: string; period?: string }>;
 }) {
-  const { symbol } = await searchParams;
-  const posts = await listPosts({ kind: "analysis", symbol });
+  const sp = await searchParams;
+  const { symbol, sector, period } = sp;
+  const periodFilter =
+    period === "week" || period === "month" ? (period as PostPeriod) : undefined;
+
+  const [posts, sectors] = await Promise.all([
+    listPosts({ kind: "analysis", symbol, sector, period: periodFilter }),
+    listPostSectors(),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-[960px] px-4 py-6 md:px-6">
@@ -20,15 +28,19 @@ export default async function AnalysisListPage({
           <h1 className="mt-1 text-2xl font-bold text-foreground">机构级长文研究</h1>
           <p className="mt-1 text-[13px] text-muted">
             摘要免费 · 完整观点与估值模型需要 Premium 订阅
-            {symbol ? ` · 按标的筛选：${symbol}` : ""}
+            {symbol ? ` · 标的：${symbol}` : ""}
+            {sector ? ` · 行业：${sector}` : ""}
+            {periodFilter ? ` · ${period === "week" ? "近一周" : "近一月"}` : ""}
           </p>
         </div>
-        {symbol ? (
+        {symbol || sector || periodFilter ? (
           <Link href="/analysis" className="btn-outline px-3 py-1.5 text-[12px]">
             清除筛选
           </Link>
         ) : null}
       </header>
+
+      <AnalysisFilters sectors={sectors} current={{ symbol, sector, period }} />
 
       <section className="card px-4">
         {posts.length === 0 ? (

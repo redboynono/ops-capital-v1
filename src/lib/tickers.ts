@@ -80,6 +80,25 @@ export async function listWatchlist(userId: string) {
   );
 }
 
+export type WatchlistRatingRow = TickerRow & {
+  quant_score: string | null;
+  ops_verdict: string | null;
+  rank_overall: number | null;
+};
+
+export async function listWatchlistWithRatings(userId: string) {
+  return mysqlQuery<WatchlistRatingRow[]>(
+    `select t.symbol, t.name, t.exchange, t.sector, t.updated_at,
+            r.quant_score, r.ops_verdict, r.rank_overall
+       from watchlist w
+       inner join tickers t on t.symbol = w.symbol
+       left join ticker_ratings r on r.symbol = t.symbol
+      where w.user_id = ?
+      order by w.created_at desc`,
+    [userId],
+  );
+}
+
 export async function addToWatchlist(userId: string, symbol: string) {
   await upsertTicker(symbol);
   await mysqlQuery(

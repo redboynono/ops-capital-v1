@@ -11,6 +11,7 @@
 import { Children, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { TocItem } from "@/lib/markdown-toc";
 
 // ---------------------------------------------------------------------
 // Patterns of "value-bearing" numbers that we hide behind the paywall.
@@ -67,9 +68,44 @@ function redactChildren(children: ReactNode): ReactNode {
 // numeric tokens replaced with blurred spans. When false, behaves like
 // ordinary ReactMarkdown.
 // ---------------------------------------------------------------------
-export function RedactedMarkdown({ children, redact }: { children: string; redact: boolean }) {
+function tocHeadingComponents(tocItems: TocItem[], wrap: (c: ReactNode) => ReactNode) {
+  let i = 0;
+  const takeId = (level: 2 | 3) => {
+    const item = tocItems[i];
+    if (item?.level !== level) return undefined;
+    i += 1;
+    return item.id;
+  };
+  return {
+    h2: ({ children: c, ...props }: { children?: ReactNode }) => (
+      <h2 id={takeId(2)} className="scroll-mt-24" {...props}>
+        {wrap(c)}
+      </h2>
+    ),
+    h3: ({ children: c, ...props }: { children?: ReactNode }) => (
+      <h3 id={takeId(3)} className="scroll-mt-24" {...props}>
+        {wrap(c)}
+      </h3>
+    ),
+  };
+}
+
+export function RedactedMarkdown({
+  children,
+  redact,
+  tocItems,
+}: {
+  children: string;
+  redact: boolean;
+  tocItems?: TocItem[];
+}) {
+  const toc = tocItems?.length ? tocHeadingComponents(tocItems, (c) => c) : {};
   if (!redact) {
-    return <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>;
+    return (
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={toc}>
+        {children}
+      </ReactMarkdown>
+    );
   }
   return (
     <ReactMarkdown
@@ -82,10 +118,9 @@ export function RedactedMarkdown({ children, redact }: { children: string; redac
         td: ({ children: c }) => <td>{redactChildren(c)}</td>,
         th: ({ children: c }) => <th>{redactChildren(c)}</th>,
         h1: ({ children: c }) => <h1>{redactChildren(c)}</h1>,
-        h2: ({ children: c }) => <h2>{redactChildren(c)}</h2>,
-        h3: ({ children: c }) => <h3>{redactChildren(c)}</h3>,
         h4: ({ children: c }) => <h4>{redactChildren(c)}</h4>,
         blockquote: ({ children: c }) => <blockquote>{redactChildren(c)}</blockquote>,
+        ...tocHeadingComponents(tocItems ?? [], redactChildren),
       }}
     >
       {children}

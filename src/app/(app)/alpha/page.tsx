@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MarketSnapshot } from "@/components/market-snapshot";
 import { PostRow } from "@/components/post-row";
+import { RatingChangesPanel } from "@/components/rating-changes-panel";
 import { TopRatedPanel } from "@/components/top-rated";
 import { listPosts } from "@/lib/posts";
 import { getSessionUser } from "@/lib/auth";
@@ -21,8 +22,9 @@ export default async function Home() {
     <div className="mx-auto w-full max-w-[1200px] px-4 py-5 md:px-6">
       <MarketSnapshot />
 
-      <div className="mt-5">
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <TopRatedPanel limit={6} />
+        <RatingChangesPanel limit={8} sinceHours={72} />
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[1.4fr_1fr]">

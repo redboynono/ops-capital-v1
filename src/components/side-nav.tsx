@@ -14,6 +14,7 @@ const sections: { title: string; items: NavItem[] }[] = [
       { href: "/analysis", label: "分析长文" },
       { href: "/news",     label: "市场快讯" },
       { href: "/earnings", label: "财报日历" },
+      { href: "/rating-changes", label: "评级变动" },
     ],
   },
   {
@@ -95,6 +96,9 @@ export async function SideNav() {
             <div className="flex flex-col">
               <Link href="/admin" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
                 后台首页
+              </Link>
+              <Link href="/admin/posts" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
+                文章库
               </Link>
               <Link href="/admin/editor" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
                 AI 编辑器

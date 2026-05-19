@@ -56,10 +56,10 @@ export default async function AdminHome() {
           <h2 className="mt-1 text-lg font-bold">运行健康面板</h2>
           <p className="mt-1 text-[13px] text-muted">cron 状态 / 数据新鲜度 / 用户漏斗 / 事件趋势 / 失败列表。</p>
         </Link>
-        <Link href="/analysis" className="card p-4 hover:border-accent">
+        <Link href="/admin/posts" className="card p-4 hover:border-accent">
           <p className="label-caps">内容库</p>
-          <h2 className="mt-1 text-lg font-bold">查看已发布内容</h2>
-          <p className="mt-1 text-[13px] text-muted">分析 / 快讯 / 标的聚合页。</p>
+          <h2 className="mt-1 text-lg font-bold">文章管理</h2>
+          <p className="mt-1 text-[13px] text-muted">列表编辑、批量发布 / 下架。</p>
         </Link>
       </div>
     </div>

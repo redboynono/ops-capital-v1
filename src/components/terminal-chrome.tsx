@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { GlobalSearch } from "@/components/global-search";
 
 // Symbols to poll via Yahoo Finance (/api/quotes). No key needed; works for
 // US stocks, HK, A-shares, indices, crypto.
@@ -192,6 +193,7 @@ export function TerminalTopBar({ userEmail }: { userEmail?: string | null }) {
       </div>
 
       <div className="flex items-center gap-3">
+        <GlobalSearch />
         {userEmail ? (
           <>
             <span className="mono truncate max-w-[220px]">{userEmail.toUpperCase()}</span>

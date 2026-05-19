@@ -19,6 +19,7 @@
 import mysql from "mysql2/promise";
 import crypto from "node:crypto";
 import { runJob } from "./lib/job-runner.mjs";
+import { listRatingChangesForSymbols, ratingChangesMarkdown } from "./lib/rating-changes.mjs";
 
 // ============================== args ============================== //
 
@@ -266,6 +267,13 @@ async function buildBriefingForUser(conn, user, today) {
   } else {
     md.push(`你的自选清单 **${watchRows.length} 个标的** · 自动汇总，无需通读市场。`);
     md.push("");
+  }
+
+  // -- Section: rating changes (watchlist only)
+  const ratingChanges = await listRatingChangesForSymbols(conn, symbols, 48);
+  const ratingMd = ratingChangesMarkdown(ratingChanges, SITE_URL);
+  if (ratingMd) {
+    md.push(ratingMd);
   }
 
   // -- Section 1: price movers

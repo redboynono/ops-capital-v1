@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Send, Sparkles, User2 } from "lucide-react";
+import { AiAnswerBody } from "@/components/ai-answer";
 
 type Context =
   | { kind: "ticker"; symbol: string; suggestions?: string[] }
@@ -11,9 +12,10 @@ type Context =
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
 const DEFAULT_SUGGESTIONS_TICKER = [
-  "当前估值贵不贵？跟同业比怎么样？",
-  "最大的下行风险是什么？",
-  "下个 3-6 个月最关键的催化剂是？",
+  "按 Factsheet：当前估值贵不贵？",
+  "OPS 评级与 Street 一致预期差在哪？",
+  "未来 3-6 个月最关键催化剂？",
+  "最大下行风险是什么？",
 ];
 const DEFAULT_SUGGESTIONS_POST = [
   "本文最核心的观点用一句话总结",
@@ -21,7 +23,17 @@ const DEFAULT_SUGGESTIONS_POST = [
   "和当前最新数据相比有没有过时的地方？",
 ];
 
-export function AskAI({ context, loggedIn }: { context: Context; loggedIn: boolean }) {
+export function AskAI({
+  context,
+  loggedIn,
+  title = "用数据问 AI",
+  subtitle = "Factsheet 约束 · 回答带 [来源] 脚注，可点击角标查看",
+}: {
+  context: Context;
+  loggedIn: boolean;
+  title?: string;
+  subtitle?: string;
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
@@ -97,10 +109,8 @@ export function AskAI({ context, loggedIn }: { context: Context; loggedIn: boole
           <Sparkles className="h-3.5 w-3.5 text-[#0a0a0d]" strokeWidth={2.4} />
         </span>
         <div className="flex-1">
-          <h3 className="text-[13px] font-bold text-foreground">问 AI</h3>
-          <p className="text-[10px] text-muted">
-            实时 factsheet 加持 · 答案来自 OPS Quant + Finnhub 数据
-          </p>
+          <h3 className="text-[13px] font-bold text-foreground">{title}</h3>
+          <p className="text-[10px] text-muted">{subtitle}</p>
         </div>
       </header>
 
@@ -217,16 +227,11 @@ function Bubble({
       >
         <Sparkles className="h-3 w-3 text-[#0a0a0d]" strokeWidth={2.4} />
       </span>
-      <div className="flex-1 whitespace-pre-wrap text-[12px] leading-relaxed text-foreground-soft">
+      <div className="flex-1 text-[12px] leading-relaxed text-foreground-soft">
         {empty && streaming ? (
           <span className="text-muted">AI 正在思考…</span>
         ) : (
-          <>
-            {content}
-            {streaming ? (
-              <span className="ml-0.5 inline-block h-3 w-1.5 translate-y-0.5 animate-pulse bg-accent-strong" />
-            ) : null}
-          </>
+          <AiAnswerBody content={content} streaming={streaming} />
         )}
       </div>
     </div>

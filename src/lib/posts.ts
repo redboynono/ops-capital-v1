@@ -43,22 +43,46 @@ async function attachTickers<T extends { id: string }>(rows: T[]): Promise<(T & 
   return rows.map((r) => ({ ...r, tickers: map.get(r.id) ?? [] }));
 }
 
-export async function listPosts(opts: { kind?: PostKind; limit?: number; symbol?: string } = {}) {
-  const { kind, limit, symbol } = opts;
+export type PostPeriod = "week" | "month";
+
+export async function listPosts(
+  opts: {
+    kind?: PostKind;
+    limit?: number;
+    symbol?: string;
+    sector?: string;
+    period?: PostPeriod;
+  } = {},
+) {
+  const { kind, limit, symbol, sector, period } = opts;
   const params: unknown[] = [];
   let sql =
-    "select p.id, p.title, p.slug, p.kind, p.excerpt, p.is_premium, p.created_at from posts p";
+    "select distinct p.id, p.title, p.slug, p.kind, p.excerpt, p.is_premium, p.created_at from posts p";
   const wheres: string[] = ["p.is_published = 1"];
+  const joins: string[] = [];
 
+  if (symbol || sector) {
+    joins.push("inner join post_tickers pt on pt.post_id = p.id");
+    if (sector) joins.push("inner join tickers tk on tk.symbol = pt.symbol");
+  }
   if (symbol) {
-    sql += " inner join post_tickers pt on pt.post_id = p.id";
     wheres.push("pt.symbol = ?");
     params.push(symbol);
+  }
+  if (sector) {
+    wheres.push("tk.sector = ?");
+    params.push(sector);
+  }
+  if (period === "week") {
+    wheres.push("p.created_at >= date_sub(now(), interval 7 day)");
+  } else if (period === "month") {
+    wheres.push("p.created_at >= date_sub(now(), interval 30 day)");
   }
   if (kind) {
     wheres.push("p.kind = ?");
     params.push(kind);
   }
+  if (joins.length) sql += ` ${joins.join(" ")}`;
   sql += ` where ${wheres.join(" and ")} order by p.created_at desc`;
   if (limit) {
     sql += " limit ?";
@@ -69,6 +93,24 @@ export async function listPosts(opts: { kind?: PostKind; limit?: number; symbol?
   return attachTickers(rows);
 }
 
+export async function listPublishedSlugsForSitemap() {
+  return mysqlQuery<{ slug: string; kind: PostKind; created_at: string }[]>(
+    `select slug, kind, created_at from posts where is_published = 1 order by created_at desc limit 500`,
+  );
+}
+
+export async function listPostSectors(): Promise<string[]> {
+  const rows = await mysqlQuery<{ sector: string }[]>(
+    `select distinct tk.sector as sector
+       from post_tickers pt
+       inner join tickers tk on tk.symbol = pt.symbol
+       inner join posts p on p.id = pt.post_id
+      where p.is_published = 1 and tk.sector is not null and tk.sector != ''
+      order by tk.sector`,
+  );
+  return rows.map((r) => r.sector);
+}
+
 export async function getPostBySlug(slug: string): Promise<PostRow | null> {
   const rows = await mysqlQuery<PostRow[]>(
     `select id, title, slug, kind, excerpt, content, is_premium, is_published, created_at, author_id
@@ -76,6 +118,55 @@ export async function getPostBySlug(slug: string): Promise<PostRow | null> {
     [slug],
   );
   return rows[0] ?? null;
+}
+
+export type AdminPostRow = PostRow & { tickers: string[] };
+
+export async function listAllPostsAdmin(opts: {
+  kind?: PostKind;
+  published?: "all" | "published" | "draft";
+  limit?: number;
+} = {}) {
+  const { kind, published = "all", limit = 200 } = opts;
+  const params: unknown[] = [];
+  const wheres: string[] = ["1=1"];
+  if (kind) {
+    wheres.push("p.kind = ?");
+    params.push(kind);
+  }
+  if (published === "published") wheres.push("p.is_published = 1");
+  if (published === "draft") wheres.push("p.is_published = 0");
+
+  const rows = await mysqlQuery<PostRow[]>(
+    `select p.id, p.title, p.slug, p.kind, p.excerpt, p.content, p.is_premium, p.is_published, p.created_at, p.author_id
+       from posts p
+      where ${wheres.join(" and ")}
+      order by p.created_at desc
+      limit ?`,
+    [...params, limit],
+  );
+  return attachTickers(rows);
+}
+
+export async function getPostByIdAdmin(id: string): Promise<AdminPostRow | null> {
+  const rows = await mysqlQuery<PostRow[]>(
+    `select id, title, slug, kind, excerpt, content, is_premium, is_published, created_at, author_id
+       from posts where id = ? limit 1`,
+    [id],
+  );
+  const post = rows[0];
+  if (!post) return null;
+  const withTickers = await attachTickers([post]);
+  return withTickers[0] ?? null;
+}
+
+export async function bulkSetPublished(ids: string[], published: boolean) {
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => "?").join(",");
+  await mysqlQuery(
+    `update posts set is_published = ? where id in (${placeholders})`,
+    [published ? 1 : 0, ...ids],
+  );
 }
 
 export async function getCurrentUserSubscriptionStatus() {

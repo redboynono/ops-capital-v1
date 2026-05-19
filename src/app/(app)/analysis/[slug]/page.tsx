@@ -7,10 +7,20 @@ import { StickyPaywall } from "@/components/sticky-paywall";
 import { getSessionUser } from "@/lib/auth";
 import { isBookmarked, recordRead } from "@/lib/me";
 import { countRedactions, RedactedMarkdown } from "@/lib/paywall";
+import { extractTocFromMarkdown, shouldShowToc } from "@/lib/markdown-toc";
+import { buildPostMetadata } from "@/lib/post-metadata";
 import { getCurrentUserSubscriptionStatus, getPostBySlug } from "@/lib/posts";
 import { listTickersForPost } from "@/lib/tickers";
+import { ArticleToc } from "@/components/article-toc";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const post = await getPostBySlug(slug);
+  if (!post || post.kind !== "analysis") return { title: "分析 · OPS Alpha" };
+  return buildPostMetadata(post, "analysis");
+}
 
 export default async function AnalysisDetailPage({
   params,
@@ -37,6 +47,8 @@ export default async function AnalysisDetailPage({
   if (user) recordRead(user.id, post.id).catch(() => null);
 
   const toggleHref = readerMode ? `/analysis/${post.slug}?reader=0` : `/analysis/${post.slug}`;
+  const tocItems = extractTocFromMarkdown(post.content);
+  const showToc = readerMode && shouldShowToc(post.content);
 
   return (
     <div className="mx-auto w-full max-w-[840px] px-4 py-6 md:px-6">
@@ -95,9 +107,14 @@ export default async function AnalysisDetailPage({
         </div>
       </header>
 
-      <article className="prose prose-sm md:prose-base max-w-none py-5">
-        <RedactedMarkdown redact={!canViewFull}>{post.content}</RedactedMarkdown>
-      </article>
+      <div className={`flex gap-8 ${showToc ? "xl:pr-0" : ""}`}>
+        <article className="prose prose-sm md:prose-base min-w-0 max-w-none flex-1 py-5">
+          <RedactedMarkdown redact={!canViewFull} tocItems={showToc ? tocItems : undefined}>
+            {post.content}
+          </RedactedMarkdown>
+        </article>
+        {showToc ? <ArticleToc items={tocItems} readerMode /> : null}
+      </div>
 
       {!canViewFull ? (
         <StickyPaywall

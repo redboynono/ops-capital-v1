@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
+import { bulkSetPublished, listAllPostsAdmin } from "@/lib/posts";
 import { mysqlQuery } from "@/lib/mysql";
 import { setPostTickers } from "@/lib/tickers";
 
@@ -17,6 +18,40 @@ type Payload = {
   is_published?: boolean;
   tickers?: string[];
 };
+
+export async function GET(req: NextRequest) {
+  const auth = await requireAdmin();
+  if (!auth.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!auth.ok) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+
+  const kind = req.nextUrl.searchParams.get("kind");
+  const published = req.nextUrl.searchParams.get("published") as "all" | "published" | "draft" | null;
+  const posts = await listAllPostsAdmin({
+    kind: kind === "news" ? "news" : kind === "analysis" ? "analysis" : undefined,
+    published: published ?? "all",
+  });
+  return NextResponse.json({ posts });
+}
+
+export async function PATCH(req: Request) {
+  const auth = await requireAdmin();
+  if (!auth.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!auth.ok) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+
+  const body = (await req.json().catch(() => null)) as {
+    action?: string;
+    ids?: string[];
+    published?: boolean;
+  } | null;
+  if (!body?.action || !Array.isArray(body.ids)) {
+    return NextResponse.json({ error: "action and ids required" }, { status: 400 });
+  }
+  if (body.action === "set_published" && typeof body.published === "boolean") {
+    await bulkSetPublished(body.ids, body.published);
+    return NextResponse.json({ ok: true });
+  }
+  return NextResponse.json({ error: "unknown action" }, { status: 400 });
+}
 
 export async function POST(req: Request) {
   const auth = await requireAdmin();

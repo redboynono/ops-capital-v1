@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { AdminOpsActions } from "@/components/admin-ops-actions";
 import { requireAdmin } from "@/lib/admin";
 import {
   getCronHealth,
@@ -106,6 +107,8 @@ export default async function OpsDashboardPage() {
           ← 回到 Admin 首页
         </Link>
       </header>
+
+      <AdminOpsActions />
 
       {/* ============= KPI ============= */}
       <section className="mb-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">

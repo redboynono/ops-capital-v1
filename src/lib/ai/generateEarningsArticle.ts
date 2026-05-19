@@ -19,6 +19,7 @@ import {
   buildAuditSummary,
   type EarningsAudit,
 } from "@/lib/ai/verifyEarningsArticle";
+import { generateEarningsCallSummary } from "@/lib/ai/generateEarningsCallSummary";
 
 export type GeneratedArticle = {
   symbol: string;
@@ -93,6 +94,15 @@ export async function generateAndSaveEarningsPost(
   const factsheet = buildEarningsFactsheet(promptInputs);
   let audit: EarningsAudit | null = null;
   let auditSummary: string | null = null;
+  try {
+    const callSummary = await generateEarningsCallSummary(promptInputs);
+    if (callSummary) {
+      article.content = `${article.content}\n\n---\n\n${callSummary}`;
+    }
+  } catch {
+    /* optional section */
+  }
+
   try {
     audit = await verifyEarningsArticle(factsheet, article.content);
     auditSummary = buildAuditSummary(audit);

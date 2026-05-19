@@ -41,7 +41,39 @@ const RULE_LABELS = {
   move_below: { zh: "今日大跌", verb: "≤ -", unit: "%" },
 };
 
-async function getQuote(symbol) {
+function toYahooSymbol(internal) {
+  if (/^\d{4,5}$/.test(internal)) {
+    const n = String(parseInt(internal, 10)).padStart(4, "0");
+    return `${n}.HK`;
+  }
+  if (internal === "BTC" || internal === "ETH" || internal === "SOL") {
+    return `${internal}-USD`;
+  }
+  return internal;
+}
+
+async function getQuoteYahoo(symbol) {
+  const yahoo = toYahooSymbol(symbol);
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahoo)}?interval=1d&range=2d`;
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const meta = j?.chart?.result?.[0]?.meta;
+    const c = Number(meta?.regularMarketPrice ?? 0);
+    const pc = Number(meta?.chartPreviousClose ?? meta?.previousClose ?? 0);
+    if (!c) return null;
+    const dp = pc ? ((c - pc) / pc) * 100 : null;
+    return { c, dp, pc };
+  } catch {
+    return null;
+  }
+}
+
+async function getQuoteFinnhub(symbol) {
   if (!FINNHUB_API_KEY) return null;
   try {
     const res = await fetch(
@@ -56,6 +88,12 @@ async function getQuote(symbol) {
   } catch {
     return null;
   }
+}
+
+async function getQuote(symbol) {
+  const finn = await getQuoteFinnhub(symbol);
+  if (finn) return finn;
+  return getQuoteYahoo(symbol);
 }
 
 function evalRule(rule, quote) {
