@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MarketSnapshot } from "@/components/market-snapshot";
 import { PostRow } from "@/components/post-row";
-import { ExpiringOptionsPlaybook } from "@/components/expiring-options-playbook";
-import { ExpiringOptionsRadar } from "@/components/expiring-options-radar";
+import { ExpiringOptionsDirectSignals } from "@/components/expiring-options-direct-signals";
+import { thisFridayIso } from "@/lib/options-expiry";
 import { RatingChangesPanel } from "@/components/rating-changes-panel";
 import { TopRatedPanel } from "@/components/top-rated";
 import { listPosts } from "@/lib/posts";
@@ -25,10 +25,12 @@ export default async function Home() {
       <MarketSnapshot />
 
       <div className="mt-5">
-        <ExpiringOptionsPlaybook compact />
+        <ExpiringOptionsDirectSignals
+          compact
+          expirationDate={thisFridayIso()}
+          expiryLabel="本周五"
+        />
       </div>
-
-      <ExpiringOptionsRadar limit={10} compact />
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <TopRatedPanel limit={6} />

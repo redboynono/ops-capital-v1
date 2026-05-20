@@ -1,10 +1,10 @@
+import { thisFridayIso } from "@/lib/options-expiry";
 import {
   fetchOptionsSnapshotForUnderlying,
-  todayIsoDate,
   type PolygonOptionSnapshot,
 } from "@/lib/polygon";
 
-/** Liquid underlyings with active 0DTE / near-dated options. */
+/** Liquid underlyings with active weekly / near-term options. */
 export const ZERO_DTE_WATCHLIST = [
   "SPY",
   "QQQ",
@@ -36,6 +36,7 @@ export type Underlying0DteSummary = {
 };
 
 type CacheEntry = {
+  expirationDate: string;
   at: number;
   rows: ExpiringOptionHighlight[];
   summaries: Underlying0DteSummary[];
@@ -92,7 +93,7 @@ function volumeOiRatio(volume: number, oi: number): number | null {
 
 export async function listExpiringOptionsRadar(opts?: {
   expirationDate?: string;
-  underlyings?: string[];
+  underlyings?: readonly string[] | string[];
   topPerUnderlying?: number;
   globalLimit?: number;
 }): Promise<{
@@ -103,13 +104,18 @@ export async function listExpiringOptionsRadar(opts?: {
   fetchedAt: string;
   delayedNote: string;
 }> {
-  const expirationDate = opts?.expirationDate ?? todayIsoDate();
+  const expirationDate = opts?.expirationDate ?? thisFridayIso();
   const underlyings = opts?.underlyings ?? [...ZERO_DTE_WATCHLIST];
   const topPer = opts?.topPerUnderlying ?? 8;
   const globalLimit = opts?.globalLimit ?? 40;
   const now = Date.now();
 
-  if (CACHE && now - CACHE.at < TTL_MS && CACHE.rows.length > 0) {
+  if (
+    CACHE &&
+    CACHE.expirationDate === expirationDate &&
+    now - CACHE.at < TTL_MS &&
+    CACHE.rows.length > 0
+  ) {
     return {
       expirationDate,
       rows: CACHE.rows.slice(0, globalLimit),
@@ -173,7 +179,7 @@ export async function listExpiringOptionsRadar(opts?: {
     .sort((a, b) => b.volume - a.volume)
     .slice(0, globalLimit);
 
-  CACHE = { at: now, rows: merged, summaries, byUnderlying };
+  CACHE = { expirationDate, at: now, rows: merged, summaries, byUnderlying };
 
   return {
     expirationDate,
@@ -183,4 +189,43 @@ export async function listExpiringOptionsRadar(opts?: {
     fetchedAt: new Date(now).toISOString(),
     delayedNote: "约 15 分钟延迟",
   };
+}
+
+/** Single-ticker options chain for a chosen expiry (e.g. this/next Friday). */
+export async function getUnderlying0DteData(
+  symbol: string,
+  expirationDate?: string,
+): Promise<{
+  underlying: string;
+  expirationDate: string;
+  contracts: ExpiringOptionHighlight[];
+  summary: Underlying0DteSummary | null;
+}> {
+  const underlying = symbol.trim().toUpperCase();
+  const exp = expirationDate ?? thisFridayIso();
+
+  if (!process.env.POLYGON_API_KEY) {
+    return { underlying, expirationDate: exp, contracts: [], summary: null };
+  }
+
+  try {
+    const snaps = await fetchOptionsSnapshotForUnderlying(underlying, exp, 250);
+    const contracts = snaps
+      .filter((s) => s.volume > 0 || s.openInterest > 0)
+      .map(
+        (s) =>
+          ({
+            ...s,
+            volumeOiRatio: volumeOiRatio(s.volume, s.openInterest),
+          }) satisfies ExpiringOptionHighlight,
+      );
+    const summary = summarizeUnderlying(underlying, contracts);
+    return { underlying, expirationDate: exp, contracts, summary };
+  } catch {
+    return { underlying, expirationDate: exp, contracts: [], summary: null };
+  }
+}
+
+export function normalizeUsTickerInput(raw: string): string {
+  return raw.trim().toUpperCase().replace(/^\$/, "");
 }

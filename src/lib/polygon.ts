@@ -110,6 +110,8 @@ export type PolygonOptionSnapshot = {
   impliedVolatility: number | null;
   underlyingPrice: number | null;
   dayChangePct: number | null;
+  vwap: number | null;
+  lastPrice: number | null;
 };
 
 type OptionSnapResult = {
@@ -120,7 +122,12 @@ type OptionSnapResult = {
     expiration_date?: string;
     underlying_ticker?: string;
   };
-  day?: { volume?: number; change_percent?: number };
+  day?: {
+    volume?: number;
+    change_percent?: number;
+    vwap?: number;
+    close?: number;
+  };
   open_interest?: number;
   implied_volatility?: number;
   underlying_asset?: { price?: number };
@@ -159,6 +166,9 @@ export async function fetchOptionsSnapshotForUnderlying(
           r.underlying_asset?.price != null ? Number(r.underlying_asset.price) : null,
         dayChangePct:
           r.day?.change_percent != null ? Number(r.day.change_percent) : null,
+        vwap: r.day?.vwap != null && Number.isFinite(r.day.vwap) ? Number(r.day.vwap) : null,
+        lastPrice:
+          r.day?.close != null && Number.isFinite(r.day.close) ? Number(r.day.close) : null,
       } satisfies PolygonOptionSnapshot;
     })
     .filter((x): x is PolygonOptionSnapshot => x != null);
@@ -166,4 +176,25 @@ export async function fetchOptionsSnapshotForUnderlying(
 
 export function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Earliest expiration on/after `onOrAfter` that has option quotes in snapshot. */
+export async function findNearestActiveExpiration(
+  underlying: string,
+  onOrAfter = todayIsoDate(),
+): Promise<string | null> {
+  const sym = underlying.toUpperCase();
+  const rows = await polygonGet<OptionSnapResult>(`/v3/snapshot/options/${sym}`, {
+    limit: "250",
+  });
+  const dates = new Set<string>();
+  for (const r of rows) {
+    const exp = r.details?.expiration_date;
+    if (!exp || exp < onOrAfter) continue;
+    const vol = Number(r.day?.volume ?? 0);
+    const oi = Number(r.open_interest ?? 0);
+    if (vol > 0 || oi > 0) dates.add(exp);
+  }
+  if (dates.size === 0) return null;
+  return [...dates].sort()[0] ?? null;
 }

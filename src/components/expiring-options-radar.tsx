@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listExpiringOptionsRadar } from "@/lib/expiring-options";
+import { OPTION_ALPHA } from "@/lib/option-alpha-brand";
 
 function fmtNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -10,21 +11,30 @@ function fmtNum(n: number): string {
 export async function ExpiringOptionsRadar({
   limit = 12,
   compact = false,
+  expirationDate,
+  expiryLabel = "本周五",
+  symbol,
 }: {
   limit?: number;
   compact?: boolean;
+  expirationDate?: string;
+  expiryLabel?: string;
+  symbol?: string;
 }) {
-  const { expirationDate, rows, delayedNote } = await listExpiringOptionsRadar({
-    globalLimit: limit,
+  const { expirationDate: exp, rows, delayedNote } = await listExpiringOptionsRadar({
+    expirationDate,
+    underlyings: symbol ? [symbol] : undefined,
+    topPerUnderlying: symbol ? 120 : undefined,
+    globalLimit: symbol ? 200 : limit,
   });
 
   return (
     <section className="card">
       <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
         <div>
-          <h2 className="text-[15px] font-bold text-foreground">末日期权雷达</h2>
+          <h2 className="text-[15px] font-bold text-foreground">{OPTION_ALPHA.radarTitle}</h2>
           <p className="text-[11px] text-muted">
-            到期 {expirationDate} · {delayedNote}
+            到期 {exp}（{expiryLabel}）· {delayedNote}
           </p>
         </div>
         {!compact ? (
@@ -40,7 +50,7 @@ export async function ExpiringOptionsRadar({
       <div className="overflow-x-auto">
         {rows.length === 0 ? (
           <p className="px-4 py-8 text-center text-[12px] text-muted">
-            今日暂无可展示的末日期权异动，请稍后再试。
+            该到期日暂无可展示的 Option Alpha 异动，请切换「下周五」或稍后再试。
           </p>
         ) : (
           <table className="w-full min-w-[640px] text-left text-[12px]">

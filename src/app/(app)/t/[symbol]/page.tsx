@@ -11,6 +11,10 @@ import { listAgentsByInput } from "@/lib/agents/registry";
 import { getSessionUser } from "@/lib/auth";
 import { mysqlQuery } from "@/lib/mysql";
 import { listPosts } from "@/lib/posts";
+import { OptionTradeIdeasPanel } from "@/components/option-trade-ideas-panel";
+import { TickerMarketStats } from "@/components/ticker-market-stats";
+import { isUsEquityTicker } from "@/lib/polygon";
+import { thisFridayIso } from "@/lib/options-expiry";
 import { getTickerBySymbol, listRelatedTickers } from "@/lib/tickers";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +103,7 @@ export default async function TickerPage({
             <QuickAddPosition symbol={symbol} loggedIn={Boolean(user)} />
           </div>
         </div>
+        <TickerMarketStats symbol={symbol} />
         <div className="mt-3 flex items-center gap-4 text-[12px] text-muted">
           <span>
             本标的文章：<span className="font-mono font-bold text-foreground">{analysis.length}</span> 分析 ·
@@ -106,6 +111,16 @@ export default async function TickerPage({
           </span>
         </div>
       </header>
+
+      {isUsEquityTicker(symbol) ? (
+        <div className="mt-5">
+          <OptionTradeIdeasPanel
+            symbol={symbol}
+            expirationDate={thisFridayIso()}
+            expiryLabel="本周五"
+          />
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_260px]">
         <section>

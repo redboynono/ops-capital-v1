@@ -9,7 +9,7 @@
 | `PAYMENT_MODE` | `live` |
 | `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | 已配置 |
 | `FINNHUB_API_KEY` | 已配置 |
-| `POLYGON_API_KEY` | Massive Options Developer（末日期权数据源，仅服务器 `.env.production`） |
+| `POLYGON_API_KEY` | Massive Options（Option Alpha 数据源，仅服务器 `.env.production`） |
 | `GUMROAD_*` | 已配置 |
 | `OPENAI_*` | 已配置 |
 | `CRON_SECRET` | 已配置 |

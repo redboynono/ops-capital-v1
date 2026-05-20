@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSessionUser } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/admin";
+import { OPTION_ALPHA } from "@/lib/option-alpha-brand";
 
 type NavItem = { href: string; label: string };
 
@@ -15,7 +16,7 @@ const sections: { title: string; items: NavItem[] }[] = [
       { href: "/news",     label: "市场快讯" },
       { href: "/earnings", label: "财报日历" },
       { href: "/rating-changes", label: "评级变动" },
-      { href: "/expiring-options", label: "末日期权" },
+      { href: "/expiring-options", label: OPTION_ALPHA.navLabel },
     ],
   },
   {
