@@ -9,12 +9,17 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes for LLM generation
 
 export async function POST(req: Request) {
+  const internalToken = process.env.INTERNAL_API_SECRET || "internal-ops-alpha-secret";
+  const providedToken = req.headers.get("x-internal-token");
+  
   // We can optionally check a secret token or admin cookie
   // Since this is triggered internally, we might not have the admin cookie if triggered via fetch without forwarding cookies.
   // We'll pass an internal secret or just forward the cookie.
-  const auth = await requireAdmin();
-  if (!auth.ok) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (providedToken !== internalToken) {
+    const auth = await requireAdmin();
+    if (!auth.ok) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
   }
 
   const body = (await req.json().catch(() => ({}))) as { symbol?: string };

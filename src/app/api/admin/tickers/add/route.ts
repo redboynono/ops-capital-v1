@@ -57,10 +57,15 @@ export async function POST(req: Request) {
   const cookieHeader = req.headers.get("cookie");
   const internalUrl = "http://localhost:3000/api/admin/tickers/async-generate";
   console.log(`[add] Triggering async generation for ${symbol} at ${internalUrl}`);
+  
+  // Create a secret token or bypass auth for internal calls
+  const internalToken = process.env.INTERNAL_API_SECRET || "internal-ops-alpha-secret";
+  
   fetch(internalUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "x-internal-token": internalToken,
       ...(cookieHeader ? { cookie: cookieHeader } : {}),
     },
     body: JSON.stringify({ symbol }),

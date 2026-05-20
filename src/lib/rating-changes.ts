@@ -64,14 +64,16 @@ export async function listRecentRatingChanges(opts: {
   };
 
   const ratingRows = await mysqlQuery<RhRow[]>(
-    `select h.symbol, t.name, h.ops_verdict, h.quant_score, h.ops_target_price,
-            cast(h.captured_at as char) as captured_at,
-            row_number() over (partition by h.symbol order by h.captured_at desc) as rn
-       from ticker_ratings_history h
-       inner join tickers t on t.symbol = h.symbol
-      where h.captured_at >= date_sub(now(), interval ? hour)
-        ${symbolFilter}`,
-    [sinceHours, ...symParams],
+    `with ranked as (
+       select h.symbol, t.name, h.ops_verdict, h.quant_score, h.ops_target_price,
+              cast(h.captured_at as char) as captured_at,
+              row_number() over (partition by h.symbol order by h.captured_at desc) as rn
+         from ticker_ratings_history h
+         inner join tickers t on t.symbol = h.symbol
+         ${opts.symbols?.length ? `where h.symbol in (${opts.symbols.map(() => "?").join(",")})` : ""}
+     )
+     select * from ranked where rn <= 2`,
+    symParams,
   );
 
   const changes: RatingChange[] = [];
@@ -86,8 +88,32 @@ export async function listRecentRatingChanges(opts: {
     const sorted = rows.sort((a, b) => Number(a.rn) - Number(b.rn));
     const latest = sorted.find((r) => Number(r.rn) === 1);
     const prev = sorted.find((r) => Number(r.rn) === 2);
-    if (!latest || !prev) continue;
+    if (!latest) continue;
+
+    // Filter by sinceHours on the latest snapshot
+    const latestTime = new Date(latest.captured_at).getTime();
+    if (latestTime < Date.now() - sinceHours * 3600 * 1000) {
+      continue;
+    }
+
     const name = latest.name;
+
+    // 首次覆盖 (Initiated)
+    if (!prev) {
+      if (latest.ops_verdict) {
+        changes.push({
+          symbol,
+          name,
+          kind: "ops_verdict",
+          field: "ops_verdict",
+          label: "首次覆盖",
+          from_value: "—",
+          to_value: fmtVerdict(latest.ops_verdict),
+          captured_at: latest.captured_at,
+        });
+      }
+      continue;
+    }
 
     if (latest.ops_verdict && prev.ops_verdict && latest.ops_verdict !== prev.ops_verdict) {
       changes.push({

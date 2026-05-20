@@ -27,9 +27,9 @@ export async function generateAndSaveAnalysis(symbol: string): Promise<string> {
 
   // Save to posts table
   await mysqlQuery(
-    `insert into posts (id, slug, title, excerpt, content, kind, is_premium, is_published, created_at, updated_at)
-     values (?, ?, ?, ?, ?, 'analysis', false, true, now(), now())
-     on duplicate key update title = values(title), excerpt = values(excerpt), content = values(content), updated_at = now()`,
+    `insert into posts (id, slug, title, excerpt, content, kind, is_premium, is_published, created_at)
+     values (?, ?, ?, ?, ?, 'analysis', false, true, now())
+     on duplicate key update title = values(title), excerpt = values(excerpt), content = values(content)`,
     [id, slug, title, excerpt, cleanContent]
   );
 
