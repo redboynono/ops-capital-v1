@@ -1,4 +1,4 @@
-import { getQuotes } from "@/lib/yahoo";
+import { getQuotes } from "@/lib/quotes";
 
 // Real indices via Yahoo Finance unofficial API (no key, wide coverage).
 const TARGETS: { key: string; name: string; sub: string }[] = [
@@ -25,7 +25,7 @@ export async function MarketSnapshot() {
     <section className="card overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span className="label-caps">市场快照</span>
-        <span className="text-[11px] text-muted-soft">数据：Yahoo Finance · 近实时</span>
+        <span className="text-[11px] text-muted-soft">近实时行情</span>
       </div>
       <div className="grid grid-cols-2 divide-x divide-y divide-border sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
         {TARGETS.map((t) => {

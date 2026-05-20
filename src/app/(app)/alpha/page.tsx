@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MarketSnapshot } from "@/components/market-snapshot";
 import { PostRow } from "@/components/post-row";
+import { ExpiringOptionsPlaybook } from "@/components/expiring-options-playbook";
+import { ExpiringOptionsRadar } from "@/components/expiring-options-radar";
 import { RatingChangesPanel } from "@/components/rating-changes-panel";
 import { TopRatedPanel } from "@/components/top-rated";
 import { listPosts } from "@/lib/posts";
@@ -21,6 +23,12 @@ export default async function Home() {
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 py-5 md:px-6">
       <MarketSnapshot />
+
+      <div className="mt-5">
+        <ExpiringOptionsPlaybook compact />
+      </div>
+
+      <ExpiringOptionsRadar limit={10} compact />
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <TopRatedPanel limit={6} />

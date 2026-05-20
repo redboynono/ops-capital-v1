@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mysqlQuery } from "@/lib/mysql";
-import { getQuotes } from "@/lib/yahoo";
+import { getQuotes } from "@/lib/quotes";
 
 export type PickStatus = "open" | "closed" | "stopped";
 export type PickConviction = "high" | "medium" | "low";

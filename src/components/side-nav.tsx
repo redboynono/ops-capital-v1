@@ -15,6 +15,7 @@ const sections: { title: string; items: NavItem[] }[] = [
       { href: "/news",     label: "市场快讯" },
       { href: "/earnings", label: "财报日历" },
       { href: "/rating-changes", label: "评级变动" },
+      { href: "/expiring-options", label: "末日期权" },
     ],
   },
   {
