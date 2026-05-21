@@ -1,5 +1,6 @@
 import { getSessionUser } from "@/lib/auth";
 import { mysqlQuery } from "@/lib/mysql";
+import { isSubscriptionActive, reconcileExpiredSubscription } from "@/lib/subscription";
 
 export type PostKind = "analysis" | "news";
 
@@ -173,13 +174,15 @@ export async function getCurrentUserSubscriptionStatus() {
   const user = await getSessionUser();
   if (!user) return { user: null, subscribed: false };
 
+  await reconcileExpiredSubscription(user.id);
   const rows = await mysqlQuery<SubscriptionProfile[]>(
     "select subscription_status, subscription_end_date from users where id = ? limit 1",
     [user.id],
   );
   const profile = rows[0];
-  const isActive = profile?.subscription_status === "active";
-  const hasNotExpired =
-    !profile?.subscription_end_date || new Date(profile.subscription_end_date) > new Date();
-  return { user, subscribed: isActive && hasNotExpired };
+  const subscribed = isSubscriptionActive({
+    subscriptionStatus: profile?.subscription_status,
+    subscriptionEndDate: profile?.subscription_end_date,
+  });
+  return { user, subscribed };
 }

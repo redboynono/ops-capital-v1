@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
+import { isSubscriptionActive, subscriptionDaysLeft } from "@/lib/subscription";
 import { getMemberStats, listBookmarks, listHistory } from "@/lib/me";
 import { listPosts } from "@/lib/posts";
 import { listWatchlist } from "@/lib/tickers";
@@ -9,13 +10,6 @@ export const dynamic = "force-dynamic";
 
 function hrefFor(kind: "analysis" | "news", slug: string) {
   return kind === "news" ? `/news/${slug}` : `/analysis/${slug}`;
-}
-
-function daysLeft(end: string | null | undefined) {
-  if (!end) return null;
-  const t = new Date(end).getTime();
-  if (Number.isNaN(t)) return null;
-  return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
 export default async function DashboardPage() {
@@ -30,8 +24,11 @@ export default async function DashboardPage() {
     listWatchlist(user.id),
   ]);
 
-  const subscribed = user.subscriptionStatus === "active";
-  const left = subscribed ? daysLeft(user.subscriptionEndDate) : null;
+  const subscribed = isSubscriptionActive({
+    subscriptionStatus: user.subscriptionStatus,
+    subscriptionEndDate: user.subscriptionEndDate,
+  });
+  const left = subscribed ? subscriptionDaysLeft(user.subscriptionEndDate) : null;
 
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 md:px-6">

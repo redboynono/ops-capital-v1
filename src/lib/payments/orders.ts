@@ -228,7 +228,65 @@ export async function markOrderFailed(outTradeNo: string, payload?: string): Pro
   );
 }
 
+/**
+ * 退款后收回对应套餐月数（不低于当前时间）。
+ * 若收回后已过期，同时将 subscription_status 置为 inactive。
+ */
+export async function revokeSubscriptionMonths(
+  userId: string,
+  months: number,
+): Promise<void> {
+  const pool = getMySqlPool();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [userRowsRaw] = await conn.query(
+      "select subscription_end_date from users where id = ? for update",
+      [userId],
+    );
+    const userRow = (userRowsRaw as { subscription_end_date: string | null }[])[0];
+    const end = userRow?.subscription_end_date
+      ? new Date(userRow.subscription_end_date)
+      : null;
+    if (!end || Number.isNaN(end.getTime())) {
+      await conn.query(
+        "update users set subscription_status = 'inactive' where id = ?",
+        [userId],
+      );
+      await conn.commit();
+      return;
+    }
+    const newEnd = subtractMonths(end, months);
+    const now = new Date();
+    if (newEnd <= now) {
+      await conn.query(
+        `update users set subscription_status = 'inactive', subscription_end_date = ? where id = ?`,
+        [formatDateTimeUTC(now), userId],
+      );
+    } else {
+      await conn.query(
+        `update users set subscription_end_date = ? where id = ?`,
+        [formatDateTimeUTC(newEnd), userId],
+      );
+    }
+    await conn.commit();
+  } catch (err) {
+    try {
+      await conn.rollback();
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
 // ─────────────────────── internals ───────────────────────
+
+function subtractMonths(base: Date, months: number): Date {
+  return addMonths(base, -months);
+}
 
 function addMonths(base: Date, months: number): Date {
   const d = new Date(base.getTime());

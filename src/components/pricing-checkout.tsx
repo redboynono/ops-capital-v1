@@ -135,6 +135,33 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
     };
   }, [qrDialog]);
 
+  // Gumroad 新标签支付：轮询 pending 订单，到账后跳转成功页
+  useEffect(() => {
+    if (!pendingRedirect) return;
+
+    const tick = async () => {
+      try {
+        const res = await fetch(
+          `/api/pay/order/${encodeURIComponent(pendingRedirect.outTradeNo)}`,
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as { status: "pending" | "paid" | "failed" };
+        if (data.status === "paid") {
+          window.location.href = `/pay/success?out_trade_no=${encodeURIComponent(pendingRedirect.outTradeNo)}`;
+        } else if (data.status === "failed") {
+          setError("支付失败，请重新下单或联系客服。");
+          setPendingRedirect(null);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 2500);
+    return () => clearInterval(id);
+  }, [pendingRedirect]);
+
   return (
     <div>
       {/* 套餐选择 */}
@@ -206,6 +233,8 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
             ) : null}
             <p className="text-center text-[11px] text-muted">
               支付由 Gumroad 处理 · 接受全球银行卡 / PayPal · 自动续订 · 随时可取消
+              <br />
+              结账页点「Continue shopping」应回到定价页；若回到首页请改用上方链接或联系客服。
             </p>
           </>
         ) : null}
@@ -262,6 +291,16 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
           >
             手动打开 Gumroad 支付页 →
           </a>
+          <p className="mt-2 text-muted">
+            付完后也可
+            <a
+              href={`/pay/success?out_trade_no=${encodeURIComponent(pendingRedirect.outTradeNo)}`}
+              className="mx-1 font-semibold text-accent-strong hover:underline"
+            >
+              打开支付确认页
+            </a>
+            （自动轮询开通状态）
+          </p>
         </div>
       ) : null}
 

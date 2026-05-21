@@ -1,7 +1,15 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+
+/** Gumroad 结账页「Continue shopping」会跳到卖家资料里填的主站 URL，常为首页 */
+function shouldRedirectGumroadReturn(referer: string | null): boolean {
+  if (!referer) return false;
+  return /gumroad\.com/i.test(referer);
+}
 
 // Bridgewater-inspired marketing site: cream background, serif headings, gold accent, generous whitespace.
 const theme = {
@@ -55,6 +63,11 @@ const alphaFeatures = [
 ];
 
 export default async function MarketingHome() {
+  const h = await headers();
+  if (shouldRedirectGumroadReturn(h.get("referer"))) {
+    redirect("/pricing");
+  }
+
   const user = await getSessionUser();
   const ctaLabel = user ? "打开 Alpha 工作台" : "进入 OPS Alpha";
 

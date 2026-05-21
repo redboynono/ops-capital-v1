@@ -35,6 +35,17 @@ Dashboard → **Products** → **New product** → 选 **Membership**。
 
 **Content** 字段可留空或填 `查看 https://opscapital.com/dashboard`（Gumroad 会在购买后把这段发到用户邮箱，作为 fallback 入口）。
 
+### 结账页「Continue shopping」回到定价页（重要）
+
+Gumroad 购物车右上角 **Continue shopping** 会跳到你 **Profile 里配置的主站 URL**（不是 `redirect_url`）。
+
+请任选其一，避免用户回到营销首页一脸懵：
+
+1. **推荐**：Gumroad → **Settings → Profile** → 网站 / Social / Profile URL 填  
+   `https://opscapital.com/shop`（本站会 302 到 `/pricing`）
+2. 或直接填 `https://opscapital.com/pricing`
+3. 若暂时只能填 `https://opscapital.com`：从 Gumroad 点回来的访问会带 `Referer`，本站首页会自动转到 `/pricing`
+
 创建后每个产品有一个 **permalink**（URL 末尾的 6-7 位短码，形如 `phjcef`）。记下 3 个 permalink。
 
 ---

@@ -65,11 +65,13 @@ export function buildGumroadCheckoutUrl(order: Order): string {
   const username = requireEnv("GUMROAD_USERNAME");
   const permalink = getPermalink(order.plan_id as PlanId);
 
+  const base = (process.env.NEXT_PUBLIC_BASE_URL ?? "https://opscapital.com").replace(/\/$/, "");
   const params = new URLSearchParams({
-    wanted: "true",                     // Gumroad 标准参数：直接进入支付页
-    out_trade_no: order.out_trade_no,   // ↓↓↓ 这些将在 ping 的 url_params 中回传 ↓↓↓
+    wanted: "true",
+    out_trade_no: order.out_trade_no,
     user_id: order.user_id,
     plan_id: order.plan_id,
+    redirect_url: `${base}/pay/success?out_trade_no=${encodeURIComponent(order.out_trade_no)}`,
   });
   return `https://${username}.gumroad.com/l/${permalink}?${params.toString()}`;
 }

@@ -3,7 +3,9 @@ import {
   createPaidOrderAndExtend,
   getOrderByOutTradeNo,
   markOrderFailed,
+  revokeSubscriptionMonths,
 } from "@/lib/payments/orders";
+import { getPlan } from "@/lib/payments/plans";
 import {
   parseGumroadPing,
   verifyGumroadSale,
@@ -86,14 +88,36 @@ export async function POST(req: Request): Promise<Response> {
     return new Response("verify failed", { status: 500 });
   }
 
-  // 退款事件：标订单为 failed（退款由 Gumroad 自动处理）
+  // 退款：标订单 failed + 收回对应套餐时长
   if (ping.is_refunded) {
     const originalOutTradeNo = ping.url_params.out_trade_no;
+    const syntheticOutTradeNo = `GMRD-${ping.sale_id}`;
+    let order =
+      originalOutTradeNo ? await getOrderByOutTradeNo(originalOutTradeNo) : null;
+    if (!order) order = await getOrderByOutTradeNo(syntheticOutTradeNo);
+
     if (originalOutTradeNo) {
       await markOrderFailed(originalOutTradeNo, rawBody).catch((e) =>
         console.error("[gumroad ping] markFailed err:", e),
       );
     }
+
+    const planId =
+      (ping.url_params.plan_id as PlanId | undefined) ??
+      planIdFromPermalink(ping.product_permalink);
+    const plan = planId ? getPlan(planId) : null;
+    let userId = ping.url_params.user_id ?? null;
+    if (!userId && ping.email) userId = await findUserIdByEmail(ping.email);
+    if (userId && plan) {
+      await revokeSubscriptionMonths(userId, plan.durationMonths).catch((e) =>
+        console.error("[gumroad ping] revoke subscription err:", e),
+      );
+    }
+    return new Response("ok", { status: 200 });
+  }
+
+  if (ping.is_test && process.env.NODE_ENV === "production") {
+    console.info("[gumroad ping] skip test sale in production:", ping.sale_id);
     return new Response("ok", { status: 200 });
   }
 
@@ -125,6 +149,20 @@ export async function POST(req: Request): Promise<Response> {
       ping.product_permalink,
     );
     return new Response("plan not found", { status: 200 });
+  }
+
+  const plan = getPlan(planId);
+  if (plan && ping.price_cents > 0) {
+    const tol = Math.max(50, Math.round(plan.amount * 0.05));
+    if (Math.abs(ping.price_cents - plan.amount) > tol) {
+      console.warn("[gumroad ping] price mismatch", {
+        sale_id: ping.sale_id,
+        expected: plan.amount,
+        got: ping.price_cents,
+        plan_id: planId,
+      });
+      return new Response("price mismatch", { status: 400 });
+    }
   }
 
   const gatewayTradeNo = `GMRD-${ping.sale_id}`;

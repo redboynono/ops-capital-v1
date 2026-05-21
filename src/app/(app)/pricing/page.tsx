@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { PLAN_IDS, PLANS } from "@/lib/payments/plans";
 import { isMockMode } from "@/lib/payments/gateways";
 import { PricingCheckout } from "@/components/pricing-checkout";
+import { isSubscriptionActive } from "@/lib/subscription";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "订阅方案 · Ops Alpha" };
@@ -21,9 +22,12 @@ export default async function PricingPage() {
   const mock = isMockMode();
   const plans = PLAN_IDS.map((id) => PLANS[id]);
 
-  const subscribed =
-    user?.subscriptionStatus === "active" &&
-    (!user.subscriptionEndDate || new Date(user.subscriptionEndDate) > new Date());
+  const subscribed = user
+    ? isSubscriptionActive({
+        subscriptionStatus: user.subscriptionStatus,
+        subscriptionEndDate: user.subscriptionEndDate,
+      })
+    : false;
 
   return (
     <div className="mx-auto w-full max-w-[960px] px-4 py-8 md:px-6">
@@ -31,7 +35,7 @@ export default async function PricingPage() {
         <span className="label-caps">Pricing</span>
         <h1 className="mt-1 text-3xl font-bold text-foreground">订阅 Ops Alpha Premium</h1>
         <p className="mt-1 text-[13px] text-muted">
-          预付费买断制 · 到期前续费自动叠加 · 支持支付宝 / 微信支付
+          预付费会员 · 到期前续费自动叠加 · 由 Gumroad 处理支付（银行卡 / PayPal，自动续订）
         </p>
       </header>
 
@@ -89,7 +93,9 @@ export default async function PricingPage() {
           </div>
           <div>
             <dt className="font-semibold text-foreground-soft">Q: 退款政策？</dt>
-            <dd className="mt-0.5">首次购买 7 天内未使用 Premium 功能可全额退款，支付宝 / 微信原路返回。</dd>
+            <dd className="mt-0.5">
+              可在 Gumroad 账户中取消续订；退款按 Gumroad 政策处理，退款后会员时长会相应调整。
+            </dd>
           </div>
         </dl>
       </section>

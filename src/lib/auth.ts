@@ -97,12 +97,20 @@ export async function getSessionUser() {
   const user = rows[0];
   if (!user) return null;
 
+  const { reconcileExpiredSubscription } = await import("@/lib/subscription");
+  await reconcileExpiredSubscription(user.id);
+  const refreshed = await mysqlQuery<DbUser[]>(
+    "select id, email, full_name, subscription_status, subscription_end_date, email_briefing_enabled from users where id = ? limit 1",
+    [user.id],
+  );
+  const u = refreshed[0] ?? user;
+
   return {
-    id: user.id,
-    email: user.email,
-    fullName: user.full_name,
-    subscriptionStatus: user.subscription_status ?? "inactive",
-    subscriptionEndDate: user.subscription_end_date,
-    emailBriefingEnabled: Number(user.email_briefing_enabled ?? 0) === 1,
+    id: u.id,
+    email: u.email,
+    fullName: u.full_name,
+    subscriptionStatus: u.subscription_status ?? "inactive",
+    subscriptionEndDate: u.subscription_end_date,
+    emailBriefingEnabled: Number(u.email_briefing_enabled ?? 0) === 1,
   };
 }
