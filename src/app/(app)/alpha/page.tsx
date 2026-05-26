@@ -6,7 +6,7 @@ import { ExpiringOptionsDirectSignals } from "@/components/expiring-options-dire
 import { thisFridayIso } from "@/lib/options-expiry";
 import { RatingChangesPanel } from "@/components/rating-changes-panel";
 import { TopRatedPanel } from "@/components/top-rated";
-import { listPosts } from "@/lib/posts";
+import { getCachedPosts } from "@/lib/cached-data";
 import { getSessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +16,8 @@ export default async function Home() {
   if (!user) redirect("/login?redirect=/alpha");
 
   const [analysis, news] = await Promise.all([
-    listPosts({ kind: "analysis", limit: 10 }),
-    listPosts({ kind: "news", limit: 10 }),
+    getCachedPosts({ kind: "analysis", limit: 10 }),
+    getCachedPosts({ kind: "news", limit: 10 }),
   ]);
 
   return (
@@ -27,6 +27,7 @@ export default async function Home() {
       <div className="mt-5">
         <ExpiringOptionsDirectSignals
           compact
+          underlyings={["SPY", "QQQ"]}
           expirationDate={thisFridayIso()}
           expiryLabel="本周五"
         />

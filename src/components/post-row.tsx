@@ -25,7 +25,16 @@ function formatRelative(iso: string) {
   return new Date(iso).toLocaleDateString("zh-CN");
 }
 
-export function PostRow({ post, dense = false }: { post: Post; dense?: boolean }) {
+export function PostRow({
+  post,
+  dense = false,
+  /** 列表页关闭，避免每条研报 hydration 一个 Share 弹窗组件 */
+  showShare = false,
+}: {
+  post: Post;
+  dense?: boolean;
+  showShare?: boolean;
+}) {
   const href = post.kind === "news" ? `/news/${post.slug}` : `/analysis/${post.slug}`;
   const premium = !!post.is_premium;
 
@@ -58,19 +67,21 @@ export function PostRow({ post, dense = false }: { post: Post; dense?: boolean }
           ) : null}
         </div>
 
-        <ShareButton
-          variant="icon-compact"
-          data={{
-            type: "post",
-            kind: post.kind,
-            title: post.title,
-            excerpt: post.excerpt,
-            tickers: post.tickers,
-            createdAt: post.created_at,
-          }}
-          urlPath={href}
-          fileNamePrefix={`ops_alpha_${post.slug}`}
-        />
+        {showShare ? (
+          <ShareButton
+            variant="icon-compact"
+            data={{
+              type: "post",
+              kind: post.kind,
+              title: post.title,
+              excerpt: post.excerpt,
+              tickers: post.tickers,
+              createdAt: post.created_at,
+            }}
+            urlPath={href}
+            fileNamePrefix={`ops_alpha_${post.slug}`}
+          />
+        ) : null}
       </div>
     </article>
   );

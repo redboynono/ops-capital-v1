@@ -98,6 +98,8 @@ function toRow(
 export async function buildCopilotDirectSignals(opts: {
   expirationDate: string;
   symbol?: string;
+  /** 未指定 symbol 时扫描的标的列表；默认全 watchlist */
+  underlyings?: readonly string[];
   limit?: number;
 }): Promise<{
   concentration: CopilotDirectRow[];
@@ -105,12 +107,20 @@ export async function buildCopilotDirectSignals(opts: {
 }> {
   const limit = opts.limit ?? 12;
   const symbol = opts.symbol?.trim().toUpperCase();
+  const underlyingList = symbol
+    ? [symbol]
+    : opts.underlyings?.length
+      ? [...opts.underlyings]
+      : undefined;
+  const scanCount = underlyingList?.length ?? 12;
+  const topPerUnderlying = scanCount <= 2 ? 40 : scanCount <= 4 ? 60 : 120;
+  const globalLimit = scanCount <= 2 ? 60 : scanCount <= 4 ? 120 : 200;
 
   const { byUnderlying } = await listExpiringOptionsRadar({
     expirationDate: opts.expirationDate,
-    topPerUnderlying: 120,
-    globalLimit: 200,
-    underlyings: symbol ? [symbol] : undefined,
+    topPerUnderlying,
+    globalLimit,
+    underlyings: underlyingList,
   });
 
   const keys = symbol ? [symbol] : Object.keys(byUnderlying);

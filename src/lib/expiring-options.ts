@@ -84,7 +84,7 @@ function summarizeUnderlying(
 }
 
 let CACHE: CacheEntry | null = null;
-const TTL_MS = 5 * 60 * 1000;
+const TTL_MS = 8 * 60 * 1000;
 
 function volumeOiRatio(volume: number, oi: number): number | null {
   if (oi <= 0) return volume > 0 ? volume : null;

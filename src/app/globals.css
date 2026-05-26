@@ -41,6 +41,7 @@
 html,
 body {
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-body-sans);
@@ -195,6 +196,12 @@ a:hover {
   padding: 12px 16px;
   background: linear-gradient(180deg, transparent, var(--background) 30%);
   backdrop-filter: blur(8px);
+}
+@media (max-width: 767px) {
+  .paywall-sticky {
+    bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+    z-index: 20;
+  }
 }
 .paywall-sticky-card {
   border: 1px solid var(--accent);
@@ -407,6 +414,22 @@ ol.sa-list > li::before {
   background-color: var(--surface);
 }
 
+/* iPhone 主屏幕 / PWA：底栏与刘海安全区 */
+.terminal .terminal-main {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 768px) {
+  .terminal .terminal-main {
+    padding-bottom: 2.5rem;
+  }
+}
+.mobile-tab-bar {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  min-height: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .terminal {
   --background: #0a0a0d;
   --surface: #141418;
@@ -428,7 +451,12 @@ ol.sa-list > li::before {
   font-family: var(--font-mono), var(--font-body-sans);
   font-feature-settings: "tnum" 1;
   min-height: 100vh;
-  padding-bottom: 1.5rem; /* 为底部 fixed FunctionBar (h-6) 留白 */
+  padding-bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 768px) {
+  .terminal {
+    padding-bottom: 1.75rem; /* 桌面底部 FunctionBar */
+  }
 }
 
 /* CJK chars stay in sans (mono fonts render CJK poorly); numbers + latin stay mono */

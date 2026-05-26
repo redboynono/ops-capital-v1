@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { GlobalSearch } from "@/components/global-search";
+import { MobileMenuButton, MobileNavDrawer } from "@/components/mobile-nav";
 
 // Symbols to poll via Yahoo Finance (/api/quotes). No key needed; works for
 // US stocks, HK, A-shares, indices, crypto.
@@ -170,15 +171,18 @@ function useUSMarketStatus() {
 export function TerminalTopBar({ userEmail }: { userEmail?: string | null }) {
   const timeStr = useNowHK();
   const mkt = useUSMarketStatus();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
+    <>
     <div className="term-rail sticky top-0 z-40 flex h-7 items-center justify-between border-b px-3 text-[11px]">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 md:gap-3">
+        <MobileMenuButton onOpen={() => setMenuOpen(true)} />
         <span className="mono font-bold" style={{ color: "var(--accent)" }}>OPS&nbsp;ALPHA</span>
-        <span className="sep">|</span>
-        <span className="mono">TERMINAL v1.0</span>
-        <span className="sep">|</span>
-        <span className="mono flex items-center gap-1.5">
+        <span className="sep hidden sm:inline">|</span>
+        <span className="mono hidden sm:inline">TERMINAL v1.0</span>
+        <span className="sep hidden sm:inline">|</span>
+        <span className="mono hidden items-center gap-1.5 sm:flex">
           <span className="live-dot" />
           LIVE
         </span>
@@ -192,25 +196,34 @@ export function TerminalTopBar({ userEmail }: { userEmail?: string | null }) {
         <span className="mono">{timeStr}</span>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 md:gap-3">
         <GlobalSearch />
         {userEmail ? (
           <>
-            <span className="mono truncate max-w-[220px]">{userEmail.toUpperCase()}</span>
-            <span className="sep">|</span>
+            <span className="mono hidden max-w-[120px] truncate md:inline md:max-w-[220px]">
+              {userEmail.toUpperCase()}
+            </span>
+            <span className="sep hidden md:inline">|</span>
             <form action="/api/auth/signout" method="post" className="inline">
-              <button type="submit" className="mono hover:text-[color:var(--accent)]">SIGN OUT</button>
+              <button type="submit" className="mono hover:text-[color:var(--accent)]">
+                <span className="md:hidden">OUT</span>
+                <span className="hidden md:inline">SIGN OUT</span>
+              </button>
             </form>
           </>
         ) : (
           <>
             <Link href="/login" className="mono hover:text-[color:var(--accent)]">LOGIN</Link>
-            <span className="sep">|</span>
-            <Link href="/login?tab=signup" className="mono hover:text-[color:var(--accent)]">SIGN UP</Link>
+            <span className="sep hidden sm:inline">|</span>
+            <Link href="/login?tab=signup" className="mono hidden hover:text-[color:var(--accent)] sm:inline">
+              SIGN UP
+            </Link>
           </>
         )}
       </div>
     </div>
+    <MobileNavDrawer open={menuOpen} onClose={() => setMenuOpen(false)} userEmail={userEmail ?? null} />
+    </>
   );
 }
 
@@ -254,7 +267,7 @@ export function TerminalFunctionBar() {
     { label: "HELP",  href: "/help" },
   ];
   return (
-    <div className="term-rail fixed bottom-0 left-0 right-0 z-40 flex h-6 items-center gap-3 border-t px-3 text-[10px]">
+    <div className="term-rail fixed bottom-0 left-0 right-0 z-30 hidden h-7 items-center gap-3 border-t px-3 text-[12px] md:flex">
       {items.map((it) => (
         <Link key={it.href} href={it.href} className="mono hover:text-[color:var(--accent)]">
           {it.label}

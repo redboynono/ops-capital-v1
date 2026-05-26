@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { listRecentRatingChanges } from "@/lib/rating-changes";
+import { getCachedRatingChanges } from "@/lib/cached-data";
 
 export async function RatingChangesPanel({ limit = 8, sinceHours = 72 }: { limit?: number; sinceHours?: number }) {
-  const changes = await listRecentRatingChanges({ sinceHours, limit });
+  const changes = await getCachedRatingChanges(sinceHours, limit);
 
   return (
     <section className="card">

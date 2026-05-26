@@ -1,6 +1,5 @@
-import { getQuotes } from "@/lib/quotes";
+import { getCachedMarketSnapshotQuotes } from "@/lib/cached-data";
 
-// Real indices via Yahoo Finance unofficial API (no key, wide coverage).
 const TARGETS: { key: string; name: string; sub: string }[] = [
   { key: "^GSPC",     name: "S&P 500", sub: "标普 500" },
   { key: "^IXIC",     name: "NASDAQ",  sub: "纳斯达克综合" },
@@ -17,7 +16,7 @@ function fmtPrice(n: number): string {
 }
 
 export async function MarketSnapshot() {
-  const quotes = await getQuotes(TARGETS.map((t) => t.key)).catch(
+  const quotes = await getCachedMarketSnapshotQuotes().catch(
     () => ({}) as Record<string, import("@/lib/yahoo").YahooQuote | null>,
   );
 

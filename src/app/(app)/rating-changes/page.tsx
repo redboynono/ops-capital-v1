@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { listRecentRatingChanges } from "@/lib/rating-changes";
+import { getCachedRatingChanges } from "@/lib/cached-data";
 import { getSessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +20,8 @@ export default async function RatingChangesPage({
 
   const sp = await searchParams;
   const hours = Number(sp.hours ?? 72);
-  const changes = await listRecentRatingChanges({
-    sinceHours: Number.isFinite(hours) ? hours : 72,
-    limit: 100,
-  });
+  const since = Number.isFinite(hours) ? hours : 72;
+  const changes = await getCachedRatingChanges(since, 100);
 
   return (
     <div className="mx-auto w-full max-w-[900px] px-4 py-6 md:px-6">

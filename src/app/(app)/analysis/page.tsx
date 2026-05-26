@@ -1,9 +1,24 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { AnalysisFilters } from "@/components/analysis-filters";
-import { PostRow } from "@/components/post-row";
-import { listPostSectors, listPosts, type PostPeriod } from "@/lib/posts";
+import { AnalysisPostsList } from "@/components/analysis-posts-list";
+import { getCachedPostSectors } from "@/lib/cached-data";
+import type { PostPeriod } from "@/lib/posts";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 180;
+
+function PostsFallback() {
+  return (
+    <div className="animate-pulse px-4 py-2">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="border-b border-border py-4">
+          <div className="h-3 w-20 rounded bg-surface-muted" />
+          <div className="mt-2 h-5 w-3/4 max-w-md rounded bg-surface-muted" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default async function AnalysisListPage({
   searchParams,
@@ -15,10 +30,7 @@ export default async function AnalysisListPage({
   const periodFilter =
     period === "week" || period === "month" ? (period as PostPeriod) : undefined;
 
-  const [posts, sectors] = await Promise.all([
-    listPosts({ kind: "analysis", symbol, sector, period: periodFilter }),
-    listPostSectors(),
-  ]);
+  const sectors = await getCachedPostSectors();
 
   return (
     <div className="mx-auto w-full max-w-[960px] px-4 py-6 md:px-6">
@@ -43,11 +55,12 @@ export default async function AnalysisListPage({
       <AnalysisFilters sectors={sectors} current={{ symbol, sector, period }} />
 
       <section className="card px-4">
-        {posts.length === 0 ? (
-          <p className="py-16 text-center text-[13px] text-muted">暂无文章。</p>
-        ) : (
-          posts.map((p) => <PostRow key={p.id} post={p} />)
-        )}
+        <Suspense
+          key={`${symbol ?? ""}-${sector ?? ""}-${period ?? ""}`}
+          fallback={<PostsFallback />}
+        >
+          <AnalysisPostsList symbol={symbol} sector={sector} period={periodFilter} />
+        </Suspense>
       </section>
     </div>
   );

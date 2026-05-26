@@ -4,7 +4,7 @@ import { getSessionUser } from "@/lib/auth";
 import { hasOptionAlphaAccess, hasResearchAccess } from "@/lib/entitlements";
 import { isSubscriptionActive, subscriptionDaysLeft } from "@/lib/subscription";
 import { getMemberStats, listBookmarks, listHistory } from "@/lib/me";
-import { listPosts } from "@/lib/posts";
+import { getCachedPosts } from "@/lib/cached-data";
 import { listWatchlist } from "@/lib/tickers";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ export default async function DashboardPage() {
     getMemberStats(user.id),
     listBookmarks(user.id, 5),
     listHistory(user.id, 5),
-    listPosts({ kind: "analysis", limit: 5 }),
+    getCachedPosts({ kind: "analysis", limit: 5 }),
     listWatchlist(user.id),
   ]);
 

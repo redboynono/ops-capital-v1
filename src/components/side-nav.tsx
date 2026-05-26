@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getSessionUser } from "@/lib/auth";
+import type { SessionUser } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/admin";
 import { OPTION_ALPHA } from "@/lib/option-alpha-brand";
 
@@ -42,8 +42,7 @@ const sections: { title: string; items: NavItem[] }[] = [
   },
 ];
 
-export async function SideNav() {
-  const user = await getSessionUser();
+export async function SideNav({ user }: { user: SessionUser | null }) {
   const isAdmin = isAdminEmail(user?.email);
 
   return (
@@ -70,10 +69,10 @@ export async function SideNav() {
         </Link>
       </div>
 
-      <nav className="mt-5 flex flex-col gap-4 text-[12px]">
+      <nav className="mt-5 flex flex-col gap-4 text-[14px]">
         {sections.map((sec) => (
           <div key={sec.title}>
-            <p className="label-caps mb-1.5" style={{ fontSize: 10, letterSpacing: "0.18em" }}>
+            <p className="label-caps mb-1.5" style={{ fontSize: 11, letterSpacing: "0.18em" }}>
               {sec.title}
             </p>
             <div className="flex flex-col">
@@ -81,7 +80,7 @@ export async function SideNav() {
                 <Link
                   key={it.href}
                   href={it.href}
-                  className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]"
+                  className="px-2 py-1.5 leading-snug text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]"
                 >
                   {it.label}
                 </Link>

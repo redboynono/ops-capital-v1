@@ -38,11 +38,27 @@ export default function HelpPage() {
         </p>
       </header>
 
+      <section className="card mb-5 border-[color:var(--accent)]/30">
+        <header className="border-b border-border px-4 py-2.5">
+          <p className="label-caps">iPhone / iPad</p>
+          <p className="mt-1 text-[13px] text-foreground-soft">添加到主屏幕（PWA）</p>
+        </header>
+        <div className="space-y-2 px-4 py-3 text-[13px] leading-relaxed text-muted">
+          <p>
+            用 <strong className="text-foreground-soft">Safari</strong> 打开本站并登录后，点底部分享按钮
+            <span className="text-foreground-soft"> → 「添加到主屏幕」</span>，即可像 App 一样从桌面进入（全屏、保留登录态）。
+          </p>
+          <p className="text-[12px]">
+            手机上可用底栏五个入口（首页 / 研报 / 快讯 / 期权 / 我的），左上角菜单可打开完整导航。
+          </p>
+        </div>
+      </section>
+
       <section className="card mb-5">
         <header className="border-b border-border px-4 py-2.5">
           <p className="label-caps">页面导航</p>
           <p className="mt-1 text-[11px] text-muted">
-            使用侧边栏或底部导航条点击跳转。
+            桌面端用侧边栏；手机用底栏或左上角菜单。
           </p>
         </header>
         <div className="divide-y divide-border">

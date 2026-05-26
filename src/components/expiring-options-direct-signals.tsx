@@ -132,12 +132,15 @@ export async function ExpiringOptionsDirectSignals({
   expirationDate,
   expiryLabel,
   symbol,
+  underlyings,
   compact = false,
   rowLimit: rowLimitProp,
 }: {
   expirationDate: string;
   expiryLabel: string;
   symbol?: string;
+  /** 首页等轻量场景可只扫 SPY/QQQ，避免 12 路 Polygon */
+  underlyings?: readonly string[];
   compact?: boolean;
   rowLimit?: number;
 }) {
@@ -145,6 +148,7 @@ export async function ExpiringOptionsDirectSignals({
   const { concentration, buySide } = await buildCopilotDirectSignals({
     expirationDate,
     symbol,
+    underlyings,
     limit: rowLimit,
   });
 
