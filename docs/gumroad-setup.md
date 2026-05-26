@@ -123,7 +123,9 @@ cd /data/ops-alpha && docker compose restart ops-alpha
 5. 付款完成 → Gumroad 异步 ping 我们的 webhook → 订单 paid + 会员生效
 6. 访问 `/dashboard` 应看到订阅状态 `active` + 到期日期
 
-> **测试模式**：Gumroad 没有独立 test/live store 切换，但有 `test_purchase` flag。用 `4242...` 卡付款时 Gumroad 自动识别为 test sale，ping 里 `test=true`，我们代码不会为 test sale 做特殊处理 —— 会像真订单一样续期会员。所以验证最好用**真实信用卡 + 小额套餐**，验证完申请退款即可。
+> **测试模式**：你是产品创作者、用测试卡自购时，Gumroad ping 里 `test=true`，生产环境**默认不开通会员**（防误操作）。  
+> 端到端自测：在 `.env.production` 临时加 `GUMROAD_ALLOW_TEST_PURCHASES=true` 并重启容器，测完删掉；  
+> 或用**非创作者账号** / **真实小额付款** 验证（验证完可在 Gumroad 退款）。
 
 ---
 

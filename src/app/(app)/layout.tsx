@@ -10,7 +10,7 @@ import { getSessionUser } from "@/lib/auth";
 export const metadata: Metadata = {
   title: "OPS Alpha · AI 驱动的中文投研桌面",
   description:
-    "OPS Alpha 是 OPS Capital 旗下的 AI 投研与行情平台：分析长文、市场快讯、标的追踪与会员桌面。",
+    "OPS Alpha 是 OPS Capital 旗下的 AI 投研与行情平台：深度研报、市场快讯、标的追踪与会员桌面。",
 };
 
 export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {

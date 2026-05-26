@@ -12,7 +12,7 @@ const sections: { title: string; items: NavItem[] }[] = [
       { href: "/alpha",    label: "Alpha 首页" },
       { href: "/picks",      label: "OPS 精选" },
       { href: "/conviction", label: "OPS 榜单" },
-      { href: "/analysis", label: "分析长文" },
+      { href: "/analysis", label: "深度研报" },
       { href: "/news",     label: "市场快讯" },
       { href: "/earnings", label: "财报日历" },
       { href: "/rating-changes", label: "评级变动" },

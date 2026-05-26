@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { getMySqlPool, mysqlQuery } from "@/lib/mysql";
+import { applyEntitlementsForUser } from "@/lib/entitlements";
 import { getPlan, type PlanId } from "@/lib/payments/plans";
 
 export type PayChannel = "alipay" | "wechat" | "gumroad";
@@ -133,6 +134,7 @@ export async function applyPaymentSuccess(opts: {
     );
 
     await conn.commit();
+    await applyEntitlementsForUser(order.user_id, order.plan_id);
 
     const paidOrder = await getOrderByOutTradeNo(opts.outTradeNo);
     return { order: paidOrder!, alreadyPaid: false };
@@ -206,6 +208,7 @@ export async function createPaidOrderAndExtend(opts: {
     );
 
     await conn.commit();
+    await applyEntitlementsForUser(opts.userId, opts.planId);
     return { alreadyExists: false };
   } catch (err) {
     try { await conn.rollback(); } catch { /* ignore */ }

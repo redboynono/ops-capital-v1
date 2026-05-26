@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
+import { hasOptionAlphaAccess, hasResearchAccess } from "@/lib/entitlements";
 import { isSubscriptionActive, subscriptionDaysLeft } from "@/lib/subscription";
 import { getMemberStats, listBookmarks, listHistory } from "@/lib/me";
 import { listPosts } from "@/lib/posts";
@@ -29,6 +30,8 @@ export default async function DashboardPage() {
     subscriptionEndDate: user.subscriptionEndDate,
   });
   const left = subscribed ? subscriptionDaysLeft(user.subscriptionEndDate) : null;
+  const research = hasResearchAccess(user);
+  const options = hasOptionAlphaAccess(user);
 
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 md:px-6">
@@ -55,12 +58,12 @@ export default async function DashboardPage() {
         <div>
           <p className="label-caps">订阅状态</p>
           <p className="mt-0.5 text-lg font-bold">
-            {subscribed ? `Premium 会员${left !== null ? ` · 剩余 ${left} 天` : ""}` : "尚未订阅"}
+            {subscribed ? `会员有效${left !== null ? ` · 剩余 ${left} 天` : ""}` : "尚未订阅"}
           </p>
           <p className="mt-0.5 text-[12px] text-muted">
             {subscribed
-              ? "Premium 分析完整内容 + 估值模型 + 每周备忘录已开启。"
-              : "订阅后解锁完整 Premium 分析、估值模型与每周备忘录。"}
+              ? `Research Pro ${research ? "✓" : "—"} · Option Alpha ${options ? "✓" : "—"}`
+              : "可按需订阅 Research Pro、Option Alpha 或全站 Bundle。"}
           </p>
         </div>
         <div className="flex gap-2">

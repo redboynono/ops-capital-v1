@@ -133,13 +133,15 @@ export async function ExpiringOptionsDirectSignals({
   expiryLabel,
   symbol,
   compact = false,
+  rowLimit: rowLimitProp,
 }: {
   expirationDate: string;
   expiryLabel: string;
   symbol?: string;
   compact?: boolean;
+  rowLimit?: number;
 }) {
-  const rowLimit = compact ? 4 : symbol ? 8 : 10;
+  const rowLimit = rowLimitProp ?? (compact ? 4 : symbol ? 8 : 10);
   const { concentration, buySide } = await buildCopilotDirectSignals({
     expirationDate,
     symbol,

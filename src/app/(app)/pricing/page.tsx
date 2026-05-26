@@ -1,28 +1,28 @@
 import Link from "next/link";
+import { PricingProductGrid } from "@/components/pricing-product-grid";
 import { getSessionUser } from "@/lib/auth";
-import { PLAN_IDS, PLANS } from "@/lib/payments/plans";
+import { hasOptionAlphaAccess, hasResearchAccess } from "@/lib/entitlements";
 import { isMockMode } from "@/lib/payments/gateways";
-import { PricingCheckout } from "@/components/pricing-checkout";
+import { PRODUCT_COPY, type ProductLine } from "@/lib/payments/plans";
 import { isSubscriptionActive } from "@/lib/subscription";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "订阅方案 · Ops Alpha" };
 
-const benefits = [
-  "完整 Premium 分析（含估值模型）",
-  "每月 OPS 精选 荐股（含目标价、止损与退出纪律）",
-  "每日 2-3 篇 AI 机构级深度研报",
-  "全部标的的分析/快讯聚合页",
-  "自选股桌面 + 收藏 + 阅读历史",
-  "免责合规：中文母语内容",
-];
-
-export default async function PricingPage() {
+export default async function PricingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ product?: string }>;
+}) {
+  const sp = await searchParams;
   const user = await getSessionUser();
   const mock = isMockMode();
-  const plans = PLAN_IDS.map((id) => PLANS[id]);
+  const initialProduct: ProductLine =
+    sp.product === "research" || sp.product === "options" || sp.product === "bundle"
+      ? sp.product
+      : "bundle";
 
-  const subscribed = user
+  const active = user
     ? isSubscriptionActive({
         subscriptionStatus: user.subscriptionStatus,
         subscriptionEndDate: user.subscriptionEndDate,
@@ -30,74 +30,81 @@ export default async function PricingPage() {
     : false;
 
   return (
-    <div className="mx-auto w-full max-w-[960px] px-4 py-8 md:px-6">
+    <div className="mx-auto w-full max-w-[1040px] px-4 py-8 md:px-6">
       <header className="mb-5 border-b border-border pb-3">
         <span className="label-caps">Pricing</span>
-        <h1 className="mt-1 text-3xl font-bold text-foreground">订阅 Ops Alpha Premium</h1>
+        <h1 className="mt-1 text-3xl font-bold text-foreground">选择你的 OPS Alpha 方案</h1>
         <p className="mt-1 text-[13px] text-muted">
-          预付费会员 · 到期前续费自动叠加 · 由 Gumroad 处理支付（银行卡 / PayPal，自动续订）
+          按能力订阅，不再用「全文打码」—— Research 跟单、Option Copilot 可分开买，也可 Bundle 一次全开。
         </p>
       </header>
 
-      {subscribed ? (
+      {active && user ? (
         <div className="card mb-5 border-[color:var(--success)] p-4">
-          <p className="label-caps text-[color:var(--success)]">当前状态</p>
-          <p className="mt-1 text-[14px]">
-            你已是 Premium 会员，到期时间：
-            <span className="font-mono ml-1 font-semibold">
-              {user!.subscriptionEndDate ? new Date(user!.subscriptionEndDate).toLocaleDateString("zh-CN") : "永久"}
-            </span>
-          </p>
-          <p className="mt-1 text-[12px] text-muted">续费后时长将在到期时间上叠加，不会丢失剩余天数。</p>
+          <p className="label-caps text-[color:var(--success)]">当前权益</p>
+          <ul className="mt-2 space-y-1 text-[13px]">
+            <li>
+              Research Pro：{hasResearchAccess(user) ? "✓ 已开通" : "— 未开通"}
+            </li>
+            <li>
+              Option Alpha：{hasOptionAlphaAccess(user) ? "✓ 已开通" : "— 未开通"}
+            </li>
+            <li className="text-muted">
+              会员到期：
+              <span className="ml-1 font-mono font-semibold text-foreground">
+                {user.subscriptionEndDate
+                  ? new Date(user.subscriptionEndDate).toLocaleDateString("zh-CN")
+                  : "—"}
+              </span>
+              （续费叠加剩余天数）
+            </li>
+          </ul>
         </div>
       ) : null}
 
       {mock ? (
         <p className="mb-4 rounded border border-dashed border-accent/60 bg-accent-soft px-3 py-2 text-[11px] text-accent-strong">
-          当前为 <code className="mono">PAYMENT_MODE=mock</code> 环境。点击支付按钮后会弹出测试流程，不扣实际款项。
+          当前为 <code className="mono">PAYMENT_MODE=mock</code>，支付为测试流程。
         </p>
       ) : null}
 
-      <section>
-        <PricingCheckout
-          plans={plans}
-          loggedIn={Boolean(user)}
-          userEmail={user?.email ?? null}
-          primaryChannel="gumroad"
-          showAltChannels={false}
-        />
-      </section>
+      <PricingProductGrid
+        loggedIn={Boolean(user)}
+        userEmail={user?.email ?? null}
+        initialProduct={initialProduct}
+      />
 
       <section className="card mt-6 p-5">
-        <p className="label-caps">Premium 权益</p>
-        <ul className="mt-2 grid gap-2 text-[13px] md:grid-cols-2">
-          {benefits.map((b) => (
-            <li key={b} className="flex items-start gap-2">
-              <span className="mt-0.5 text-accent-strong">✓</span>
-              <span>{b}</span>
-            </li>
+        <p className="label-caps">对比一览</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-3 text-[12px]">
+          {(["research", "options", "bundle"] as const).map((p) => (
+            <div key={p} className="rounded border border-border/80 p-3">
+              <p className="font-bold text-foreground">{PRODUCT_COPY[p].title}</p>
+              <ul className="mt-2 space-y-1 text-muted">
+                {PRODUCT_COPY[p].bullets.map((b) => (
+                  <li key={b}>· {b}</li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       </section>
 
       <section className="mt-6 text-[12px] leading-relaxed text-muted">
-        <h3 className="label-caps text-[11px]">常见问题</h3>
-        <dl className="mt-2 space-y-3">
-          <div>
-            <dt className="font-semibold text-foreground-soft">Q: 购买后什么时候开始计算会员时长？</dt>
-            <dd className="mt-0.5">支付成功后立即生效。如果你当前已是会员，新时长会在现有到期日之上叠加，不会丢失天数。</dd>
-          </div>
-          <div>
-            <dt className="font-semibold text-foreground-soft">Q: 可以开发票吗？</dt>
-            <dd className="mt-0.5">年度会员可申请增值税普通发票，请在支付成功后联系 <Link href="/contact" className="text-accent-strong">support</Link>。</dd>
-          </div>
-          <div>
-            <dt className="font-semibold text-foreground-soft">Q: 退款政策？</dt>
-            <dd className="mt-0.5">
-              可在 Gumroad 账户中取消续订；退款按 Gumroad 政策处理，退款后会员时长会相应调整。
-            </dd>
-          </div>
-        </dl>
+        <h3 className="label-caps text-[11px]">支付说明</h3>
+        <p className="mt-2">
+          由 Gumroad 处理（银行卡 / PayPal）。结账邮箱须与 opscapital 注册邮箱一致。
+          Option Alpha 与 Research 目前共用同一 Gumroad 时长档位，产品线以订单 <code>plan_id</code> 为准。
+        </p>
+        <p className="mt-2">
+          <Link href="/help" className="text-accent-strong hover:underline">
+            帮助中心
+          </Link>
+          {" · "}
+          <Link href="/contact" className="text-accent-strong hover:underline">
+            联系客服
+          </Link>
+        </p>
       </section>
     </div>
   );

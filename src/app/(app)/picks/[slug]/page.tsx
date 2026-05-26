@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ShareButton } from "@/components/share/share-button";
 import { StickyPaywall } from "@/components/sticky-paywall";
+import { ProductPaywallCard } from "@/components/product-paywall-card";
+import { ReaderModeShell, ReaderPrefsProvider, ReaderPrefsToolbar } from "@/components/reader-prefs";
+import { plainTeaser } from "@/lib/content-preview";
+import { hasResearchAccess } from "@/lib/entitlements";
 import { getSessionUser } from "@/lib/auth";
-import { countRedactions, MaybeBlur, RedactedMarkdown } from "@/lib/paywall";
-import { getCurrentUserSubscriptionStatus } from "@/lib/posts";
 import { computePerformance, getPickBySlug } from "@/lib/picks";
 
 export const dynamic = "force-dynamic";
@@ -48,13 +50,9 @@ export default async function PickDetailPage({
   const pick = await getPickBySlug(slug);
   if (!pick || !pick.is_published) notFound();
 
-  const [{ subscribed }, perf, user] = await Promise.all([
-    getCurrentUserSubscriptionStatus(),
-    computePerformance(pick),
-    getSessionUser(),
-  ]);
+  const [user, perf] = await Promise.all([getSessionUser(), computePerformance(pick)]);
 
-  const canViewFull = !pick.is_premium || subscribed;
+  const canViewFull = !pick.is_premium || hasResearchAccess(user);
   const toggleHref = readerMode ? `/picks/${pick.slug}?reader=0` : `/picks/${pick.slug}`;
 
   const statusLabel =
@@ -69,6 +67,7 @@ export default async function PickDetailPage({
   const headlinePct = pick.status === "open" ? perf.unrealizedPct : perf.realizedPct;
 
   return (
+    <ReaderPrefsProvider enabled={readerMode}>
     <div className="mx-auto w-full max-w-[880px] px-4 py-6 md:px-6">
       <nav className="flex items-center justify-between text-[12px] text-muted">
         <div>
@@ -77,6 +76,7 @@ export default async function PickDetailPage({
           <span className="font-mono">{pick.ticker_symbol}</span>
         </div>
         <div className="flex items-center gap-2">
+          <ReaderPrefsToolbar />
           <ShareButton
             variant="button"
             data={{
@@ -109,7 +109,7 @@ export default async function PickDetailPage({
         </div>
       </nav>
 
-      <div className={readerMode ? "reader-mode mt-3" : "mt-3"}>
+      <ReaderModeShell>
         {/* Header block */}
         <header className={readerMode ? "border-b border-[#d8d0c2] pb-4" : "border-b border-border pb-4"}>
           <div className="flex flex-wrap items-center gap-2">
@@ -149,14 +149,14 @@ export default async function PickDetailPage({
             <div>
               <p className="label-caps text-[10px]">目标价</p>
               <p className="mt-0.5 font-mono text-[17px] font-bold">
-                <MaybeBlur value={fmtPrice(pick.target_price)} redact={!canViewFull} />
+                {canViewFull ? fmtPrice(pick.target_price) : "🔒 Pro"}
               </p>
               <p className="font-mono text-[10px] text-muted">{pick.horizon_months}M 期限</p>
             </div>
             <div>
               <p className="label-caps text-[10px]">止损</p>
               <p className="mt-0.5 font-mono text-[17px] font-bold text-[color:var(--danger)]">
-                <MaybeBlur value={fmtPrice(pick.stop_price)} redact={!canViewFull} />
+                {canViewFull ? fmtPrice(pick.stop_price) : "🔒 Pro"}
               </p>
               <p className="font-mono text-[10px] text-muted">
                 {pick.conviction === "high" ? "高信念" : pick.conviction === "low" ? "低信念" : "中等"}
@@ -172,42 +172,55 @@ export default async function PickDetailPage({
           ) : null}
         </header>
 
-        {/* Body */}
-        <div className="space-y-6 py-5">
-          <Section title="投资逻辑" md={pick.thesis_md} redact={!canViewFull} readerMode={readerMode} />
-          <Section title="催化剂" md={pick.catalysts_md} redact={!canViewFull} readerMode={readerMode} />
-          <Section title="风险提示" md={pick.risks_md} redact={!canViewFull} readerMode={readerMode} />
-          <Section title="估值分析" md={pick.valuation_md} redact={!canViewFull} readerMode={readerMode} />
-          <Section title="退出纪律" md={pick.sell_discipline_md} redact={!canViewFull} readerMode={readerMode} />
+        <div className={`space-y-6 py-5 ${readerMode ? "reader-content-flow" : ""}`}>
+          {canViewFull ? (
+            <>
+              <PickSection title="投资逻辑" md={pick.thesis_md} readerMode={readerMode} />
+              <PickSection title="催化剂" md={pick.catalysts_md} readerMode={readerMode} />
+              <PickSection title="风险提示" md={pick.risks_md} readerMode={readerMode} />
+              <PickSection title="估值分析" md={pick.valuation_md} readerMode={readerMode} />
+              <PickSection title="退出纪律" md={pick.sell_discipline_md} readerMode={readerMode} />
+            </>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-[13px] leading-relaxed text-muted">
+                {plainTeaser(pick.thesis_md ?? pick.subtitle ?? "", 320)}
+              </p>
+              <ProductPaywallCard product="research" loggedIn={Boolean(user)} />
+            </div>
+          )}
         </div>
 
-        {!canViewFull ? (
-          <StickyPaywall
-            loggedIn={Boolean(user)}
-            redactedCount={countRedactions(
-              [pick.thesis_md, pick.catalysts_md, pick.risks_md, pick.valuation_md, pick.sell_discipline_md]
-                .filter(Boolean)
-                .join("\n\n"),
-            )}
-            variant="picks"
-          />
-        ) : null}
+        {!canViewFull ? <StickyPaywall loggedIn={Boolean(user)} product="research" /> : null}
 
         <p className={`mt-8 pt-4 text-[11px] leading-relaxed ${readerMode ? "border-t border-[#d8d0c2] text-[#6b5c3f]" : "border-t border-border text-muted-soft"}`}>
           免责声明：本 OPS Pick 为研究观点，不构成投资建议。入场价与目标价为发布时刻基于公开信息的量化模型判断。
         </p>
-      </div>
+      </ReaderModeShell>
     </div>
+    </ReaderPrefsProvider>
   );
 }
 
-function Section({ title, md, redact, readerMode }: { title: string; md: string | null; redact: boolean; readerMode: boolean }) {
+function PickSection({
+  title,
+  md,
+  readerMode,
+}: {
+  title: string;
+  md: string | null;
+  readerMode: boolean;
+}) {
   if (!md || md.trim().length === 0) return null;
   return (
     <section>
       <h2 className="mb-2 text-lg font-bold">{title}</h2>
-      <article className={`prose prose-sm md:prose-base max-w-none ${readerMode ? "" : "prose-invert"}`}>
-        <RedactedMarkdown redact={redact}>{md}</RedactedMarkdown>
+      <article
+        className={`prose prose-sm md:prose-base max-w-none ${readerMode ? "" : "prose-invert"}`}
+      >
+        <div className={`whitespace-pre-wrap leading-relaxed ${readerMode ? "" : "text-[14px]"}`}>
+          {md}
+        </div>
       </article>
     </section>
   );

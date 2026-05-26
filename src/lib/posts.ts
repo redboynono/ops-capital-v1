@@ -1,6 +1,7 @@
 import { getSessionUser } from "@/lib/auth";
 import { mysqlQuery } from "@/lib/mysql";
-import { isSubscriptionActive, reconcileExpiredSubscription } from "@/lib/subscription";
+import { hasResearchAccess } from "@/lib/entitlements";
+import { reconcileExpiredSubscription } from "@/lib/subscription";
 
 export type PostKind = "analysis" | "news";
 
@@ -25,6 +26,8 @@ export type PostListItem = Pick<
 type SubscriptionProfile = {
   subscription_status: string | null;
   subscription_end_date: string | null;
+  entitlement_research: number | null;
+  entitlement_options: number | null;
 };
 
 async function attachTickers<T extends { id: string }>(rows: T[]): Promise<(T & { tickers: string[] })[]> {
@@ -176,13 +179,21 @@ export async function getCurrentUserSubscriptionStatus() {
 
   await reconcileExpiredSubscription(user.id);
   const rows = await mysqlQuery<SubscriptionProfile[]>(
-    "select subscription_status, subscription_end_date from users where id = ? limit 1",
+    `select subscription_status, subscription_end_date,
+            entitlement_research, entitlement_options
+       from users where id = ? limit 1`,
     [user.id],
   );
   const profile = rows[0];
-  const subscribed = isSubscriptionActive({
-    subscriptionStatus: profile?.subscription_status,
-    subscriptionEndDate: profile?.subscription_end_date,
-  });
+  const subscribed = hasResearchAccess(
+    user
+      ? {
+          subscriptionStatus: profile?.subscription_status,
+          subscriptionEndDate: profile?.subscription_end_date,
+          entitlementResearch: Number(profile?.entitlement_research ?? 0) === 1,
+          entitlementOptions: Number(profile?.entitlement_options ?? 0) === 1,
+        }
+      : null,
+  );
   return { user, subscribed };
 }

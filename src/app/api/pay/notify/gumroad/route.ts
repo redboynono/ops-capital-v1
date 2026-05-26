@@ -25,10 +25,16 @@ async function findUserIdByEmail(email: string): Promise<string | null> {
 
 /** 从 product_permalink 推断 plan_id（env 配置的 3 个 permalink 反向查）*/
 function planIdFromPermalink(permalink: string): PlanId | null {
-  if (permalink === process.env.GUMROAD_PERMALINK_MONTH) return "month";
-  if (permalink === process.env.GUMROAD_PERMALINK_QUARTER) return "quarter";
-  if (permalink === process.env.GUMROAD_PERMALINK_YEAR) return "year";
-  return null;
+  const duration =
+    permalink === process.env.GUMROAD_PERMALINK_MONTH
+      ? "month"
+      : permalink === process.env.GUMROAD_PERMALINK_QUARTER
+        ? "quarter"
+        : permalink === process.env.GUMROAD_PERMALINK_YEAR
+          ? "year"
+          : null;
+  if (!duration) return null;
+  return `bundle_${duration}` as PlanId;
 }
 
 export const runtime = "nodejs";
@@ -64,9 +70,10 @@ export async function POST(req: Request): Promise<Response> {
     return new Response(msg, { status: 400 });
   }
 
+  // Gumroad「Send test ping to URL」通常不含真实 sale_id，仅用于确认 URL 可达
   if (!ping.sale_id) {
-    console.warn("[gumroad ping] missing sale_id in body");
-    return new Response("missing sale_id", { status: 400 });
+    console.info("[gumroad ping] connectivity test (no sale_id), ack ok");
+    return new Response("ok", { status: 200 });
   }
 
   // 防伪：反查 Gumroad API
@@ -116,7 +123,13 @@ export async function POST(req: Request): Promise<Response> {
     return new Response("ok", { status: 200 });
   }
 
-  if (ping.is_test && process.env.NODE_ENV === "production") {
+  // 创作者用测试卡买自己产品 → Gumroad 标 test=true；默认不开通，避免误续期
+  // 验证链路时可设 GUMROAD_ALLOW_TEST_PURCHASES=true
+  if (
+    ping.is_test &&
+    process.env.NODE_ENV === "production" &&
+    process.env.GUMROAD_ALLOW_TEST_PURCHASES !== "true"
+  ) {
     console.info("[gumroad ping] skip test sale in production:", ping.sale_id);
     return new Response("ok", { status: 200 });
   }

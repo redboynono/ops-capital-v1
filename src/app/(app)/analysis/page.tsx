@@ -24,10 +24,10 @@ export default async function AnalysisListPage({
     <div className="mx-auto w-full max-w-[960px] px-4 py-6 md:px-6">
       <header className="mb-4 flex items-end justify-between border-b border-border pb-3">
         <div>
-          <span className="label-caps">分析 Analysis</span>
-          <h1 className="mt-1 text-2xl font-bold text-foreground">机构级长文研究</h1>
+          <span className="label-caps">Research · 深度研报</span>
+          <h1 className="mt-1 text-2xl font-bold text-foreground">机构级深度研报</h1>
           <p className="mt-1 text-[13px] text-muted">
-            摘要免费 · 完整观点与估值模型需要 Premium 订阅
+            摘要免费阅读 · 全文、估值框架与 Ask AI 需 Research Pro
             {symbol ? ` · 标的：${symbol}` : ""}
             {sector ? ` · 行业：${sector}` : ""}
             {periodFilter ? ` · ${period === "week" ? "近一周" : "近一月"}` : ""}

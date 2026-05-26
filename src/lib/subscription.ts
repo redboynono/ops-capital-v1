@@ -27,7 +27,9 @@ export async function reconcileExpiredSubscription(userId: string): Promise<void
   const { mysqlQuery } = await import("@/lib/mysql");
   await mysqlQuery(
     `update users
-       set subscription_status = 'inactive'
+       set subscription_status = 'inactive',
+           entitlement_research = 0,
+           entitlement_options = 0
      where id = ?
        and subscription_status = 'active'
        and subscription_end_date is not null

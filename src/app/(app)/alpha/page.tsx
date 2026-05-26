@@ -42,8 +42,8 @@ export default async function Home() {
         <section className="card">
           <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
             <div>
-              <h2 className="text-[15px] font-bold text-foreground">热门分析</h2>
-              <p className="text-[11px] text-muted">AI 编辑团队精选 · 机构级长文</p>
+              <h2 className="text-[15px] font-bold text-foreground">深度研报</h2>
+              <p className="text-[11px] text-muted">AI 编辑精选 · 摘要免费 · 全文 Research Pro</p>
             </div>
             <Link href="/analysis" className="text-[12px] font-semibold text-accent-strong hover:underline">
               查看全部 →
@@ -111,14 +111,14 @@ export default async function Home() {
       <section className="mt-5 card p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-[15px] font-bold text-foreground">解锁完整 Premium 研报</h3>
+            <h3 className="text-[15px] font-bold text-foreground">Research Pro · 深度研报全文</h3>
             <p className="mt-0.5 text-[12px] text-muted">
-              $9.99/月 · $87.99/年 · 完整分析 + 估值模型 + 每周备忘录
+              摘要免费 · 全文与估值框架 · 可与 OPS 精选配合使用
             </p>
           </div>
           <div className="flex gap-2">
-            <Link href="/pricing" className="btn-primary px-3 py-1.5 text-[12px]">
-              查看方案
+            <Link href="/pricing?product=research" className="btn-primary px-3 py-1.5 text-[12px]">
+              订阅 Research
             </Link>
             <Link href="/login?tab=signup" className="btn-outline px-3 py-1.5 text-[12px]">
               免费注册

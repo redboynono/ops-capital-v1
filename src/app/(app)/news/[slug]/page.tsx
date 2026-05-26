@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AskAI } from "@/components/ask-ai";
 import { ArticleToc } from "@/components/article-toc";
 import { BookmarkButton } from "@/components/bookmark-button";
+import { ReaderModeShell, ReaderPrefsProvider, ReaderPrefsToolbar } from "@/components/reader-prefs";
 import { ShareButton } from "@/components/share/share-button";
 import { getSessionUser } from "@/lib/auth";
 import { isBookmarked, recordRead } from "@/lib/me";
@@ -47,6 +48,7 @@ export default async function NewsDetailPage({
   const showToc = readerMode && shouldShowToc(post.content, 800);
 
   return (
+    <ReaderPrefsProvider enabled={readerMode}>
     <div className="mx-auto w-full max-w-[780px] px-4 py-6 md:px-6">
       <nav className="flex items-center justify-between text-[12px] text-muted">
         <div>
@@ -54,15 +56,18 @@ export default async function NewsDetailPage({
           <span className="mx-1">/</span>
           <span>{post.slug}</span>
         </div>
-        <Link
-          href={toggleHref}
-          className="rounded-sm border border-border px-2 py-0.5 font-mono text-[11px] hover:border-accent hover:text-accent-strong"
-        >
-          {readerMode ? "☾ 终端视图" : "☀ 阅读模式"}
-        </Link>
+        <div className="flex items-center gap-2">
+          <ReaderPrefsToolbar />
+          <Link
+            href={toggleHref}
+            className="rounded-sm border border-border px-2 py-0.5 font-mono text-[11px] hover:border-accent hover:text-accent-strong"
+          >
+            {readerMode ? "☾ 终端视图" : "☀ 阅读模式"}
+          </Link>
+        </div>
       </nav>
 
-      <div className={readerMode ? "reader-mode mt-3" : "mt-3"}>
+      <ReaderModeShell>
       <header className={readerMode ? "border-b border-[#d8d0c2] pb-3" : "border-b border-border pb-3"}>
         <div className="flex flex-wrap items-center gap-2">
           <span className="badge-free">快讯</span>
@@ -96,7 +101,7 @@ export default async function NewsDetailPage({
         </div>
       </header>
 
-      <div className="flex gap-8">
+      <div className={`flex gap-8 ${readerMode ? "reader-content-flow" : ""}`}>
         <article className={`prose prose-sm min-w-0 max-w-none flex-1 py-4 ${readerMode ? "" : "prose-invert"}`}>
           <RedactedMarkdown redact={false} tocItems={showToc ? tocItems : undefined}>
             {post.content}
@@ -110,7 +115,8 @@ export default async function NewsDetailPage({
       <p className={`mt-6 pt-3 text-[11px] leading-relaxed ${readerMode ? "border-t border-[#d8d0c2] text-[#6b5c3f]" : "border-t border-border text-muted-soft"}`}>
         免责声明：本快讯由 AI 编辑流水线生成，仅供参考，不构成投资建议。
       </p>
-      </div>
+      </ReaderModeShell>
     </div>
+    </ReaderPrefsProvider>
   );
 }

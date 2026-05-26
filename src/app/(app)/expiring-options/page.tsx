@@ -11,7 +11,12 @@ import { ExpiringOptionsSymbolForm } from "@/components/expiring-options-symbol-
 import { normalizeUsTickerInput, ZERO_DTE_WATCHLIST } from "@/lib/expiring-options";
 import { buildExpiringOptionsQuery, resolveExpirySelection } from "@/lib/options-expiry";
 import { OPTION_ALPHA } from "@/lib/option-alpha-brand";
+import { ProductPaywallCard } from "@/components/product-paywall-card";
 import { getSessionUser } from "@/lib/auth";
+import {
+  hasOptionAlphaAccess,
+  OPTION_ALPHA_FREE_PREVIEW_SYMBOL,
+} from "@/lib/entitlements";
 
 export const metadata = {
   title: OPTION_ALPHA.pageTitle,
@@ -35,6 +40,17 @@ export default async function ExpiringOptionsPage({
 
   const user = await getSessionUser();
   if (!user) redirect(`/login?redirect=${encodeURIComponent(loginRedirect)}`);
+
+  const optionPro = hasOptionAlphaAccess(user);
+  const previewOnly =
+    !optionPro &&
+    querySymbol &&
+    querySymbol !== OPTION_ALPHA_FREE_PREVIEW_SYMBOL;
+  const symbolForData = optionPro
+    ? querySymbol
+    : querySymbol || OPTION_ALPHA_FREE_PREVIEW_SYMBOL;
+  const effectiveSymbol =
+    previewOnly ? OPTION_ALPHA_FREE_PREVIEW_SYMBOL : symbolForData;
 
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 py-5 md:px-6">
@@ -70,22 +86,54 @@ export default async function ExpiringOptionsPage({
         </div>
       </section>
 
-      {querySymbol ? (
-        <OptionTradeIdeasPanel
-          symbol={querySymbol}
-          expirationDate={expiry.expirationDate}
-          expiryLabel={expiry.label}
-          week={expiry.week}
-        />
+      {previewOnly ? (
+        <div className="mb-5">
+          <ProductPaywallCard product="options" loggedIn compact />
+          <p className="mt-2 text-[12px] text-muted">
+            免费预览仅支持 <span className="font-mono font-bold">{OPTION_ALPHA_FREE_PREVIEW_SYMBOL}</span>。
+            你输入了 {querySymbol}，请订阅后查看。
+          </p>
+        </div>
       ) : null}
 
-      <div className="mb-5">
-        <ExpiringOptionsDirectSignals
-          expirationDate={expiry.expirationDate}
-          expiryLabel={expiry.label}
-          symbol={querySymbol || undefined}
-        />
-      </div>
+      {previewOnly ? null : (
+        <div className="mb-5">
+          <ExpiringOptionsDirectSignals
+            expirationDate={expiry.expirationDate}
+            expiryLabel={expiry.label}
+            symbol={effectiveSymbol || undefined}
+            rowLimit={optionPro ? undefined : 5}
+          />
+        </div>
+      )}
+
+      {effectiveSymbol && optionPro ? (
+        <>
+          <OptionTradeIdeasPanel
+            symbol={effectiveSymbol}
+            expirationDate={expiry.expirationDate}
+            expiryLabel={expiry.label}
+            week={expiry.week}
+          />
+          <div className="mb-5" id="option-chain">
+            <ExpiringOptionsChainTable
+              symbol={effectiveSymbol}
+              expirationDate={expiry.expirationDate}
+              expiryLabel={expiry.label}
+            />
+          </div>
+        </>
+      ) : !previewOnly ? (
+        <div className="mb-5">
+          <ProductPaywallCard product="options" loggedIn />
+          {!optionPro ? (
+            <p className="mt-2 text-[11px] text-muted">
+              免费预览：无标的时看全市场 Top 信号；输入{" "}
+              <span className="font-mono">{OPTION_ALPHA_FREE_PREVIEW_SYMBOL}</span> 可看该标的表。
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {querySymbol ? null : (
         <details className="mb-5 group" open>

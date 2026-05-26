@@ -17,6 +17,8 @@ type DbUser = {
   full_name: string | null;
   subscription_status: string | null;
   subscription_end_date: string | null;
+  entitlement_research: number | null;
+  entitlement_options: number | null;
   email_briefing_enabled: number | null;
 };
 
@@ -90,7 +92,9 @@ export async function getSessionUser() {
   if (!payload) return null;
 
   const rows = await mysqlQuery<DbUser[]>(
-    "select id, email, full_name, subscription_status, subscription_end_date, email_briefing_enabled from users where id = ? limit 1",
+    `select id, email, full_name, subscription_status, subscription_end_date,
+            entitlement_research, entitlement_options, email_briefing_enabled
+       from users where id = ? limit 1`,
     [payload.userId],
   );
 
@@ -100,10 +104,19 @@ export async function getSessionUser() {
   const { reconcileExpiredSubscription } = await import("@/lib/subscription");
   await reconcileExpiredSubscription(user.id);
   const refreshed = await mysqlQuery<DbUser[]>(
-    "select id, email, full_name, subscription_status, subscription_end_date, email_briefing_enabled from users where id = ? limit 1",
+    `select id, email, full_name, subscription_status, subscription_end_date,
+            entitlement_research, entitlement_options, email_briefing_enabled
+       from users where id = ? limit 1`,
     [user.id],
   );
   const u = refreshed[0] ?? user;
+  const { resolveEntitlements } = await import("@/lib/entitlements");
+  const ent = resolveEntitlements({
+    subscription_status: u.subscription_status,
+    subscription_end_date: u.subscription_end_date,
+    entitlement_research: u.entitlement_research,
+    entitlement_options: u.entitlement_options,
+  });
 
   return {
     id: u.id,
@@ -111,6 +124,8 @@ export async function getSessionUser() {
     fullName: u.full_name,
     subscriptionStatus: u.subscription_status ?? "inactive",
     subscriptionEndDate: u.subscription_end_date,
+    entitlementResearch: ent.research,
+    entitlementOptions: ent.options,
     emailBriefingEnabled: Number(u.email_briefing_enabled ?? 0) === 1,
   };
 }

@@ -293,6 +293,32 @@ a:hover {
   font-size: 15.5px;
   line-height: 1.78;
 }
+.terminal .reader-mode[data-font="sm"] { font-size: 14px; }
+.terminal .reader-mode[data-font="md"] { font-size: 15.5px; }
+.terminal .reader-mode[data-font="lg"] { font-size: 17.5px; }
+.terminal .reader-mode[data-font="xl"] { font-size: 20px; }
+.terminal .reader-mode[data-leading="compact"] { line-height: 1.65; }
+.terminal .reader-mode[data-leading="normal"] { line-height: 1.78; }
+.terminal .reader-mode[data-leading="relaxed"] { line-height: 1.92; }
+.terminal .reader-mode[data-width="narrow"] .reader-content-flow {
+  max-width: 36rem;
+  margin-inline: auto;
+}
+.terminal .reader-mode[data-width="wide"] .reader-content-flow {
+  max-width: 52rem;
+  margin-inline: auto;
+}
+.terminal .reader-mode .prose {
+  font-size: inherit;
+  line-height: inherit;
+}
+.terminal .reader-mode .prose :where(p, li, td, th, blockquote, code) {
+  font-size: inherit;
+}
+.terminal .reader-mode .prose :where(h1) { font-size: 1.75em; }
+.terminal .reader-mode .prose :where(h2) { font-size: 1.45em; }
+.terminal .reader-mode .prose :where(h3) { font-size: 1.2em; }
+.terminal .reader-mode .prose :where(h4) { font-size: 1.05em; }
 .terminal .reader-mode h1,
 .terminal .reader-mode h2,
 .terminal .reader-mode h3 {

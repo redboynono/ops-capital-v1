@@ -28,7 +28,7 @@
  */
 
 import type { Order } from "@/lib/payments/orders";
-import type { PlanId } from "@/lib/payments/plans";
+import { durationFromPlanId, type PlanId } from "@/lib/payments/plans";
 
 const API_BASE = "https://api.gumroad.com/v2";
 
@@ -45,14 +45,18 @@ function requireEnv(key: string): string {
   return v;
 }
 
-const PERMALINK_ENV_BY_PLAN: Record<PlanId, string> = {
+const PERMALINK_ENV_BY_DURATION: Record<
+  import("@/lib/payments/plans").DurationKey,
+  string
+> = {
   month: "GUMROAD_PERMALINK_MONTH",
   quarter: "GUMROAD_PERMALINK_QUARTER",
   year: "GUMROAD_PERMALINK_YEAR",
 };
 
-export function getPermalink(planId: PlanId): string {
-  return requireEnv(PERMALINK_ENV_BY_PLAN[planId]);
+export function getPermalink(planId: PlanId | string): string {
+  const duration = durationFromPlanId(planId);
+  return requireEnv(PERMALINK_ENV_BY_DURATION[duration]);
 }
 
 // ============================== checkout ============================== //

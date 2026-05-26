@@ -35,7 +35,9 @@ export function PostRow({ post, dense = false }: { post: Post; dense?: boolean }
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             {premium ? (
-              <span className="badge-premium">PRO</span>
+              <span className="badge-premium">
+                {post.kind === "analysis" ? "Research" : "PRO"}
+              </span>
             ) : (
               <span className="badge-free">公开</span>
             )}

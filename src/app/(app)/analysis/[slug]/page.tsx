@@ -6,12 +6,15 @@ import { ShareButton } from "@/components/share/share-button";
 import { StickyPaywall } from "@/components/sticky-paywall";
 import { getSessionUser } from "@/lib/auth";
 import { isBookmarked, recordRead } from "@/lib/me";
-import { countRedactions, RedactedMarkdown } from "@/lib/paywall";
+import { markdownExcerpt } from "@/lib/content-preview";
+import { hasResearchAccess } from "@/lib/entitlements";
+import { RedactedMarkdown } from "@/lib/paywall";
 import { extractTocFromMarkdown, shouldShowToc } from "@/lib/markdown-toc";
 import { buildPostMetadata } from "@/lib/post-metadata";
-import { getCurrentUserSubscriptionStatus, getPostBySlug } from "@/lib/posts";
+import { getPostBySlug } from "@/lib/posts";
 import { listTickersForPost } from "@/lib/tickers";
 import { ArticleToc } from "@/components/article-toc";
+import { ReaderModeShell, ReaderPrefsProvider, ReaderPrefsToolbar } from "@/components/reader-prefs";
 
 export const dynamic = "force-dynamic";
 
@@ -36,13 +39,12 @@ export default async function AnalysisDetailPage({
   const post = await getPostBySlug(slug);
   if (!post || post.kind !== "analysis") notFound();
 
-  const [{ subscribed }, tickers, user] = await Promise.all([
-    getCurrentUserSubscriptionStatus(),
-    listTickersForPost(post.id),
+  const [user, tickers] = await Promise.all([
     getSessionUser(),
+    listTickersForPost(post.id),
   ]);
 
-  const canViewFull = !post.is_premium || subscribed;
+  const canViewFull = !post.is_premium || hasResearchAccess(user);
   const bookmarked = user ? await isBookmarked(user.id, post.id) : false;
   if (user) recordRead(user.id, post.id).catch(() => null);
 
@@ -51,6 +53,7 @@ export default async function AnalysisDetailPage({
   const showToc = readerMode && shouldShowToc(post.content);
 
   return (
+    <ReaderPrefsProvider enabled={readerMode}>
     <div className="mx-auto w-full max-w-[840px] px-4 py-6 md:px-6">
       <nav className="flex items-center justify-between text-[12px] text-muted">
         <div>
@@ -58,19 +61,26 @@ export default async function AnalysisDetailPage({
           <span className="mx-1">/</span>
           <span>{post.slug}</span>
         </div>
-        <Link
-          href={toggleHref}
-          className="rounded-sm border border-border px-2 py-0.5 font-mono text-[11px] hover:border-accent hover:text-accent-strong"
-          title="切换阅读模式"
-        >
-          {readerMode ? "☾ 终端视图" : "☀ 阅读模式"}
-        </Link>
+        <div className="flex items-center gap-2">
+          <ReaderPrefsToolbar />
+          <Link
+            href={toggleHref}
+            className="rounded-sm border border-border px-2 py-0.5 font-mono text-[11px] hover:border-accent hover:text-accent-strong"
+            title="切换阅读模式"
+          >
+            {readerMode ? "☾ 终端视图" : "☀ 阅读模式"}
+          </Link>
+        </div>
       </nav>
 
-      <div className={readerMode ? "reader-mode mt-3" : "mt-3"}>
+      <ReaderModeShell>
       <header className={readerMode ? "border-b border-[#d8d0c2] pb-4" : "border-b border-border pb-4"}>
         <div className="flex flex-wrap items-center gap-2">
-          {post.is_premium ? <span className="badge-premium">PRO</span> : <span className="badge-free">公开</span>}
+          {post.is_premium ? (
+            <span className="badge-premium">Research</span>
+          ) : (
+            <span className="badge-free">公开</span>
+          )}
           {tickers.map((t) => (
             <Link key={t.symbol} href={`/t/${t.symbol}`} className="chip">
               {t.symbol}
@@ -107,22 +117,16 @@ export default async function AnalysisDetailPage({
         </div>
       </header>
 
-      <div className={`flex gap-8 ${showToc ? "xl:pr-0" : ""}`}>
+      <div className={`flex gap-8 ${readerMode ? "reader-content-flow" : ""} ${showToc ? "xl:pr-0" : ""}`}>
         <article className={`prose prose-sm md:prose-base min-w-0 max-w-none flex-1 py-5 ${readerMode ? "" : "prose-invert"}`}>
-          <RedactedMarkdown redact={!canViewFull} tocItems={showToc ? tocItems : undefined}>
-            {post.content}
+          <RedactedMarkdown redact={false} tocItems={showToc && canViewFull ? tocItems : undefined}>
+            {canViewFull ? post.content : markdownExcerpt(post.content)}
           </RedactedMarkdown>
         </article>
         {showToc ? <ArticleToc items={tocItems} readerMode /> : null}
       </div>
 
-      {!canViewFull ? (
-        <StickyPaywall
-          loggedIn={Boolean(user)}
-          redactedCount={countRedactions(post.content)}
-          variant="analysis"
-        />
-      ) : null}
+      {!canViewFull ? <StickyPaywall loggedIn={Boolean(user)} product="research" /> : null}
 
       {canViewFull ? (
         <AskAI context={{ kind: "post", slug: post.slug }} loggedIn={Boolean(user)} />
@@ -131,7 +135,8 @@ export default async function AnalysisDetailPage({
       <p className={`mt-8 pt-4 text-[11px] leading-relaxed ${readerMode ? "border-t border-[#d8d0c2] text-[#6b5c3f]" : "border-t border-border text-muted-soft"}`}>
         免责声明：本文由 AI 编辑流水线生成并经人工复核，仅为研究观点，不构成投资建议。
       </p>
-      </div>
+      </ReaderModeShell>
     </div>
+    </ReaderPrefsProvider>
   );
 }
