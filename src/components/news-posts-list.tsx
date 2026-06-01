@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCachedPosts } from "@/lib/cached-data";
+import { normalizeInternalSymbol } from "@/lib/symbol-resolve";
 
 const PAGE_SIZE = 50;
 
@@ -31,7 +32,7 @@ export async function NewsPostsList({ symbol }: { symbol?: string }) {
           <li key={n.id}>
             <div className="flex flex-wrap items-center gap-2">
               {n.tickers?.slice(0, 3).map((s) => (
-                <Link key={s} href={`/t/${s}`} className="chip">
+                <Link key={s} href={`/t/${encodeURIComponent(normalizeInternalSymbol(s))}`} className="chip">
                   {s}
                 </Link>
               ))}

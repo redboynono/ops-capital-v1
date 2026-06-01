@@ -1,8 +1,10 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Download, Loader2, Share2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SlideContent } from "./share-poster";
+import type { ShareInput } from "@/lib/share/payload";
+import { ShareChannels } from "./share-channels";
 import {
   buildSlides,
   slideFileName,
@@ -13,7 +15,7 @@ import {
 } from "./share-slides";
 
 /** 必须是纯可序列化数据，Server → Client 可传（url 会在 client click 时拼） */
-type ShareData = Omit<PostPoster, "url"> | Omit<PickPoster, "url">;
+type ShareData = ShareInput;
 
 type Props = {
   data: ShareData;
@@ -41,17 +43,32 @@ export function ShareButton({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+  const [slides, setSlides] = useState<Slide[]>([]);
+  const [slidesLoading, setSlidesLoading] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  // 计算 slides（仅在 url 已确定时）
-  const slides: Slide[] = useMemo(() => {
-    if (!resolvedUrl) return [];
-    return buildSlides({ ...data, url: resolvedUrl } as PosterData);
-  }, [data, resolvedUrl]);
+  useEffect(() => {
+    if (!open || !resolvedUrl) {
+      setSlides([]);
+      return;
+    }
+    setSlidesLoading(true);
+    const id = window.setTimeout(() => {
+      try {
+        const built = buildSlides({ ...data, url: resolvedUrl } as PosterData);
+        setSlides(built);
+      } catch {
+        setSlides([]);
+      } finally {
+        setSlidesLoading(false);
+      }
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [open, resolvedUrl, data]);
 
   const handleOpen = useCallback(
     (e: React.MouseEvent) => {
@@ -136,7 +153,7 @@ export function ShareButton({
         type="button"
         onClick={handleOpen}
         className={`inline-flex items-center gap-1.5 rounded-sm border border-border px-2.5 py-1 text-[12px] text-foreground-soft transition hover:border-accent hover:text-accent-strong ${className}`}
-        title="生成分享图集"
+        title="分享"
       >
         <Share2 size={14} />
         分享
@@ -148,8 +165,8 @@ export function ShareButton({
         className={`inline-flex items-center justify-center rounded-sm text-muted transition hover:bg-surface-muted hover:text-accent-strong ${
           variant === "icon-compact" ? "h-6 w-6" : "h-8 w-8"
         } ${className}`}
-        title="生成分享图集"
-        aria-label="生成分享图集"
+        title="分享"
+        aria-label="分享"
       >
         <Share2 size={variant === "icon-compact" ? 13 : 15} />
       </button>
@@ -159,7 +176,7 @@ export function ShareButton({
     <>
       {buttonNode}
 
-      {open && resolvedUrl && slides.length > 0 ? (
+      {open && resolvedUrl ? (
         <>
           {/* 隐藏的全尺寸渲染区：用于 html-to-image 截图。位移到屏幕外，但 visibility 保持 visible */}
           <div
@@ -175,18 +192,20 @@ export function ShareButton({
               flexDirection: "column",
             }}
           >
-            {slides.map((slide, i) => (
-              <div
-                key={i}
-                id={`slide-${i}`}
-                ref={(el) => {
-                  slideRefs.current[i] = el;
-                }}
-                style={{ width: POSTER_W, height: POSTER_H, flexShrink: 0 }}
-              >
-                <SlideContent slide={slide} />
-              </div>
-            ))}
+            {slides.length > 0
+              ? slides.map((slide, i) => (
+                  <div
+                    key={i}
+                    id={`slide-${i}`}
+                    ref={(el) => {
+                      slideRefs.current[i] = el;
+                    }}
+                    style={{ width: POSTER_W, height: POSTER_H, flexShrink: 0 }}
+                  >
+                    <SlideContent slide={slide} />
+                  </div>
+                ))
+              : null}
           </div>
 
           {/* Dialog overlay */}
@@ -199,11 +218,17 @@ export function ShareButton({
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <ShareChannels url={resolvedUrl} data={data} />
+
+              <div className="flex items-center justify-between border-b border-border px-5 py-2">
                 <div>
-                  <p className="text-[12px] font-semibold">小红书图集预览</p>
+                  <p className="text-[12px] font-semibold">小红书图集</p>
                   <p className="text-[10px] text-muted">
-                    {slides.length} 张 · 1080×1440 · 适配小红书 / 微博 / 朋友圈
+                    {slidesLoading
+                      ? "正在生成海报…"
+                      : slides.length > 0
+                        ? `${slides.length} 张 · 1080×1440 · 保存后发小红书`
+                        : "暂无长文内容 · 可用上方链接或文案分享"}
                   </p>
                 </div>
                 <button
@@ -217,33 +242,43 @@ export function ShareButton({
               </div>
 
               {/* Carousel */}
-              <div className="relative flex-1 overflow-hidden bg-[#0a0a0a]">
-                {/* Visible scaled preview viewport */}
-                <div
-                  className="mx-auto"
-                  style={{
-                    width: POSTER_W * PREVIEW_SCALE,
-                    height: POSTER_H * PREVIEW_SCALE,
-                    marginTop: 16,
-                    marginBottom: 16,
-                    overflow: "hidden",
-                    position: "relative",
-                  }}
-                >
+              <div className="relative flex-1 overflow-hidden bg-[#0a0a0a] min-h-[200px]">
+                {slidesLoading ? (
+                  <div className="flex h-[280px] items-center justify-center text-[12px] text-muted">
+                    <Loader2 size={20} className="mr-2 animate-spin" />
+                    生成图集中…
+                  </div>
+                ) : slides.length === 0 ? (
+                  <div className="flex h-[200px] items-center justify-center px-6 text-center text-[12px] text-muted">
+                    快讯/无正文内容仅支持链接分享；深度研报与精选支持多图导出
+                  </div>
+                ) : (
                   <div
+                    className="mx-auto"
                     style={{
-                      transform: `scale(${PREVIEW_SCALE})`,
-                      transformOrigin: "top left",
-                      width: POSTER_W,
-                      height: POSTER_H,
+                      width: POSTER_W * PREVIEW_SCALE,
+                      height: POSTER_H * PREVIEW_SCALE,
+                      marginTop: 16,
+                      marginBottom: 16,
+                      overflow: "hidden",
+                      position: "relative",
                     }}
                   >
-                    <SlideContent slide={slides[carouselIndex]} />
+                    <div
+                      style={{
+                        transform: `scale(${PREVIEW_SCALE})`,
+                        transformOrigin: "top left",
+                        width: POSTER_W,
+                        height: POSTER_H,
+                      }}
+                    >
+                      <SlideContent slide={slides[carouselIndex]} />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Prev / Next */}
-                {slides.length > 1 ? (
+                {!slidesLoading && slides.length > 1 ? (
                   <>
                     <button
                       type="button"
@@ -295,17 +330,19 @@ export function ShareButton({
                     <span className="text-[color:var(--danger)]">{error}</span>
                   ) : saving && progress ? (
                     <>正在生成 {progress.done} / {progress.total}...</>
-                  ) : (
+                  ) : slides.length > 0 ? (
                     <>
                       第 <span className="font-mono font-semibold">{carouselIndex + 1}</span> /{" "}
                       <span className="font-mono">{slides.length}</span> 张 · 保存为 ZIP 可一次发完
                     </>
+                  ) : (
+                    <>使用上方渠道分享；有图集时可一键导出 ZIP</>
                   )}
                 </p>
                 <button
                   type="button"
                   onClick={handleDownloadAll}
-                  disabled={saving}
+                  disabled={saving || slidesLoading || slides.length === 0}
                   className="inline-flex items-center gap-1.5 rounded-sm bg-[color:var(--accent-strong)] px-4 py-1.5 text-[12px] font-semibold text-black transition hover:opacity-90 disabled:opacity-60"
                   style={{
                     background: "#c9a15a",

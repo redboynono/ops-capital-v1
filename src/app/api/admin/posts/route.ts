@@ -66,7 +66,8 @@ export async function POST(req: Request) {
   const excerpt = body.excerpt?.trim() ?? "";
   const content = body.content ?? "";
   const kind = body.kind === "news" ? "news" : "analysis";
-  const isPremium = kind === "news" ? false : !!body.is_premium;
+  // 分析文未传 is_premium 时默认付费；快讯始终公开
+  const isPremium = kind === "news" ? false : body.is_premium !== false;
   const isPublished = !!body.is_published;
   const tickers = (body.tickers ?? []).map((s) => s.toUpperCase().trim()).filter(Boolean);
 

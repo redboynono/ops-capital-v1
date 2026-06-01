@@ -5,6 +5,7 @@ import { Search, X, Globe2 } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import type { TickerRow } from "@/lib/tickers";
+import { normalizeInternalSymbol } from "@/lib/symbol-resolve";
 
 type Props = {
   tickers: TickerRow[];
@@ -50,7 +51,7 @@ export function TickersBrowser({ tickers, exchangeLabels }: Props) {
   const total = tickers.length;
   const matched = grouped.filtered.length;
 
-  // ---- Live Finnhub lookup when DB has 0 hits and query ≥ 2 chars ----
+  // ---- 全市场实时查询（Finnhub + Yahoo）当索引无匹配且 ≥ 2 字符 ----
   useEffect(() => {
     const q = deferred.trim();
     if (q.length < 2 || matched > 0) {
@@ -142,7 +143,7 @@ export function TickersBrowser({ tickers, exchangeLabels }: Props) {
               {liveHits.map((h) => (
                 <li key={h.symbol}>
                   <Link
-                    href={`/t/${encodeURIComponent(h.symbol)}`}
+                    href={`/t/${encodeURIComponent(normalizeInternalSymbol(h.symbol))}`}
                     className="row-hover flex items-center gap-3 px-4 py-2.5"
                   >
                     <span className="font-mono text-[13px] font-semibold text-accent-strong">
@@ -166,8 +167,8 @@ export function TickersBrowser({ tickers, exchangeLabels }: Props) {
               {liveLoading
                 ? "查询全球市场中…"
                 : query.trim().length < 2
-                  ? "至少输入 2 个字符以触发实时市场查询"
-                  : `全球市场中也没有匹配 "${query}" 的标的`}
+                  ? "至少输入 2 个字符以触发全市场查询（含港股名称）"
+                  : `全市场也未找到 "${query}"，可试代码如 0100 / 0700 或英文名`}
             </p>
           )}
         </div>

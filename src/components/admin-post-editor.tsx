@@ -87,7 +87,11 @@ export function AdminPostEditor({ post }: Props) {
           <select
             className={`${input} mt-1`}
             value={kind}
-            onChange={(e) => setKind(e.target.value as "analysis" | "news")}
+            onChange={(e) => {
+              const k = e.target.value as "analysis" | "news";
+              setKind(k);
+              if (k === "news") setIsPremium(false);
+            }}
           >
             <option value="analysis">分析</option>
             <option value="news">快讯</option>
@@ -102,10 +106,23 @@ export function AdminPostEditor({ post }: Props) {
             placeholder="NVDA, TSLA"
           />
         </label>
-        <label className="flex items-center gap-2 text-[13px]">
-          <input type="checkbox" checked={isPremium} onChange={(e) => setIsPremium(e.target.checked)} />
-          Premium
-        </label>
+        {kind === "analysis" ? (
+          <label className="flex flex-col gap-0.5 text-[13px] md:col-span-2">
+            <span className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isPremium}
+                onChange={(e) => setIsPremium(e.target.checked)}
+              />
+              Research Pro（付费全文）
+            </span>
+            <span className="text-[11px] text-muted pl-6">
+              取消勾选 = 公开样例（全文免费，用于引流）
+            </span>
+          </label>
+        ) : (
+          <p className="text-[11px] text-muted">快讯始终公开</p>
+        )}
         <label className="flex items-center gap-2 text-[13px]">
           <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} />
           已发布

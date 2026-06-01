@@ -151,7 +151,11 @@ export default function AdminEditorPage() {
               <button
                 key={k}
                 type="button"
-                onClick={() => setKind(k)}
+                onClick={() => {
+                  setKind(k);
+                  if (k === "news") setIsPremium(false);
+                  else setIsPremium(true);
+                }}
                 className={`rounded px-3 py-1 text-[12px] font-semibold ${
                   kind === k ? "bg-accent text-white" : "text-muted hover:text-foreground"
                 }`}
@@ -224,8 +228,13 @@ export default function AdminEditorPage() {
                 onChange={(e) => setIsPremium(e.target.checked)}
                 className="accent-[color:var(--accent)]"
               />
-              Premium（付费）
+              Research Pro（付费全文）
             </label>
+          ) : null}
+          {kind === "analysis" ? (
+            <p className="text-[11px] text-muted md:col-span-2">
+              默认付费；仅勾选取消时作为公开样例。每日自动生成仍保留 1 篇免费。
+            </p>
           ) : null}
           <label className="inline-flex items-center gap-2 text-[13px] text-foreground-soft">
             <input

@@ -3,10 +3,11 @@ import { Globe2, ExternalLink } from "lucide-react";
 import {
   fetchCompanyNews,
   fetchCompanyProfile,
-  type FinnhubCompanyProfile,
   type FinnhubNewsItem,
-  getQuote,
 } from "@/lib/finnhub";
+import { getQuote } from "@/lib/quotes";
+import { isHkStyleSymbol, normalizeInternalSymbol } from "@/lib/symbol-resolve";
+import { getQuote as getYahooQuote, toYahooSymbol } from "@/lib/yahoo";
 
 const exchangeShort: Record<string, string> = {
   "NEW YORK STOCK EXCHANGE, INC.": "NYSE",
@@ -47,28 +48,52 @@ export async function UnlistedTickerView({
   const newsTo = new Date();
   const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 
+  const finnhubSymbol = isHkStyleSymbol(symbol) ? normalizeInternalSymbol(symbol) : symbol;
+
   const [profile, quote, news] = await Promise.all([
-    fetchCompanyProfile(symbol),
+    isHkStyleSymbol(symbol) ? Promise.resolve(null) : fetchCompanyProfile(symbol).catch(() => null),
     getQuote(symbol).catch(() => null),
-    fetchCompanyNews(symbol, isoDate(newsFrom), isoDate(newsTo), 8).catch(() => [] as FinnhubNewsItem[]),
+    isHkStyleSymbol(symbol)
+      ? Promise.resolve([] as FinnhubNewsItem[])
+      : fetchCompanyNews(finnhubSymbol, isoDate(newsFrom), isoDate(newsTo), 8).catch(
+          () => [] as FinnhubNewsItem[],
+        ),
   ]);
 
+  const yahooSym = toYahooSymbol(symbol);
+  let displayQuote = quote;
+  let yahooName: string | null = null;
+  if (!displayQuote?.c) {
+    const yq = await getYahooQuote(yahooSym).catch(() => null);
+    if (yq?.c) {
+      displayQuote = yq;
+      yahooName = yq.shortName;
+    }
+  }
+
   // If profile + quote both fail, the symbol is genuinely unknown
-  if (!profile && (!quote || quote.c === 0)) {
+  if (!profile && (!displayQuote || displayQuote.c === 0)) {
     return (
       <div className="mx-auto w-full max-w-[800px] px-4 py-12 text-center">
         <p className="label-caps text-muted">Ticker not found</p>
         <h1 className="mt-2 text-2xl font-bold">"{symbol}" 未在任何市场找到</h1>
         <p className="mt-2 text-[13px] text-muted">
-          请检查代码是否正确，或返回 <Link href="/tickers" className="text-accent-strong hover:underline">标的索引</Link>。
+          港股请用 5 位代码（如 <span className="font-mono">00700</span>）或 Yahoo 格式（如{" "}
+          <span className="font-mono">0700.HK</span>）。请检查代码，或返回{" "}
+          <Link href="/tickers" className="text-accent-strong hover:underline">标的索引</Link>。
         </p>
       </div>
     );
   }
 
-  const exShort = profile ? (exchangeShort[profile.exchange] ?? profile.exchange.split(",")[0]) : "—";
+  const exShort = profile
+    ? (exchangeShort[profile.exchange] ?? profile.exchange.split(",")[0])
+    : isHkStyleSymbol(symbol)
+      ? "HKEX"
+      : "—";
   const sector = profile?.finnhubIndustry ?? null;
-  const change = quote?.dp ?? null;
+  const change = displayQuote?.dp ?? null;
+  const displayName = profile?.name ?? yahooName ?? symbol;
   const changeClass =
     change == null ? "text-muted" : change > 0 ? "text-[color:var(--success)]" : change < 0 ? "text-[color:var(--danger)]" : "text-foreground";
 
@@ -86,7 +111,7 @@ export async function UnlistedTickerView({
           <Globe2 className="h-4 w-4" strokeWidth={1.8} />
           <span className="font-mono font-semibold">UNLISTED</span>
           <span className="text-foreground-soft">
-            该标的暂未收录·下方为来自 Finnhub 的实时市场数据预览（无评级·无历史）
+            该标的暂未收录·下方为实时行情预览（无评级·无历史）
           </span>
         </div>
         {isAdmin ? (
@@ -108,7 +133,12 @@ export async function UnlistedTickerView({
           ) : null}
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-3">
-              <h1 className="font-mono text-3xl font-bold text-foreground">{symbol}</h1>
+              <h1 className="font-mono text-3xl font-bold text-foreground">
+                {isHkStyleSymbol(symbol) ? yahooSym : symbol}
+              </h1>
+              {isHkStyleSymbol(symbol) && yahooSym !== symbol ? (
+                <span className="font-mono text-[12px] text-muted">库内 {symbol}</span>
+              ) : null}
               <span className="text-[13px] text-muted">{exShort}</span>
               {profile?.country ? (
                 <span className="rounded-sm border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted">
@@ -116,7 +146,7 @@ export async function UnlistedTickerView({
                 </span>
               ) : null}
             </div>
-            <p className="mt-1 text-[15px] font-semibold text-foreground-soft">{profile?.name ?? "—"}</p>
+            <p className="mt-1 text-[15px] font-semibold text-foreground-soft">{displayName}</p>
             {sector ? <p className="mt-0.5 text-[12px] text-muted">行业：{sector}</p> : null}
             {profile?.weburl ? (
               <a
@@ -136,7 +166,9 @@ export async function UnlistedTickerView({
         <div className="mt-3 grid grid-cols-2 gap-3 rounded-sm border border-border bg-surface-muted p-3 md:grid-cols-4">
           <div>
             <p className="label-caps text-[10px]">现价</p>
-            <p className="mt-0.5 font-mono text-[17px] font-bold">{fmtMoney(quote?.c, profile?.currency ?? "USD")}</p>
+            <p className="mt-0.5 font-mono text-[17px] font-bold">
+              {fmtMoney(displayQuote?.c, profile?.currency ?? (isHkStyleSymbol(symbol) ? "HKD" : "USD"))}
+            </p>
             <p className={`font-mono text-[11px] ${changeClass}`}>
               {change != null ? `${change >= 0 ? "+" : ""}${change.toFixed(2)}%` : "—"}
             </p>
@@ -144,9 +176,9 @@ export async function UnlistedTickerView({
           <div>
             <p className="label-caps text-[10px]">日内</p>
             <p className="mt-0.5 font-mono text-[13px]">
-              {fmtMoney(quote?.l)} – {fmtMoney(quote?.h)}
+              {fmtMoney(displayQuote?.l)} – {fmtMoney(displayQuote?.h)}
             </p>
-            <p className="font-mono text-[11px] text-muted">前收 {fmtMoney(quote?.pc)}</p>
+            <p className="font-mono text-[11px] text-muted">前收 {fmtMoney(displayQuote?.pc)}</p>
           </div>
           <div>
             <p className="label-caps text-[10px]">市值</p>

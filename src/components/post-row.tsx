@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ShareButton } from "@/components/share/share-button";
+import { normalizeInternalSymbol } from "@/lib/symbol-resolve";
 
 type Post = {
   id: string;
@@ -51,7 +52,7 @@ export function PostRow({
               <span className="badge-free">公开</span>
             )}
             {post.tickers?.slice(0, 3).map((s) => (
-              <Link key={s} href={`/t/${s}`} className="chip">
+              <Link key={s} href={`/t/${encodeURIComponent(normalizeInternalSymbol(s))}`} className="chip">
                 {s}
               </Link>
             ))}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AgentLauncher, type AgentCardData } from "@/components/agent-launcher";
 import { PostRow } from "@/components/post-row";
 import { FactorGrades, QuantRanking, RatingsSummary } from "@/components/rating-panels";
@@ -15,6 +16,7 @@ import { OptionTradeIdeasPanel } from "@/components/option-trade-ideas-panel";
 import { TickerMarketStats } from "@/components/ticker-market-stats";
 import { isUsEquityTicker } from "@/lib/polygon";
 import { thisFridayIso } from "@/lib/options-expiry";
+import { normalizeInternalSymbol } from "@/lib/symbol-resolve";
 import { getTickerBySymbol, listRelatedTickers } from "@/lib/tickers";
 
 export const dynamic = "force-dynamic";
@@ -45,11 +47,18 @@ export default async function TickerPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { symbol: raw } = await params;
-  const symbol = raw.toUpperCase();
+  const decoded = decodeURIComponent(raw).trim().toUpperCase();
+  const symbol = normalizeInternalSymbol(decoded);
+  if (symbol !== decoded) {
+    redirect(`/t/${encodeURIComponent(symbol)}`);
+  }
   const ticker = await getTickerBySymbol(symbol);
 
-  // Unlisted: fall back to live Finnhub preview instead of 404. Lets users
-  // search any ticker (e.g. fresh IPOs like CRCL) and still see real data.
+  if (ticker && ticker.symbol !== symbol) {
+    redirect(`/t/${encodeURIComponent(ticker.symbol)}`);
+  }
+
+  // Unlisted: fall back to live market preview (Yahoo 覆盖港股 .HK 写法)
   if (!ticker) {
     const u = await getSessionUser();
     return <UnlistedTickerView symbol={symbol} isAdmin={isAdminEmail(u?.email)} />;

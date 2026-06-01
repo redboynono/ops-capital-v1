@@ -25,10 +25,10 @@ export async function generateAndSaveAnalysis(symbol: string): Promise<string> {
   const excerpt = content.slice(0, 200).replace(/#/g, "").replace(/\n/g, " ").trim() + "...";
   const id = randomUUID();
 
-  // Save to posts table
+  // 默认 Research Pro；公开样例在后台或 daily-content 中单独设置
   await mysqlQuery(
     `insert into posts (id, slug, title, excerpt, content, kind, is_premium, is_published, created_at)
-     values (?, ?, ?, ?, ?, 'analysis', false, true, now())
+     values (?, ?, ?, ?, ?, 'analysis', 1, true, now())
      on duplicate key update title = values(title), excerpt = values(excerpt), content = values(content)`,
     [id, slug, title, excerpt, cleanContent]
   );

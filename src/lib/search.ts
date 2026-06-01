@@ -1,3 +1,4 @@
+import { searchMarketSymbols } from "@/lib/market-symbol-search";
 import { mysqlQuery } from "@/lib/mysql";
 
 export type SearchTickerHit = {
@@ -31,7 +32,7 @@ export async function globalSearch(raw: string, limit = 12): Promise<SearchResul
   const sym = q.toUpperCase().replace(/\s+/g, "");
   const like = `%${q}%`;
 
-  const tickers = await mysqlQuery<SearchTickerHit[]>(
+  const dbTickers = await mysqlQuery<SearchTickerHit[]>(
     `select symbol, name, exchange from tickers
       where symbol like ? or name like ?
       order by
@@ -40,6 +41,22 @@ export async function globalSearch(raw: string, limit = 12): Promise<SearchResul
       limit ?`,
     [like, like, sym, `${sym}%`, limit],
   );
+
+  const tickers: SearchTickerHit[] = [...dbTickers];
+  if (tickers.length < limit && q.length >= 2) {
+    const live = await searchMarketSymbols(q, limit);
+    const seen = new Set(tickers.map((t) => t.symbol));
+    for (const h of live) {
+      if (seen.has(h.symbol)) continue;
+      seen.add(h.symbol);
+      tickers.push({
+        symbol: h.symbol,
+        name: h.name,
+        exchange: h.exchange ?? (h.symbol.endsWith(".HK") || /^\d{4,5}$/.test(h.symbol) ? "HKEX" : "OTHER"),
+      });
+      if (tickers.length >= limit) break;
+    }
+  }
 
   const posts = await mysqlQuery<SearchPostHit[]>(
     `select id, title, slug, kind, excerpt, created_at from posts

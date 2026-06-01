@@ -11,6 +11,8 @@
  *  - Forex:                  USDCNY=X, USDJPY=X
  */
 
+import { canonicalHkYahooSymbol } from "@/lib/symbol-resolve";
+
 export type YahooQuote = {
   symbol: string;
   displaySymbol: string;
@@ -42,7 +44,8 @@ function displayOf(symbol: string): string {
 }
 
 async function fetchOne(symbol: string): Promise<YahooQuote | null> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=2d`;
+  const yahooSym = toYahooSymbol(symbol);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?interval=1d&range=2d`;
   try {
     const res = await fetch(url, {
       cache: "no-store",
@@ -79,7 +82,7 @@ async function fetchOne(symbol: string): Promise<YahooQuote | null> {
     const dp = pc ? ((c - pc) / pc) * 100 : null;
     return {
       symbol,
-      displaySymbol: displayOf(symbol),
+      displaySymbol: displayOf(yahooSym),
       c,
       d,
       dp,
@@ -142,15 +145,17 @@ export async function getQuote(symbol: string): Promise<YahooQuote | null> {
  *  - everything else returned as-is
  */
 export function toYahooSymbol(internal: string): string {
-  if (/^\d{4,5}$/.test(internal)) {
-    const n = String(parseInt(internal, 10)).padStart(4, "0");
-    return `${n}.HK`;
+  const s = internal.trim().toUpperCase();
+  if (/^\d{1,5}\.HK$/i.test(s)) return canonicalHkYahooSymbol(s);
+  if (/^\d{4,5}$/.test(s)) {
+    return canonicalHkYahooSymbol(`${String(parseInt(s, 10))}.HK`);
   }
-  return internal;
+  return s;
 }
 
 export function isHkSymbol(internal: string): boolean {
-  return /^\d{4,5}$/.test(internal);
+  const s = internal.trim().toUpperCase();
+  return /^\d{4,5}$/.test(s) || /^\d{1,5}\.HK$/.test(s);
 }
 
 // ---- crumb cache ---------------------------------------------------

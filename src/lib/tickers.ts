@@ -1,4 +1,5 @@
 import { mysqlQuery } from "@/lib/mysql";
+import { symbolLookupCandidates } from "@/lib/symbol-resolve";
 
 export type TickerRow = {
   symbol: string;
@@ -15,11 +16,14 @@ export async function listAllTickers() {
 }
 
 export async function getTickerBySymbol(symbol: string) {
-  const rows = await mysqlQuery<TickerRow[]>(
-    "select symbol, name, exchange, sector, updated_at from tickers where symbol = ? limit 1",
-    [symbol],
-  );
-  return rows[0] ?? null;
+  for (const candidate of symbolLookupCandidates(symbol)) {
+    const rows = await mysqlQuery<TickerRow[]>(
+      "select symbol, name, exchange, sector, updated_at from tickers where symbol = ? limit 1",
+      [candidate],
+    );
+    if (rows[0]) return rows[0];
+  }
+  return null;
 }
 
 export async function listTickersForPost(postId: string) {
