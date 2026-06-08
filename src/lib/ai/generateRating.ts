@@ -7,6 +7,7 @@ import {
   fetchCompanyNews,
   getQuote,
 } from "@/lib/finnhub";
+import { isCryptoSymbol } from "@/lib/symbol-resolve";
 import {
   fetchYahooFundamentals,
   getQuote as getYahooQuote,
@@ -135,7 +136,7 @@ export async function generateAndSaveRating(
   let metrics: Record<string, unknown> | null = null;
   let news: Awaited<ReturnType<typeof fetchCompanyNews>> = [];
 
-  if (isHkSymbol(symbol)) {
+  if (isHkSymbol(symbol) || isCryptoSymbol(symbol)) {
     const ySym = toYahooSymbol(symbol);
     const [yQuote, yFund] = await Promise.all([
       getYahooQuote(ySym).catch(() => null),

@@ -11,7 +11,7 @@
  *  - Forex:                  USDCNY=X, USDJPY=X
  */
 
-import { canonicalHkYahooSymbol } from "@/lib/symbol-resolve";
+import { canonicalHkYahooSymbol, isCryptoSymbol, normalizeInternalSymbol } from "@/lib/symbol-resolve";
 
 export type YahooQuote = {
   symbol: string;
@@ -145,11 +145,12 @@ export async function getQuote(symbol: string): Promise<YahooQuote | null> {
  *  - everything else returned as-is
  */
 export function toYahooSymbol(internal: string): string {
-  const s = internal.trim().toUpperCase();
-  if (/^\d{1,5}\.HK$/i.test(s)) return canonicalHkYahooSymbol(s);
+  const s = normalizeInternalSymbol(internal);
+  if (/^\d{1,5}\.HK$/i.test(internal.trim().toUpperCase())) return canonicalHkYahooSymbol(internal);
   if (/^\d{4,5}$/.test(s)) {
     return canonicalHkYahooSymbol(`${String(parseInt(s, 10))}.HK`);
   }
+  if (isCryptoSymbol(s)) return `${s}-USD`;
   return s;
 }
 

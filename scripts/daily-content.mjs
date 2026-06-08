@@ -22,6 +22,7 @@
 import mysql from "mysql2/promise";
 import crypto from "node:crypto";
 import { runJob } from "./lib/job-runner.mjs";
+import { fetchYahooQuote, isCryptoSymbol, toYahooSymbol } from "./lib/yahoo-quote.mjs";
 
 // ============================== args ============================== //
 
@@ -179,12 +180,27 @@ async function buildFactsheet(ticker) {
   const isoTo = today.toISOString().slice(0, 10);
 
   const safe = (p) => p.catch((e) => { console.warn(`  [factsheet warn] ${e.message}`); return null; });
-  const [profile, quote, fin, news] = await Promise.all([
-    safe(fhGet("stock/profile2", { symbol: sym })),
-    safe(fhGet("quote", { symbol: sym })),
-    safe(fhGet("stock/metric", { symbol: sym, metric: "all" })),
-    safe(fhGet("company-news", { symbol: sym, from: isoFrom, to: isoTo })),
-  ]);
+
+  let profile = null;
+  let quote = null;
+  let fin = null;
+  let news = [];
+  let quoteSource = "Finnhub";
+
+  if (isCryptoSymbol(sym) || /^\d{4,5}$/.test(sym)) {
+    quoteSource = `Yahoo (${toYahooSymbol(sym)})`;
+    quote = await fetchYahooQuote(sym);
+    if (isCryptoSymbol(sym)) {
+      profile = { name: ticker.name ?? sym, exchange: "CRYPTO", finnhubIndustry: ticker.sector ?? "Crypto" };
+    }
+  } else {
+    [profile, quote, fin, news] = await Promise.all([
+      safe(fhGet("stock/profile2", { symbol: sym })),
+      safe(fhGet("quote", { symbol: sym })),
+      safe(fhGet("stock/metric", { symbol: sym, metric: "all" })),
+      safe(fhGet("company-news", { symbol: sym, from: isoFrom, to: isoTo })),
+    ]);
+  }
 
   const m = fin?.metric ?? {};
   const lines = [];
@@ -203,7 +219,7 @@ async function buildFactsheet(ticker) {
   if (profile?.marketCapitalization) lines.push(`- market_cap (profile): ${fmtMoney(profile.marketCapitalization * 1e6)}`);
 
   lines.push("");
-  lines.push("## 实时报价（Finnhub /quote，本封取数于 " + isoTo + "）");
+  lines.push(`## 实时报价（${quoteSource}，本封取数于 ${isoTo}）`);
   if (quote && Number.isFinite(quote.c)) {
     lines.push(`- current_price: $${fmtNum(quote.c)}`);
     lines.push(`- change_today: $${fmtNum(quote.d)} (${fmtNum(quote.dp)}%)`);

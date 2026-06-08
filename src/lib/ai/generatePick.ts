@@ -6,6 +6,7 @@ import {
   getQuote,
 } from "@/lib/finnhub";
 import { mysqlQuery } from "@/lib/mysql";
+import { isCryptoSymbol } from "@/lib/symbol-resolve";
 import {
   fetchYahooFundamentals,
   getQuote as getYahooQuote,
@@ -71,7 +72,7 @@ export async function generatePickDraft(
   let metrics: Record<string, unknown> | null = null;
   let news: Awaited<ReturnType<typeof fetchCompanyNews>> = [];
 
-  if (isHkSymbol(symbol)) {
+  if (isHkSymbol(symbol) || isCryptoSymbol(symbol)) {
     const ySym = toYahooSymbol(symbol);
     const [yQuote, yFund] = await Promise.all([
       getYahooQuote(ySym).catch(() => null),

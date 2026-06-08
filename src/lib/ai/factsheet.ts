@@ -6,7 +6,7 @@ import {
   type FinnhubCompanyProfile,
 } from "@/lib/finnhub";
 import { getRating, getFactorGrades } from "@/lib/ratings";
-import { normalizeInternalSymbol } from "@/lib/symbol-resolve";
+import { isCryptoSymbol, normalizeInternalSymbol } from "@/lib/symbol-resolve";
 import { getTickerBySymbol } from "@/lib/tickers";
 import {
   fetchYahooFundamentals,
@@ -18,7 +18,7 @@ import {
 
 /**
  * 构建一只标的的实时 factsheet（profile + quote + 关键估值 + 评级 + 近 14 天 news）。
- * 美股走 Finnhub；港股（5 位 / .HK）走 Yahoo，避免 00100 等代码报价为 0。
+ * 美股走 Finnhub；港股 / 加密（BTC→BTC-USD）走 Yahoo，避免错误报价。
  */
 export async function buildTickerFactsheet(symbol: string): Promise<string> {
   const sym = normalizeInternalSymbol(symbol);
@@ -45,14 +45,14 @@ export async function buildTickerFactsheet(symbol: string): Promise<string> {
   let displayName: string | null = null;
   let quoteSource = "Finnhub";
 
-  if (isHkSymbol(sym)) {
+  if (isHkSymbol(sym) || isCryptoSymbol(sym)) {
     const ySym = toYahooSymbol(sym);
     const [yQuote, yFund] = await Promise.all([
       safe(getYahooQuote(ySym)),
-      safe(fetchYahooFundamentals(ySym)),
+      isCryptoSymbol(sym) ? Promise.resolve(null) : safe(fetchYahooFundamentals(ySym)),
     ]);
     quoteSource = `Yahoo (${ySym})`;
-    currency = yQuote?.currency ?? "HKD";
+    currency = yQuote?.currency ?? (isCryptoSymbol(sym) ? "USD" : "HKD");
     displayName = yQuote?.shortName ?? null;
     if (yQuote?.c) {
       quote = {
@@ -183,7 +183,11 @@ export async function buildTickerFactsheet(symbol: string): Promise<string> {
       if (n.summary) lines.push(`  ${String(n.summary).slice(0, 160)}`);
     }
   } else {
-    lines.push(isHkSymbol(sym) ? "- (港股 Finnhub news 不可用)" : "- (近 14 天无 news 或获取失败)");
+    lines.push(
+      isHkSymbol(sym) || isCryptoSymbol(sym)
+        ? "- (港股/加密 Finnhub news 不可用)"
+        : "- (近 14 天无 news 或获取失败)",
+    );
   }
 
   return lines.join("\n");

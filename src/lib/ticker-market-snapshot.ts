@@ -4,7 +4,7 @@ import {
   getQuote as finnhubGetQuote,
 } from "@/lib/finnhub";
 import { getQuote as getUnifiedQuote } from "@/lib/quotes";
-import { normalizeInternalSymbol } from "@/lib/symbol-resolve";
+import { isCryptoSymbol, normalizeInternalSymbol } from "@/lib/symbol-resolve";
 import {
   fetchYahooFundamentals,
   getQuote as getYahooQuote,
@@ -60,24 +60,27 @@ export async function fetchTickerMarketSnapshot(symbol: string): Promise<TickerM
   };
 
   const hk = isHkSymbol(sym);
-  const ySym = hk ? toYahooSymbol(sym) : sym;
+  const crypto = isCryptoSymbol(sym);
+  const yahooOnly = hk || crypto;
+  const ySym = toYahooSymbol(sym);
 
   const [profile, finnQ, fin, unifiedQ, yahooQ] = await Promise.all([
-    hk ? Promise.resolve(null) : fetchCompanyProfile(sym).catch(() => null),
-    hk ? Promise.resolve(null) : finnhubGetQuote(sym).catch(() => null),
-    hk ? Promise.resolve(null) : fetchBasicFinancials(sym).catch(() => null),
+    yahooOnly ? Promise.resolve(null) : fetchCompanyProfile(sym).catch(() => null),
+    yahooOnly ? Promise.resolve(null) : finnhubGetQuote(sym).catch(() => null),
+    yahooOnly ? Promise.resolve(null) : fetchBasicFinancials(sym).catch(() => null),
     getUnifiedQuote(sym).catch(() => null),
-    hk ? getYahooQuote(ySym).catch(() => null) : Promise.resolve(null),
+    yahooOnly ? getYahooQuote(ySym).catch(() => null) : Promise.resolve(null),
   ]);
 
-  const q =
-    hk && yahooQ?.c
+  const q = yahooOnly
+    ? yahooQ?.c
       ? yahooQ
-      : finnQ?.c
-        ? finnQ
-        : unifiedQ?.c
-          ? unifiedQ
-          : yahooQ;
+      : unifiedQ
+    : finnQ?.c
+      ? finnQ
+      : unifiedQ?.c
+        ? unifiedQ
+        : yahooQ;
   if (q?.c) {
     base.price = q.c;
     base.changeAbs = q.d ?? null;
@@ -89,6 +92,8 @@ export async function fetchTickerMarketSnapshot(symbol: string): Promise<TickerM
 
   if (hk) {
     base.currency = yahooQ?.currency ?? "HKD";
+  } else if (crypto) {
+    base.currency = yahooQ?.currency ?? unifiedQ?.currency ?? "USD";
   } else if (profile) {
     base.currency = profile.currency || "USD";
     base.ipo = profile.ipo || null;
@@ -111,7 +116,7 @@ export async function fetchTickerMarketSnapshot(symbol: string): Promise<TickerM
     if (capM) base.marketCapM = capM;
   }
 
-  if (!base.marketCapM || !base.peTtm || hk) {
+  if (!base.marketCapM || !base.peTtm || hk || crypto) {
     const y = await fetchYahooFundamentals(ySym).catch(() => null);
     if (y) {
       if (!base.marketCapM && y.marketCap) base.marketCapM = y.marketCap / 1e6;
