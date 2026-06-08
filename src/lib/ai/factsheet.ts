@@ -3,17 +3,25 @@ import {
   fetchCompanyNews,
   fetchCompanyProfile,
   getQuote,
+  type FinnhubCompanyProfile,
 } from "@/lib/finnhub";
 import { getRating, getFactorGrades } from "@/lib/ratings";
+import { normalizeInternalSymbol } from "@/lib/symbol-resolve";
+import { getTickerBySymbol } from "@/lib/tickers";
+import {
+  fetchYahooFundamentals,
+  getQuote as getYahooQuote,
+  isHkSymbol,
+  toYahooSymbol,
+  yahooToFinnhubMetric,
+} from "@/lib/yahoo";
 
 /**
  * 构建一只标的的实时 factsheet（profile + quote + 关键估值 + 评级 + 近 14 天 news）。
- * 给 Gemini Q&A / 自动文章 pipeline 共用：
- *   - 拉到的数据用于"锁住"实时数据（防止训练记忆 stale）
- *   - 任何 fetch 失败都安静降级（不抛异常，不阻塞其他 ticker）
+ * 美股走 Finnhub；港股（5 位 / .HK）走 Yahoo，避免 00100 等代码报价为 0。
  */
 export async function buildTickerFactsheet(symbol: string): Promise<string> {
-  const sym = symbol.toUpperCase();
+  const sym = normalizeInternalSymbol(symbol);
   const today = new Date();
   const past = new Date(today);
   past.setUTCDate(past.getUTCDate() - 14);
@@ -21,39 +29,98 @@ export async function buildTickerFactsheet(symbol: string): Promise<string> {
   const isoTo = today.toISOString().slice(0, 10);
 
   const safe = <T,>(p: Promise<T>) => p.catch(() => null) as Promise<T | null>;
-  const [profile, quote, fin, news, rating, gradesMap] = await Promise.all([
-    safe(fetchCompanyProfile(sym)),
-    safe(getQuote(sym)),
-    safe(fetchBasicFinancials(sym)),
-    fetchCompanyNews(sym, isoFrom, isoTo, 6).catch(() => []),
+
+  let profile: FinnhubCompanyProfile | null = null;
+  let quote: {
+    c: number;
+    d?: number | null;
+    dp?: number | null;
+    h?: number;
+    l?: number;
+    pc?: number;
+  } | null = null;
+  let metrics: Record<string, number | null | undefined> = {};
+  let news: Awaited<ReturnType<typeof fetchCompanyNews>> = [];
+  let currency = "USD";
+  let displayName: string | null = null;
+  let quoteSource = "Finnhub";
+
+  if (isHkSymbol(sym)) {
+    const ySym = toYahooSymbol(sym);
+    const [yQuote, yFund] = await Promise.all([
+      safe(getYahooQuote(ySym)),
+      safe(fetchYahooFundamentals(ySym)),
+    ]);
+    quoteSource = `Yahoo (${ySym})`;
+    currency = yQuote?.currency ?? "HKD";
+    displayName = yQuote?.shortName ?? null;
+    if (yQuote?.c) {
+      quote = {
+        c: yQuote.c,
+        d: yQuote.d ?? 0,
+        dp: yQuote.dp ?? 0,
+        h: yQuote.h,
+        l: yQuote.l,
+        pc: yQuote.pc,
+      };
+    }
+    if (yFund) metrics = yahooToFinnhubMetric(yFund);
+  } else {
+    const [p, q, fin, n] = await Promise.all([
+      safe(fetchCompanyProfile(sym)),
+      safe(getQuote(sym)),
+      safe(fetchBasicFinancials(sym)),
+      fetchCompanyNews(sym, isoFrom, isoTo, 6).catch(() => []),
+    ]);
+    profile = p;
+    quote = q;
+    metrics = (fin?.metric ?? {}) as Record<string, number | null | undefined>;
+    news = n;
+    currency = profile?.currency ?? "USD";
+    displayName = profile?.name ?? null;
+  }
+
+  const dbTicker = await getTickerBySymbol(sym).catch(() => null);
+  if (!displayName) displayName = dbTicker?.name ?? null;
+
+  const fmtNum = (v: unknown, d = 2) =>
+    v == null || !Number.isFinite(Number(v)) ? "n/a" : Number(v).toFixed(d);
+  const money = (v: unknown) => {
+    const n = fmtNum(v);
+    if (n === "n/a") return n;
+    const prefix = currency === "HKD" ? "HK$" : currency === "USD" ? "$" : `${currency} `;
+    return `${prefix}${n}`;
+  };
+
+  const [rating, gradesMap] = await Promise.all([
     safe(getRating(sym)),
     safe(getFactorGrades(sym)),
   ]);
 
-  const fmtNum = (v: unknown, d = 2) =>
-    v == null || !Number.isFinite(Number(v)) ? "n/a" : Number(v).toFixed(d);
-  const m: Record<string, number | null | undefined> = (fin?.metric ?? {}) as Record<string, number | null>;
-
   const lines: string[] = [];
-  lines.push(`## ${sym} 公司概况`);
-  if (profile?.name) lines.push(`- name: ${profile.name}`);
+  lines.push(`## ${sym}${displayName ? ` · ${displayName}` : ""} 公司概况`);
+  if (displayName) lines.push(`- name: ${displayName}`);
   if (profile?.finnhubIndustry) lines.push(`- industry: ${profile.finnhubIndustry}`);
   if (profile?.country) lines.push(`- country: ${profile.country}`);
-  if (profile?.exchange) lines.push(`- exchange: ${profile.exchange}`);
+  if (isHkSymbol(sym)) lines.push(`- exchange: HKEX`);
+  else if (profile?.exchange) lines.push(`- exchange: ${profile.exchange}`);
   if (profile?.ipo) {
     const months = Math.round((today.getTime() - new Date(profile.ipo).getTime()) / (30 * 86400000));
     lines.push(`- ipo_date: ${profile.ipo} (距今约 ${months} 个月)`);
   }
   if (profile?.weburl) lines.push(`- weburl: ${profile.weburl}`);
+  if (isHkSymbol(sym)) lines.push(`- yahoo_symbol: ${toYahooSymbol(sym)}`);
 
   lines.push("");
-  lines.push(`## 实时报价（Finnhub /quote, ${isoTo}）`);
-  if (quote && Number.isFinite(quote.c)) {
-    lines.push(`- current_price: $${fmtNum(quote.c)}`);
-    lines.push(`- change_today: $${fmtNum(quote.d)} (${fmtNum(quote.dp)}%)`);
-    lines.push(`- prev_close: $${fmtNum(quote.pc)}, day_high: $${fmtNum(quote.h)}, day_low: $${fmtNum(quote.l)}`);
+  lines.push(`## 实时报价（${quoteSource}, ${isoTo}）`);
+  if (quote && Number.isFinite(quote.c) && quote.c > 0) {
+    lines.push(`- current_price: ${money(quote.c)}`);
+    lines.push(`- change_today: ${money(quote.d)} (${fmtNum(quote.dp)}%)`);
+    lines.push(
+      `- prev_close: ${money(quote.pc)}, day_high: ${money(quote.h)}, day_low: ${money(quote.l)}`,
+    );
   } else {
-    lines.push("- (实时报价不可用)");
+    lines.push("- (实时报价不可用 — 请勿编造 $0 价格，应说明数据缺失)");
   }
 
   const metricKeys: [string, string][] = [
@@ -74,7 +141,7 @@ export async function buildTickerFactsheet(symbol: string): Promise<string> {
   ];
   const metricLines: string[] = [];
   for (const [k, label] of metricKeys) {
-    const v = m[k];
+    const v = metrics[k];
     if (v == null || !Number.isFinite(Number(v))) continue;
     metricLines.push(`${label}=${fmtNum(v)}`);
   }
@@ -88,7 +155,9 @@ export async function buildTickerFactsheet(symbol: string): Promise<string> {
     lines.push("## OPS 评级");
     if (rating.ops_verdict) lines.push(`- OPS verdict: ${rating.ops_verdict} (score=${rating.ops_score ?? "n/a"})`);
     if (rating.street_verdict)
-      lines.push(`- Street verdict: ${rating.street_verdict} (score=${rating.street_score ?? "n/a"}, analysts=${rating.street_analyst_count ?? "?"})`);
+      lines.push(
+        `- Street verdict: ${rating.street_verdict} (score=${rating.street_score ?? "n/a"}, analysts=${rating.street_analyst_count ?? "?"})`,
+      );
     if (rating.quant_score) lines.push(`- OPS Quant score: ${rating.quant_score}`);
     if (rating.ops_target_price) lines.push(`- OPS target_price: ${rating.ops_target_price}`);
     if (rating.street_target_price) lines.push(`- Street target_price: ${rating.street_target_price}`);
@@ -114,7 +183,7 @@ export async function buildTickerFactsheet(symbol: string): Promise<string> {
       if (n.summary) lines.push(`  ${String(n.summary).slice(0, 160)}`);
     }
   } else {
-    lines.push("- (近 14 天无 news 或获取失败)");
+    lines.push(isHkSymbol(sym) ? "- (港股 Finnhub news 不可用)" : "- (近 14 天无 news 或获取失败)");
   }
 
   return lines.join("\n");

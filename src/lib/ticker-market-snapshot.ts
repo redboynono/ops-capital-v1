@@ -4,7 +4,13 @@ import {
   getQuote as finnhubGetQuote,
 } from "@/lib/finnhub";
 import { getQuote as getUnifiedQuote } from "@/lib/quotes";
-import { fetchYahooFundamentals, toYahooSymbol } from "@/lib/yahoo";
+import { normalizeInternalSymbol } from "@/lib/symbol-resolve";
+import {
+  fetchYahooFundamentals,
+  getQuote as getYahooQuote,
+  isHkSymbol,
+  toYahooSymbol,
+} from "@/lib/yahoo";
 
 export type TickerMarketSnapshot = {
   price: number | null;
@@ -32,7 +38,7 @@ function metricNum(m: Record<string, number | null | undefined>, key: string): n
 }
 
 export async function fetchTickerMarketSnapshot(symbol: string): Promise<TickerMarketSnapshot> {
-  const sym = symbol.toUpperCase();
+  const sym = normalizeInternalSymbol(symbol);
   const base: TickerMarketSnapshot = {
     price: null,
     changePct: null,
@@ -53,14 +59,25 @@ export async function fetchTickerMarketSnapshot(symbol: string): Promise<TickerM
     ipo: null,
   };
 
-  const [profile, finnQ, fin, unifiedQ] = await Promise.all([
-    fetchCompanyProfile(sym).catch(() => null),
-    finnhubGetQuote(sym).catch(() => null),
-    fetchBasicFinancials(sym).catch(() => null),
+  const hk = isHkSymbol(sym);
+  const ySym = hk ? toYahooSymbol(sym) : sym;
+
+  const [profile, finnQ, fin, unifiedQ, yahooQ] = await Promise.all([
+    hk ? Promise.resolve(null) : fetchCompanyProfile(sym).catch(() => null),
+    hk ? Promise.resolve(null) : finnhubGetQuote(sym).catch(() => null),
+    hk ? Promise.resolve(null) : fetchBasicFinancials(sym).catch(() => null),
     getUnifiedQuote(sym).catch(() => null),
+    hk ? getYahooQuote(ySym).catch(() => null) : Promise.resolve(null),
   ]);
 
-  const q = finnQ?.c ? finnQ : unifiedQ;
+  const q =
+    hk && yahooQ?.c
+      ? yahooQ
+      : finnQ?.c
+        ? finnQ
+        : unifiedQ?.c
+          ? unifiedQ
+          : yahooQ;
   if (q?.c) {
     base.price = q.c;
     base.changeAbs = q.d ?? null;
@@ -70,7 +87,9 @@ export async function fetchTickerMarketSnapshot(symbol: string): Promise<TickerM
     base.prevClose = q.pc ?? null;
   }
 
-  if (profile) {
+  if (hk) {
+    base.currency = yahooQ?.currency ?? "HKD";
+  } else if (profile) {
     base.currency = profile.currency || "USD";
     base.ipo = profile.ipo || null;
     if (profile.marketCapitalization > 0) base.marketCapM = profile.marketCapitalization;
@@ -92,8 +111,8 @@ export async function fetchTickerMarketSnapshot(symbol: string): Promise<TickerM
     if (capM) base.marketCapM = capM;
   }
 
-  if (!base.marketCapM || !base.peTtm) {
-    const y = await fetchYahooFundamentals(toYahooSymbol(sym)).catch(() => null);
+  if (!base.marketCapM || !base.peTtm || hk) {
+    const y = await fetchYahooFundamentals(ySym).catch(() => null);
     if (y) {
       if (!base.marketCapM && y.marketCap) base.marketCapM = y.marketCap / 1e6;
       if (!base.peTtm && y.trailingPE) base.peTtm = y.trailingPE;
