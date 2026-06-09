@@ -74,14 +74,18 @@ export async function TopRatedPanel({ limit = 6 }: { limit?: number }) {
                 </div>
                 <p className="flex-1 truncate text-[12px] text-foreground-soft">{r.name}</p>
 
-                {r.ops_verdict ? (
-                  <span
-                    className="inline-flex h-6 items-center justify-center rounded-sm px-2 font-mono text-[10px] font-bold text-white"
-                    style={{ background: VERDICT_BG[r.ops_verdict] }}
-                  >
-                    {VERDICT_LABELS[r.ops_verdict].en}
-                  </span>
-                ) : null}
+                <div className="flex w-24 shrink-0 justify-center">
+                  {r.ops_verdict ? (
+                    <span
+                      className="inline-flex h-6 items-center justify-center rounded-sm px-2 font-mono text-[10px] font-bold text-white"
+                      style={{ background: VERDICT_BG[r.ops_verdict] }}
+                    >
+                      {VERDICT_LABELS[r.ops_verdict].en}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-muted-soft">—</span>
+                  )}
+                </div>
 
                 <ScoreChip label="OPS" value={ops} />
                 <ScoreChip label="STR" value={street} />
