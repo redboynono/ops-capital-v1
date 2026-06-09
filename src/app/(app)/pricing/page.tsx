@@ -3,6 +3,7 @@ import { PricingProductGrid } from "@/components/pricing-product-grid";
 import { getSessionUser } from "@/lib/auth";
 import { hasOptionAlphaAccess, hasResearchAccess } from "@/lib/entitlements";
 import { isMockMode } from "@/lib/payments/gateways";
+import { getPrimaryPayChannel } from "@/lib/payments/stripe";
 import { PRODUCT_COPY, type ProductLine } from "@/lib/payments/plans";
 import { isSubscriptionActive } from "@/lib/subscription";
 
@@ -17,6 +18,7 @@ export default async function PricingPage({
   const sp = await searchParams;
   const user = await getSessionUser();
   const mock = isMockMode();
+  const primaryChannel = getPrimaryPayChannel();
   const initialProduct: ProductLine =
     sp.product === "research" || sp.product === "options" || sp.product === "bundle"
       ? sp.product
@@ -72,6 +74,7 @@ export default async function PricingPage({
         loggedIn={Boolean(user)}
         userEmail={user?.email ?? null}
         initialProduct={initialProduct}
+        primaryChannel={primaryChannel}
       />
 
       <section className="card mt-6 p-5">
@@ -93,8 +96,11 @@ export default async function PricingPage({
       <section className="mt-6 text-[12px] leading-relaxed text-muted">
         <h3 className="label-caps text-[11px]">支付说明</h3>
         <p className="mt-2">
-          由 Gumroad 处理（银行卡 / PayPal）。结账邮箱须与 opscapital 注册邮箱一致。
-          Option Alpha 与 Research 目前共用同一 Gumroad 时长档位，产品线以订单 <code>plan_id</code> 为准。
+          {primaryChannel === "stripe"
+            ? "由 Stripe Checkout 处理（银行卡 / Apple Pay 等）。付款成功后 Webhook 自动开通对应 plan_id 权益。"
+            : "由 Gumroad 处理（银行卡 / PayPal）。结账邮箱须与 opscapital 注册邮箱一致。"}
+          {" "}
+          Option Alpha 与 Research 以订单 <code>plan_id</code> 区分权益。
         </p>
         <p className="mt-2">
           <Link href="/help" className="text-accent-strong hover:underline">

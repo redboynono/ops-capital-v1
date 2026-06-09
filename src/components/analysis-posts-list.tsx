@@ -6,10 +6,12 @@ const PAGE_SIZE = 40;
 
 export async function AnalysisPostsList({
   symbol,
+  symbols,
   sector,
   period,
 }: {
   symbol?: string;
+  symbols?: string[];
   sector?: string;
   period?: PostPeriod;
 }) {
@@ -17,6 +19,7 @@ export async function AnalysisPostsList({
     kind: "analysis",
     limit: PAGE_SIZE,
     symbol,
+    symbols,
     sector,
     period,
   });

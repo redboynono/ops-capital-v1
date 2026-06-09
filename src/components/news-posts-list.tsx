@@ -14,11 +14,18 @@ function formatListTime(iso: string) {
   return `${mm}/${dd} ${hh}:${mi}`;
 }
 
-export async function NewsPostsList({ symbol }: { symbol?: string }) {
+export async function NewsPostsList({
+  symbol,
+  symbols,
+}: {
+  symbol?: string;
+  symbols?: string[];
+}) {
   const items = await getCachedPosts({
     kind: "news",
     limit: PAGE_SIZE,
     symbol,
+    symbols,
   });
 
   if (items.length === 0) {

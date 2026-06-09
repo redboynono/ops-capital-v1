@@ -18,6 +18,7 @@ export function getCachedPosts(
     kind?: PostKind;
     limit?: number;
     symbol?: string;
+    symbols?: string[];
     sector?: string;
     period?: PostPeriod;
   } = {},
@@ -25,15 +26,16 @@ export function getCachedPosts(
   const kind = opts.kind ?? "";
   const limit = String(opts.limit ?? 0);
   const symbol = opts.symbol ?? "";
+  const symbolsKey = (opts.symbols ?? []).join(",");
   const sector = opts.sector ?? "";
   const period = opts.period ?? "";
 
   const isDefaultFeed =
-    !symbol && !sector && !period && limit !== "0";
+    !symbol && !symbolsKey && !sector && !period && limit !== "0";
   const revalidate =
     isDefaultFeed && (kind === "analysis" || kind === "news") ? 180 : 120;
 
-  return unstable_cache(async () => listPosts(opts), ["posts", kind, limit, symbol, sector, period], {
+  return unstable_cache(async () => listPosts(opts), ["posts", kind, limit, symbol, symbolsKey, sector, period], {
     revalidate,
     tags: ["posts"],
   })();

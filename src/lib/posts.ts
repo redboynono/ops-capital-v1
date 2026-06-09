@@ -54,24 +54,30 @@ export async function listPosts(
     kind?: PostKind;
     limit?: number;
     symbol?: string;
+    symbols?: string[];
     sector?: string;
     period?: PostPeriod;
   } = {},
 ) {
-  const { kind, limit, symbol, sector, period } = opts;
+  const { kind, limit, symbol, symbols, sector, period } = opts;
   const params: unknown[] = [];
   let sql =
     "select distinct p.id, p.title, p.slug, p.kind, p.excerpt, p.is_premium, p.created_at from posts p";
   const wheres: string[] = ["p.is_published = 1"];
   const joins: string[] = [];
 
-  if (symbol || sector) {
+  const symbolFilter = symbols?.length ? symbols : symbol ? [symbol] : [];
+
+  if (symbolFilter.length || sector) {
     joins.push("inner join post_tickers pt on pt.post_id = p.id");
     if (sector) joins.push("inner join tickers tk on tk.symbol = pt.symbol");
   }
-  if (symbol) {
+  if (symbolFilter.length === 1) {
     wheres.push("pt.symbol = ?");
-    params.push(symbol);
+    params.push(symbolFilter[0]);
+  } else if (symbolFilter.length > 1) {
+    wheres.push(`pt.symbol in (${symbolFilter.map(() => "?").join(",")})`);
+    params.push(...symbolFilter);
   }
   if (sector) {
     wheres.push("tk.sector = ?");

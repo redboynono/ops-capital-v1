@@ -14,10 +14,12 @@ export function PricingProductGrid({
   loggedIn,
   userEmail,
   initialProduct = "bundle",
+  primaryChannel = "gumroad",
 }: {
   loggedIn: boolean;
   userEmail?: string | null;
   initialProduct?: ProductLine;
+  primaryChannel?: "stripe" | "gumroad";
 }) {
   const [product, setProduct] = useState<ProductLine>(initialProduct);
   const plans = useMemo(() => plansForProduct(product), [product]);
@@ -65,7 +67,7 @@ export function PricingProductGrid({
           plans={plans}
           loggedIn={loggedIn}
           userEmail={userEmail}
-          primaryChannel="gumroad"
+          primaryChannel={primaryChannel}
           showAltChannels={false}
         />
       </div>

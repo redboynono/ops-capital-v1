@@ -8,21 +8,22 @@ type Props = {
   plans: Plan[];
   loggedIn: boolean;
   userEmail?: string | null;       // 已登录用户的注册邮箱，用于 Gumroad 结账提醒
-  primaryChannel: "gumroad" | "alipay" | "wechat";
+  primaryChannel: "stripe" | "gumroad" | "alipay" | "wechat";
   showAltChannels: boolean;       // 是否显示支付宝 / 微信 备选按钮
 };
 
 type CheckoutResp = {
   ok: true;
   mock: boolean;
-  order: { out_trade_no: string; amount: number; duration_months: number; pay_channel: "alipay" | "wechat" | "gumroad"; plan_id: string };
+  order: { out_trade_no: string; amount: number; duration_months: number; pay_channel: "alipay" | "wechat" | "gumroad" | "stripe"; plan_id: string };
   checkout:
     | { kind: "redirect"; payUrl: string }
     | { kind: "qrcode"; codeUrl: string };
 } | { error: string; code?: string };
 
 const CHANNEL_LABEL: Record<string, string> = {
-  gumroad: "立即购买（信用卡 / PayPal）",
+  stripe: "立即购买（Stripe · 卡 / Apple Pay）",
+  gumroad: "立即购买（Gumroad · 卡 / PayPal）",
   alipay: "支付宝",
   wechat: "微信支付",
 };
@@ -47,7 +48,7 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
   }>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const submit = async (channel: "gumroad" | "alipay" | "wechat") => {
+  const submit = async (channel: "stripe" | "gumroad" | "alipay" | "wechat") => {
     if (!loggedIn) {
       window.location.href = `/login?redirect=/pricing`;
       return;
@@ -58,7 +59,7 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
 
     // 先打开一个空白窗口（user gesture 同步触发，避免被弹窗拦截）。
     // 拿到 payUrl 后再赋值 location.href。
-    const popup = channel === "gumroad" ? window.open("about:blank", "_blank") : null;
+    const popup = channel === "gumroad" || channel === "stripe" ? window.open("about:blank", "_blank") : null;
 
     try {
       const res = await fetch("/api/pay/create", {
@@ -214,6 +215,21 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
         >
           {busy === primaryChannel ? "生成订单中..." : CHANNEL_LABEL[primaryChannel]}
         </button>
+
+        {primaryChannel === "stripe" ? (
+          <>
+            {loggedIn && userEmail ? (
+              <p className="text-center text-[11px] text-muted">
+                将使用注册邮箱 <span className="font-mono font-semibold text-foreground">{userEmail}</span> 预填 Stripe 结账页
+              </p>
+            ) : null}
+            <p className="text-center text-[11px] text-muted">
+              支付由 Stripe 处理 · 支持全球银行卡 / Apple Pay / Link 等 125+ 支付方式
+              <br />
+              付款成功后自动返回本站并开通会员（Webhook 通常在数秒内到账）
+            </p>
+          </>
+        ) : null}
 
         {primaryChannel === "gumroad" ? (
           <>

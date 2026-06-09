@@ -2,6 +2,9 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
+import { ValueChainStack } from "@/components/marketing/value-chain-stack";
+import { AI_VALUE_CHAIN_LAYERS, INVESTMENT_FOCUS } from "@/lib/marketing/ai-value-chain";
+import { getValueChainLinkage } from "@/lib/marketing/value-chain-data";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +14,6 @@ function shouldRedirectGumroadReturn(referer: string | null): boolean {
   return /gumroad\.com/i.test(referer);
 }
 
-// Bridgewater-inspired marketing site: cream background, serif headings, gold accent, generous whitespace.
 const theme = {
   bg: "#f5f1ea",
   bgAlt: "#ede7dc",
@@ -40,26 +42,21 @@ const beliefs = [
   },
 ];
 
-const pillars = [
-  {
-    k: "全球宏观映射",
-    body: "追踪全球流动性、利率与地缘变量，将宏观状态映射到资产配置与风险敞口。",
-  },
-  {
-    k: "科技基本面与估值博弈",
-    body: "深度拆解美股科技、港股互联网与半导体供应链，研判估值溢价与戴维斯双击 / 双杀。",
-  },
-  {
-    k: "AI × 多资产组合",
-    body: "AI 辅助研究流水线，横跨美股、港股、加密资产与 Pre-IPO，寻找跨市场套利与结构性机会。",
-  },
+const alphaFeatures = [
+  "AI 产业六层价值链 · 全链标的覆盖与评级",
+  "机构级深度研报 + 估值模型与因子评分",
+  "半导体 / 算力 / 大模型 / Agent 每日快讯",
+  "自选股桌面 · 评级变动 · AI 编辑流水线",
 ];
 
-const alphaFeatures = [
-  "机构级分析长文 + 估值模型",
-  "全市场标的聚合页（美股 / 港股 / 加密）",
-  "自选股桌面 · 收藏 · 阅读历史",
-  "AI 编辑流水线 · 每日更新分析与快讯",
+const coverageTags = [
+  "晶圆代工",
+  "光刻 / HBM",
+  "GPU / ASIC",
+  "算力云",
+  "Hyperscaler",
+  "大模型",
+  "AI Agent",
 ];
 
 export default async function MarketingHome() {
@@ -68,12 +65,11 @@ export default async function MarketingHome() {
     redirect("/pricing");
   }
 
-  const user = await getSessionUser();
+  const [user, linkage] = await Promise.all([getSessionUser(), getValueChainLinkage()]);
   const ctaLabel = user ? "打开 Alpha 工作台" : "进入 OPS Alpha";
 
   return (
     <main style={{ background: theme.bg, color: theme.ink, fontFamily: '"Noto Serif SC", "Songti SC", Georgia, serif' }}>
-      {/* Top nav */}
       <header
         className="sticky top-0 z-30 backdrop-blur"
         style={{ background: `${theme.bg}e6`, borderBottom: `1px solid ${theme.line}` }}
@@ -91,8 +87,9 @@ export default async function MarketingHome() {
             className="hidden items-center gap-8 text-[13px] tracking-wide md:flex"
             style={{ color: theme.inkSoft }}
           >
+            <a href="#focus" className="hover:opacity-70">投资重点</a>
+            <a href="#value-chain" className="hover:opacity-70">六层价值链</a>
             <a href="#philosophy" className="hover:opacity-70">理念</a>
-            <a href="#approach" className="hover:opacity-70">投资方式</a>
             <a href="#alpha" className="hover:opacity-70">OPS Alpha</a>
             <Link href="/contact" className="hover:opacity-70">联系</Link>
           </nav>
@@ -124,27 +121,35 @@ export default async function MarketingHome() {
       </header>
 
       {/* Hero */}
-      <section className="mx-auto max-w-[1200px] px-6 pb-24 pt-20 md:pt-32">
-        <p
-          className="text-[11px] font-semibold tracking-[0.36em]"
-          style={{ color: theme.gold }}
-        >
-          OPS CAPITAL · SINCE 2021
+      <section className="mx-auto max-w-[1200px] px-6 pb-20 pt-20 md:pt-28">
+        <p className="text-[11px] font-semibold tracking-[0.36em]" style={{ color: theme.gold }}>
+          OPS CAPITAL · AI & SEMICONDUCTORS
         </p>
         <h1
           className="mt-6 text-5xl leading-[1.08] md:text-7xl"
           style={{ color: theme.ink, letterSpacing: "-0.01em" }}
         >
-          穿越周期的<br />
-          <span style={{ fontStyle: "italic", color: theme.gold }}>中国</span>投资机构
+          深耕 AI 与<br />
+          <span style={{ fontStyle: "italic", color: theme.gold }}>半导体</span>价值链
         </h1>
-        <p
-          className="mt-8 max-w-2xl text-[17px] leading-[1.85]"
-          style={{ color: theme.inkSoft }}
-        >
-          OPS Capital 以系统化研究、原则驱动的决策与 AI 杠杆，帮助长期投资者理解宏观、识别阿尔法、
-          穿越周期。我们相信好的投资，来自严格的研究流程与不被情绪左右的纪律执行。
+        <p className="mt-8 max-w-2xl text-[17px] leading-[1.85]" style={{ color: theme.inkSoft }}>
+          OPS Capital 以六层产业框架系统追踪 AI 算力革命——从晶圆制造、芯片设计、算力基建，
+          到云分发、大模型与 Agent 应用。我们用原则驱动的研究与 AI 杠杆，帮助长期投资者在
+          物理瓶颈与估值博弈中识别结构性阿尔法。
         </p>
+
+        <div className="mt-8 flex flex-wrap gap-2">
+          {coverageTags.map((tag) => (
+            <span
+              key={tag}
+              className="px-3 py-1.5 text-[12px] tracking-wide"
+              style={{ border: `1px solid ${theme.line}`, color: theme.muted }}
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+
         <div className="mt-10 flex flex-wrap items-center gap-5 text-[13px]">
           <Link
             href="/alpha"
@@ -153,29 +158,26 @@ export default async function MarketingHome() {
           >
             {ctaLabel} →
           </Link>
-          <a href="#philosophy" style={{ color: theme.ink }} className="border-b pb-0.5" >
-            了解我们的投资理念
+          <a href="#value-chain" style={{ color: theme.ink }} className="border-b pb-0.5">
+            探索六层价值链模型
           </a>
         </div>
       </section>
 
-      {/* Divider stat band */}
+      {/* Stats */}
       <section style={{ background: theme.bgAlt, borderTop: `1px solid ${theme.line}`, borderBottom: `1px solid ${theme.line}` }}>
         <div className="mx-auto grid max-w-[1200px] grid-cols-2 gap-8 px-6 py-12 md:grid-cols-4">
           {[
-            { k: "覆盖市场", v: "4+" },
-            { k: "研究标的", v: "500+" },
-            { k: "AI 模型", v: "多模态" },
-            { k: "决策原则", v: "可回溯" },
+            { k: "价值链层级", v: "L0–L5" },
+            { k: "核心标的", v: "30+" },
+            { k: "研究深度", v: "机构级" },
+            { k: "更新频率", v: "每日" },
           ].map((s) => (
             <div key={s.k}>
               <p className="text-[11px] tracking-[0.28em]" style={{ color: theme.muted }}>
                 {s.k.toUpperCase()}
               </p>
-              <p
-                className="mt-3 text-4xl md:text-5xl"
-                style={{ color: theme.ink, letterSpacing: "-0.02em" }}
-              >
+              <p className="mt-3 text-4xl md:text-5xl" style={{ color: theme.ink, letterSpacing: "-0.02em" }}>
                 {s.v}
               </p>
             </div>
@@ -183,80 +185,44 @@ export default async function MarketingHome() {
         </div>
       </section>
 
-      {/* Who We Are */}
-      <section id="who" className="mx-auto max-w-[1200px] px-6 py-24">
+      {/* Investment Focus */}
+      <section id="focus" className="mx-auto max-w-[1200px] px-6 py-24">
         <div className="grid gap-12 md:grid-cols-[1fr_1.4fr]">
           <div>
             <p className="text-[11px] font-semibold tracking-[0.32em]" style={{ color: theme.gold }}>
-              WHO WE ARE
+              INVESTMENT FOCUS
             </p>
             <h2 className="mt-4 text-3xl md:text-4xl" style={{ letterSpacing: "-0.01em" }}>
-              研究是核心，<br />AI 是杠杆。
+              AI 算力革命，<br />
+              我们的主战场。
             </h2>
           </div>
           <div className="space-y-6 text-[16px] leading-[1.9]" style={{ color: theme.inkSoft }}>
             <p>
-              OPS Capital 是一家以研究为核心、以 AI 为杠杆的投资机构。我们的组合横跨美股科技、港股
-              互联网、半导体供应链、加密资产与 Pre-IPO 市场。
+              2024–2026 年，全球资本开支重心已从「模型参数竞赛」转向「物理产能与能源约束」。
+              我们聚焦半导体制造链、AI 算力基础设施与大模型商业化三条主线，以 OPS 自研的
+              六层价值链模型贯穿选股、评级与仓位决策。
             </p>
             <p>
-              我们相信，好的投资是把资深研究员的 judgment 抽象为原则，再用系统与 AI 复制给整个团队——
-              让好的决策可以扩展，让坏的决策在发生前就被识别。
+              组合横跨台积电 / 英伟达等定价权龙头、Equinix / Nebius 等算力地产、
+              以及 Azure / AWS 等云分发入口——并在 L4/L5 持续跟踪大模型 IPO 与 Agent 范式迁移。
             </p>
           </div>
         </div>
-      </section>
 
-      {/* Philosophy */}
-      <section
-        id="philosophy"
-        style={{ background: theme.ink, color: theme.bg }}
-        className="px-6 py-24"
-      >
-        <div className="mx-auto max-w-[1200px]">
-          <p className="text-[11px] font-semibold tracking-[0.32em]" style={{ color: theme.gold }}>
-            WHAT WE BELIEVE
-          </p>
-          <h2 className="mt-4 text-3xl md:text-5xl" style={{ letterSpacing: "-0.01em" }}>
-            我们的信念
-          </h2>
-
-          <div className="mt-16 grid gap-12 md:grid-cols-3">
-            {beliefs.map((b) => (
-              <div key={b.k}>
-                <p className="text-[11px] tracking-[0.36em]" style={{ color: theme.gold }}>
-                  {b.k}
-                </p>
-                <h3 className="mt-5 text-2xl" style={{ letterSpacing: "-0.01em" }}>{b.title}</h3>
-                <p className="mt-4 text-[15px] leading-[1.9]" style={{ color: "#c8c2b4" }}>
-                  {b.body}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Approach */}
-      <section id="approach" className="mx-auto max-w-[1200px] px-6 py-24">
-        <p className="text-[11px] font-semibold tracking-[0.32em]" style={{ color: theme.gold }}>
-          HOW WE INVEST
-        </p>
-        <h2 className="mt-4 text-3xl md:text-5xl" style={{ letterSpacing: "-0.01em" }}>
-          三条方法论主轴
-        </h2>
-
-        <div className="mt-12 grid gap-8 md:grid-cols-3">
-          {pillars.map((p, i) => (
+        <div className="mt-14 grid gap-8 md:grid-cols-3">
+          {INVESTMENT_FOCUS.map((p, i) => (
             <article
               key={p.k}
               className="p-8"
               style={{ border: `1px solid ${theme.line}`, background: i === 1 ? theme.bgAlt : "transparent" }}
             >
               <p className="text-[11px] tracking-[0.32em]" style={{ color: theme.muted }}>
-                PILLAR {String(i + 1).padStart(2, "0")}
+                FOCUS {String(i + 1).padStart(2, "0")}
               </p>
-              <h3 className="mt-4 text-xl" style={{ letterSpacing: "-0.01em" }}>{p.k}</h3>
+              <h3 className="mt-4 text-xl" style={{ letterSpacing: "-0.01em" }}>
+                {p.k}
+              </h3>
               <p className="mt-4 text-[14px] leading-[1.85]" style={{ color: theme.inkSoft }}>
                 {p.body}
               </p>
@@ -265,7 +231,71 @@ export default async function MarketingHome() {
         </div>
       </section>
 
-      {/* OPS Alpha Channel */}
+      {/* Six-Layer Value Chain */}
+      <section
+        id="value-chain"
+        style={{ background: theme.ink, color: theme.bg }}
+        className="px-6 py-24"
+      >
+        <div className="mx-auto max-w-[1200px]">
+          <div className="grid gap-12 lg:grid-cols-[1fr_1.15fr] lg:gap-16">
+            <div className="lg:sticky lg:top-28 lg:self-start">
+              <p className="text-[11px] font-semibold tracking-[0.32em]" style={{ color: theme.gold }}>
+                AI VALUE CHAIN · L0 → L5
+              </p>
+              <h2 className="mt-4 text-3xl md:text-5xl" style={{ letterSpacing: "-0.01em" }}>
+                AI 产业<br />六层价值链
+              </h2>
+              <p className="mt-6 text-[15px] leading-[1.9]" style={{ color: "#c8c2b4" }}>
+                自研产业框架，自下而上穿透物理制造（L0）到智能体应用（L5）。
+                每一层标注核心代表、2026 年商业与技术趋势，并映射到 OPS Alpha 的标的评级与深度研报。
+              </p>
+              <p className="mt-6 text-[13px] italic" style={{ color: "#8a857a" }}>
+                — Steven Sun · CIO, OPS Capital
+              </p>
+              <Link
+                href="/tickers"
+                className="mt-8 inline-block px-6 py-3 text-[13px] font-semibold"
+                style={{ border: `1px solid ${theme.gold}`, color: theme.gold }}
+              >
+                浏览全市场标的 →
+              </Link>
+            </div>
+
+            <div>
+              <ValueChainStack layers={AI_VALUE_CHAIN_LAYERS} linkage={linkage} theme={theme} />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Philosophy */}
+      <section id="philosophy" className="mx-auto max-w-[1200px] px-6 py-24">
+        <p className="text-[11px] font-semibold tracking-[0.32em]" style={{ color: theme.gold }}>
+          WHAT WE BELIEVE
+        </p>
+        <h2 className="mt-4 text-3xl md:text-5xl" style={{ letterSpacing: "-0.01em" }}>
+          我们的信念
+        </h2>
+
+        <div className="mt-16 grid gap-12 md:grid-cols-3">
+          {beliefs.map((b) => (
+            <div key={b.k}>
+              <p className="text-[11px] tracking-[0.36em]" style={{ color: theme.gold }}>
+                {b.k}
+              </p>
+              <h3 className="mt-5 text-2xl" style={{ letterSpacing: "-0.01em" }}>
+                {b.title}
+              </h3>
+              <p className="mt-4 text-[15px] leading-[1.9]" style={{ color: theme.inkSoft }}>
+                {b.body}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* OPS Alpha */}
       <section
         id="alpha"
         style={{ background: theme.bgAlt, borderTop: `1px solid ${theme.line}`, borderBottom: `1px solid ${theme.line}` }}
@@ -277,14 +307,15 @@ export default async function MarketingHome() {
               CHANNEL · OPS ALPHA
             </p>
             <h2 className="mt-4 text-3xl md:text-5xl" style={{ letterSpacing: "-0.01em" }}>
-              OPS Alpha<br />
+              OPS Alpha
+              <br />
               <span style={{ color: theme.muted, fontSize: "0.6em", fontStyle: "italic" }}>
-                AI 驱动的中文投研桌面
+                AI 投研桌面 · 六层框架落地
               </span>
             </h2>
             <p className="mt-6 max-w-xl text-[16px] leading-[1.9]" style={{ color: theme.inkSoft }}>
-              OPS Alpha 是 OPS Capital 面向专业个人投资者开放的研究频道。我们把内部的 AI 研究流水线、
-              标的聚合与估值框架整理成订阅制内容，让你以极低的成本获得机构级视角。
+              OPS Alpha 将 OPS Capital 内部的 AI 研究流水线、六层价值链标的库与量化评级
+              开放给专业个人投资者——以订阅制获得机构级视角，每日跟踪半导体与 AI 产业链动态。
             </p>
 
             <div className="mt-8 flex flex-wrap gap-4 text-[13px]">
@@ -312,51 +343,81 @@ export default async function MarketingHome() {
                 className="flex items-start gap-4 py-4"
                 style={{ borderBottom: `1px solid ${theme.line}` }}
               >
-                <span
-                  className="font-mono text-[12px] pt-1"
-                  style={{ color: theme.gold, letterSpacing: "0.1em" }}
-                >
+                <span className="font-mono pt-1 text-[12px]" style={{ color: theme.gold, letterSpacing: "0.1em" }}>
                   {String(i + 1).padStart(2, "0")}
                 </span>
-                <span className="text-[15px] leading-[1.75]" style={{ color: theme.ink }}>{f}</span>
+                <span className="text-[15px] leading-[1.75]" style={{ color: theme.ink }}>
+                  {f}
+                </span>
               </li>
             ))}
           </ul>
         </div>
       </section>
 
-      {/* Footer / Contact */}
       <footer id="contact" style={{ background: theme.ink, color: theme.bg }} className="px-6 py-16">
-        <div className="mx-auto max-w-[1200px] grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
+        <div className="mx-auto grid max-w-[1200px] gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
           <div>
             <p className="flex items-baseline gap-2 text-[15px] font-bold tracking-[0.2em]">
               <span style={{ color: theme.gold }}>◆</span>
               <span>OPS CAPITAL</span>
             </p>
             <p className="mt-5 max-w-sm text-[14px] leading-[1.9]" style={{ color: "#c8c2b4" }}>
-              OPS Capital is a research-driven investment firm. We combine disciplined principles
-              with AI leverage to navigate cycles across global tech, HK internet, and digital assets.
+              Research-driven investment firm focused on AI & semiconductor value chains.
+              We combine disciplined principles with AI leverage to navigate cycles from
+              wafer fabs to foundation models.
             </p>
           </div>
           <div>
-            <p className="text-[11px] tracking-[0.32em]" style={{ color: theme.gold }}>CHANNELS</p>
+            <p className="text-[11px] tracking-[0.32em]" style={{ color: theme.gold }}>
+              CHANNELS
+            </p>
             <ul className="mt-4 space-y-2 text-[14px]" style={{ color: "#d6d0c2" }}>
-              <li><Link href="/alpha" className="hover:opacity-70">OPS Alpha · 投研桌面</Link></li>
-              <li><Link href="/analysis" className="hover:opacity-70">分析长文</Link></li>
-              <li><Link href="/news" className="hover:opacity-70">市场快讯</Link></li>
-              <li><Link href="/pricing" className="hover:opacity-70">订阅方案</Link></li>
+              <li>
+                <Link href="/alpha" className="hover:opacity-70">
+                  OPS Alpha · 投研桌面
+                </Link>
+              </li>
+              <li>
+                <Link href="/analysis" className="hover:opacity-70">
+                  分析长文
+                </Link>
+              </li>
+              <li>
+                <Link href="/news" className="hover:opacity-70">
+                  市场快讯
+                </Link>
+              </li>
+              <li>
+                <Link href="/pricing" className="hover:opacity-70">
+                  订阅方案
+                </Link>
+              </li>
             </ul>
           </div>
           <div>
-            <p className="text-[11px] tracking-[0.32em]" style={{ color: theme.gold }}>CONTACT</p>
+            <p className="text-[11px] tracking-[0.32em]" style={{ color: theme.gold }}>
+              CONTACT
+            </p>
             <ul className="mt-4 space-y-2 text-[14px]" style={{ color: "#d6d0c2" }}>
-              <li><a href="mailto:steven.sun@opscapital.com" className="hover:opacity-70">steven.sun@opscapital.com</a></li>
+              <li>
+                <a href="mailto:steven.sun@opscapital.com" className="hover:opacity-70">
+                  steven.sun@opscapital.com
+                </a>
+              </li>
               <li>Singapore · Hong Kong</li>
-              <li><Link href="/contact" className="hover:opacity-70" style={{ color: theme.gold }}>查看全部联系方式 →</Link></li>
+              <li>
+                <Link href="/contact" className="hover:opacity-70" style={{ color: theme.gold }}>
+                  查看全部联系方式 →
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
-        <div className="mx-auto mt-12 max-w-[1200px] border-t pt-6 text-[11px]" style={{ borderColor: "#2a2a2a", color: "#8a857a" }}>
+        <div
+          className="mx-auto mt-12 max-w-[1200px] border-t pt-6 text-[11px]"
+          style={{ borderColor: "#2a2a2a", color: "#8a857a" }}
+        >
           © {new Date().getFullYear()} OPS Capital · 本站内容仅供投资研究参考，不构成任何买卖建议。投资有风险，决策需谨慎。
         </div>
       </footer>

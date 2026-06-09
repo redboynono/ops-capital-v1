@@ -3,7 +3,7 @@ import { getMySqlPool, mysqlQuery } from "@/lib/mysql";
 import { applyEntitlementsForUser } from "@/lib/entitlements";
 import { getPlan, type PlanId } from "@/lib/payments/plans";
 
-export type PayChannel = "alipay" | "wechat" | "gumroad";
+export type PayChannel = "alipay" | "wechat" | "gumroad" | "stripe";
 export type OrderStatus = "pending" | "paid" | "failed";
 
 export type Order = {

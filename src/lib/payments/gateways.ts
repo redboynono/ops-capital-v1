@@ -17,6 +17,7 @@
 
 import type { Order } from "@/lib/payments/orders";
 import { buildGumroadCheckoutUrl } from "@/lib/payments/gumroad";
+import { createStripeCheckoutSession } from "@/lib/payments/stripe";
 
 export type CheckoutResult =
   | { kind: "redirect"; payUrl: string }        // 支付宝 PC / Gumroad → 直接跳转
@@ -53,8 +54,11 @@ export async function createCheckout(
   if (MODE === "mock") {
     return createMockCheckout(order);
   }
+  if (order.pay_channel === "stripe") {
+    const payUrl = await createStripeCheckoutSession(order, ctx);
+    return { kind: "redirect", payUrl };
+  }
   if (order.pay_channel === "gumroad") {
-    // Gumroad 走我们自己构造的托管收银台 URL（无需调 API 创建 checkout session）
     return { kind: "redirect", payUrl: buildGumroadCheckoutUrl(order) };
   }
   if (order.pay_channel === "alipay") return createLiveAlipayCheckout(order);

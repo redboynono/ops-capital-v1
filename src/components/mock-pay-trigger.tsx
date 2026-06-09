@@ -5,7 +5,7 @@ import { useState } from "react";
 
 type Props = {
   outTradeNo: string;
-  channel: "alipay" | "wechat" | "gumroad";
+  channel: "alipay" | "wechat" | "gumroad" | "stripe";
   successSig: string;
   failedSig: string;
   initialStatus: "pending" | "paid" | "failed";
