@@ -7,6 +7,7 @@ import {
   isMockMode,
   PaymentChannelNotConfiguredError,
 } from "@/lib/payments/gateways";
+import { getStripeCustomerId, hasUsedTrial } from "@/lib/payments/subscriptions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,8 +49,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 
+  // 订阅模式：复用已有 Stripe customer + 仅首次订阅给试用
+  let existingCustomerId: string | null = null;
+  let trialEligible = false;
+  if (channel === "stripe") {
+    try {
+      [existingCustomerId, trialEligible] = await Promise.all([
+        getStripeCustomerId(user.id),
+        hasUsedTrial(user.id).then((used) => !used),
+      ]);
+    } catch {
+      /* 读取失败不阻断下单，仅按无试用处理 */
+    }
+  }
+
   try {
-    const checkout = await createCheckout(order, { userEmail: user.email });
+    const checkout = await createCheckout(order, {
+      userEmail: user.email,
+      existingCustomerId,
+      trialEligible,
+    });
     return NextResponse.json({
       ok: true,
       mock: isMockMode(),

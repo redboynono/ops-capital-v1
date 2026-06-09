@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { BriefingToggle } from "@/components/briefing-toggle";
+import { ManageSubscriptionButton } from "@/components/manage-subscription-button";
 import { ProfileForm } from "@/components/profile-form";
 import { getSessionUser } from "@/lib/auth";
+import { isSubscriptionActive } from "@/lib/subscription";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,24 @@ export default async function DashboardProfilePage() {
             <dt className="text-muted">订阅状态</dt>
             <dd className="text-accent-strong">{user.subscriptionStatus}</dd>
           </div>
+          {user.subscriptionEndDate ? (
+            <div className="flex items-center justify-between py-2">
+              <dt className="text-muted">本期到期</dt>
+              <dd className="font-mono">
+                {new Date(user.subscriptionEndDate).toLocaleDateString("zh-CN")}
+              </dd>
+            </div>
+          ) : null}
         </dl>
+
+        {isSubscriptionActive({
+          subscriptionStatus: user.subscriptionStatus,
+          subscriptionEndDate: user.subscriptionEndDate,
+        }) ? (
+          <div className="mt-3 border-t border-border pt-3">
+            <ManageSubscriptionButton />
+          </div>
+        ) : null}
       </div>
 
       <section className="card mt-4 p-4">

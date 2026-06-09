@@ -16,7 +16,10 @@
  */
 
 import type { Order } from "@/lib/payments/orders";
-import { createStripeCheckoutSession } from "@/lib/payments/stripe";
+import {
+  createStripeCheckoutSession,
+  type StripeCheckoutContext,
+} from "@/lib/payments/stripe";
 
 export type CheckoutResult =
   | { kind: "redirect"; payUrl: string }        // 支付宝 PC / Gumroad → 直接跳转
@@ -48,7 +51,7 @@ function mockSecret(): string {
 
 export async function createCheckout(
   order: Order,
-  ctx: { userEmail: string },
+  ctx: StripeCheckoutContext,
 ): Promise<CheckoutResult> {
   if (MODE === "mock") {
     return createMockCheckout(order);

@@ -33,11 +33,29 @@ export type Plan = {
   highlight?: boolean;
 };
 
-const DURATION: Record<DurationKey, { months: number; label: string }> = {
-  month: { months: 1, label: "月付" },
-  quarter: { months: 3, label: "季付" },
-  year: { months: 12, label: "年付" },
+/** Stripe 订阅周期：复用 Checkout subscription 模式的 recurring 配置 */
+export type StripeRecurring = {
+  interval: "month" | "year";
+  interval_count: number;
 };
+
+const DURATION: Record<
+  DurationKey,
+  { months: number; label: string; recurring: StripeRecurring }
+> = {
+  month: { months: 1, label: "月付", recurring: { interval: "month", interval_count: 1 } },
+  quarter: { months: 3, label: "季付", recurring: { interval: "month", interval_count: 3 } },
+  year: { months: 12, label: "年付", recurring: { interval: "year", interval_count: 1 } },
+};
+
+/** 新用户首次订阅赠送的免费试用天数（0 = 关闭试用） */
+export const TRIAL_DAYS = 7;
+
+export function recurringForPlan(planId: string): StripeRecurring {
+  const p = getPlan(planId);
+  const key: DurationKey = p ? p.duration : durationFromPlanId(planId);
+  return DURATION[key].recurring;
+}
 
 function plan(
   product: ProductLine,

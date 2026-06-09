@@ -14,3 +14,14 @@ export function plainTeaser(md: string, maxChars = 280): string {
   if (flat.length <= maxChars) return flat;
   return `${flat.slice(0, maxChars).trim()}…`;
 }
+
+/**
+ * 摘要门导语：从正文「第一节」开始预览，避免与已展示的核心结论（excerpt）重复。
+ * 若无 H2 小标题则退化为去掉首个 H1 标题后的整体预览。
+ */
+export function bodyTeaser(md: string, maxChars = 420): string {
+  const trimmed = md.trim();
+  const firstH2 = trimmed.search(/^##\s+/m);
+  const source = firstH2 >= 0 ? trimmed.slice(firstH2) : trimmed.replace(/^#\s+.*$/m, "");
+  return plainTeaser(source, maxChars);
+}

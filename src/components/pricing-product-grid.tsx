@@ -14,10 +14,14 @@ export function PricingProductGrid({
   loggedIn,
   userEmail,
   initialProduct = "bundle",
+  trialEligible = false,
+  trialDays = 0,
 }: {
   loggedIn: boolean;
   userEmail?: string | null;
   initialProduct?: ProductLine;
+  trialEligible?: boolean;
+  trialDays?: number;
 }) {
   const [product, setProduct] = useState<ProductLine>(initialProduct);
   const plans = useMemo(() => plansForProduct(product), [product]);
@@ -66,6 +70,8 @@ export function PricingProductGrid({
           loggedIn={loggedIn}
           userEmail={userEmail}
           showAltChannels={false}
+          trialEligible={trialEligible}
+          trialDays={trialDays}
         />
       </div>
     </div>

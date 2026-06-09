@@ -70,6 +70,15 @@ export async function recordRead(userId: string, postId: string) {
   );
 }
 
+/** 某篇文章的去重阅读人数（reading_history 每用户每文一条），用于摘要门社会证明 */
+export async function getPostReaderCount(postId: string): Promise<number> {
+  const rows = await mysqlQuery<{ total: number }[]>(
+    "select count(*) as total from reading_history where post_id = ?",
+    [postId],
+  );
+  return Number(rows[0]?.total ?? 0);
+}
+
 export async function getMemberStats(userId: string) {
   const [bookmarkRows, historyRows, weeklyRows] = await Promise.all([
     mysqlQuery<{ total: number }[]>("select count(*) as total from bookmarks where user_id = ?", [userId]),

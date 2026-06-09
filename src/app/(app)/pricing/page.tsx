@@ -3,7 +3,8 @@ import { PricingProductGrid } from "@/components/pricing-product-grid";
 import { getSessionUser } from "@/lib/auth";
 import { hasOptionAlphaAccess, hasResearchAccess } from "@/lib/entitlements";
 import { isMockMode } from "@/lib/payments/gateways";
-import { PRODUCT_COPY, type ProductLine } from "@/lib/payments/plans";
+import { PRODUCT_COPY, TRIAL_DAYS, type ProductLine } from "@/lib/payments/plans";
+import { hasUsedTrial } from "@/lib/payments/subscriptions";
 import { isSubscriptionActive } from "@/lib/subscription";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,9 @@ export default async function PricingPage({
         subscriptionEndDate: user.subscriptionEndDate,
       })
     : false;
+
+  // 未登录访客按「可试用」展示（引流）；已登录则按其是否用过试用判定
+  const trialEligible = user ? !(await hasUsedTrial(user.id)) : true;
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-4 py-8 md:px-6">
@@ -72,6 +76,8 @@ export default async function PricingPage({
         loggedIn={Boolean(user)}
         userEmail={user?.email ?? null}
         initialProduct={initialProduct}
+        trialEligible={trialEligible}
+        trialDays={TRIAL_DAYS}
       />
 
       <section className="card mt-6 p-5">

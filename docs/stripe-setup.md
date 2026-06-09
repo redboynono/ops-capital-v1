@@ -32,9 +32,12 @@ Dashboard → **Developers → API keys**
 Dashboard → **Developers → Webhooks → Add endpoint**
 
 - **Endpoint URL**：`https://opscapital.com/api/pay/notify/stripe`
-- **Events**：
-  - `checkout.session.completed`（必开）
-  - `checkout.session.expired`（可选，标记 pending 订单失败）
+- **Events**（订阅模式，全部必开）：
+  - `checkout.session.completed` — 首次订阅成功
+  - `checkout.session.expired` — 收银台过期，标记订单失败
+  - `invoice.paid` / `invoice.payment_succeeded` — 续费扣款成功
+  - `customer.subscription.updated` — 试用转正 / 退订标记 / 欠费
+  - `customer.subscription.deleted` — 订阅终止，收回权益
 
 复制 **Signing secret** → `STRIPE_WEBHOOK_SECRET`
 

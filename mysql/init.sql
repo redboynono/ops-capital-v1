@@ -10,8 +10,13 @@ create table if not exists users (
   password_reset_expires_at datetime null,
   subscription_status enum('inactive','active') not null default 'inactive',
   subscription_end_date datetime null,
+  stripe_customer_id varchar(64) null,
+  stripe_subscription_id varchar(64) null,
+  trial_used tinyint(1) not null default 0,
   email_briefing_enabled tinyint(1) not null default 0,
-  created_at datetime not null default current_timestamp
+  created_at datetime not null default current_timestamp,
+  key idx_users_stripe_customer (stripe_customer_id),
+  key idx_users_stripe_subscription (stripe_subscription_id)
 );
 
 create table if not exists posts (

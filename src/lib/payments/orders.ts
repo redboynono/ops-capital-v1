@@ -219,6 +219,26 @@ export async function createPaidOrderAndExtend(opts: {
 }
 
 /**
+ * 仅把发起订阅的订单标记为 paid（不修改用户订阅，订阅由 Stripe Webhook 同步驱动）。
+ * 幂等：已 paid 则跳过。用于 subscription 模式下 checkout.session.completed。
+ */
+export async function markOrderPaid(opts: {
+  outTradeNo: string;
+  gatewayTradeNo: string;
+  payload: string;
+}): Promise<void> {
+  await mysqlQuery(
+    `update orders
+        set status = 'paid',
+            gateway_trade_no = ?,
+            gateway_payload = ?,
+            paid_at = coalesce(paid_at, now())
+      where out_trade_no = ? and status <> 'paid'`,
+    [opts.gatewayTradeNo, opts.payload, opts.outTradeNo],
+  );
+}
+
+/**
  * 标记订单为 failed。幂等。非 paid 状态下才能落到 failed。
  */
 export async function markOrderFailed(outTradeNo: string, payload?: string): Promise<void> {

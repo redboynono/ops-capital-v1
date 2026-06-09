@@ -220,14 +220,16 @@ a:hover {
 }
 .paywall-sticky-card .pw-headline h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
+  letter-spacing: 0.01em;
   color: var(--foreground);
 }
 .paywall-sticky-card .pw-headline p {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: var(--muted);
+  margin: 3px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--foreground-soft);
 }
 .paywall-sticky-card .pw-prices {
   display: flex;
@@ -237,15 +239,17 @@ a:hover {
 .paywall-sticky-card .pw-price {
   border: 1px solid var(--accent);
   border-radius: 4px;
-  padding: 6px 10px;
+  padding: 9px 14px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
   background: #fff;
   text-decoration: none;
   color: var(--foreground);
   transition: background 0.15s;
 }
 .paywall-sticky-card .pw-price strong {
+  font-size: 15px;
   color: var(--accent-strong);
 }
 .paywall-sticky-card .pw-price.primary {
@@ -273,6 +277,154 @@ a:hover {
   border-color: #b8860b;
   background: #f0e6cc;
   color: #8a4a1a;
+}
+
+/* ---------- Bloomberg-style AI summary gate (non-subscribers) ---------- */
+.ops-summary {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 18px 20px;
+  margin: 4px 0 0;
+}
+.ops-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.ops-summary-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: var(--accent);
+  color: #0a0a0d;
+  padding: 3px 9px;
+  border-radius: 3px;
+}
+.ops-summary-tag {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.ops-summary-lede {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.75;
+  font-weight: 500;
+  color: var(--foreground);
+}
+.ops-summary-teaser {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--foreground-soft);
+}
+.ops-summary-locked {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+.ops-summary-locked-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+.ops-summary-locked ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+}
+.ops-summary-locked li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.ops-summary-locked li::before {
+  content: "🔒";
+  position: absolute;
+  left: 0;
+  font-size: 11px;
+  opacity: 0.65;
+}
+.ops-summary-locked-link {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.12s;
+}
+.ops-summary-locked-link:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+.ops-summary-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.ops-summary-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 5px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.ops-summary-cta:hover {
+  background: var(--accent-strong);
+}
+.ops-summary-cta-price {
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.ops-summary-social {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Reader mode (cream parchment) overrides */
+.reader-mode .ops-summary {
+  background: #fffdf8;
+  border-color: #d8d0c2;
+  border-left-color: #b08b57;
+}
+.reader-mode .ops-summary-badge {
+  background: #b08b57;
+  color: #fff;
+}
+.reader-mode .ops-summary-tag {
+  color: #8a7a55;
+}
+.reader-mode .ops-summary-lede {
+  color: #2a2a2a;
+}
+.reader-mode .ops-summary-teaser {
+  color: #4a4438;
+}
+.reader-mode .ops-summary-locked-title {
+  color: #8a4c0e;
+}
+.reader-mode .ops-summary-locked li {
+  color: #6b5c3f;
 }
 
 .link-title {
@@ -357,6 +509,23 @@ a:hover {
   background: rgba(176,139,87,0.15);
   color: #6b5c3f;
   border: 1px solid rgba(176,139,87,0.35);
+}
+/* 阅读模式（米色纸张）下，把暗色主题的 soft/muted 语义色改成暖深色，否则浅灰字看不清 */
+.terminal .reader-mode {
+  --foreground-soft: #4a4438;
+  --muted: #6b5c3f;
+  --muted-soft: #8a7a55;
+}
+
+/* 文章导语/摘要：两套主题都给明确可读色（终端=清晰浅灰，阅读=暖深色），绝不用琥珀金 */
+.article-lede {
+  color: var(--foreground-soft);
+}
+.terminal .article-lede {
+  color: #cdcdd4;
+}
+.terminal .reader-mode .article-lede {
+  color: #3f3a30;
 }
 
 /* shared form input look (works in both root and .terminal scope) */

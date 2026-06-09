@@ -11,6 +11,10 @@ type Props = {
   loggedIn: boolean;
   userEmail?: string | null;
   showAltChannels: boolean;
+  /** 首次订阅可享免费试用 */
+  trialEligible?: boolean;
+  /** 免费试用天数（0 表示关闭） */
+  trialDays?: number;
 };
 
 type CheckoutResp = {
@@ -22,7 +26,15 @@ type CheckoutResp = {
     | { kind: "qrcode"; codeUrl: string };
 } | { error: string; code?: string };
 
-export function PricingCheckout({ plans, loggedIn, userEmail, showAltChannels }: Props) {
+export function PricingCheckout({
+  plans,
+  loggedIn,
+  userEmail,
+  showAltChannels,
+  trialEligible = false,
+  trialDays = 0,
+}: Props) {
+  const showTrial = trialEligible && trialDays > 0;
   const [selectedPlan, setSelectedPlan] = useState<string>(
     plans.find((p) => p.highlight)?.id ?? plans[0].id,
   );
@@ -207,8 +219,18 @@ export function PricingCheckout({ plans, loggedIn, userEmail, showAltChannels }:
           disabled={busy !== null}
           className="btn-primary w-full py-3.5 text-[15px] font-semibold disabled:opacity-50"
         >
-          {busy === PAY_CHANNEL ? "生成订单中..." : "立即订阅（Stripe · 卡 / Apple Pay）"}
+          {busy === PAY_CHANNEL
+            ? "生成订单中..."
+            : showTrial
+              ? `免费试用 ${trialDays} 天，到期自动续费`
+              : "立即订阅（Stripe · 卡 / Apple Pay）"}
         </button>
+
+        {showTrial ? (
+          <p className="text-center text-[11px] text-[color:var(--accent-strong)]">
+            ✓ 首次订阅享 {trialDays} 天免费试用 · 试用期内可随时取消，不扣款
+          </p>
+        ) : null}
 
         {loggedIn && userEmail ? (
           <p className="text-center text-[11px] text-muted">
@@ -218,7 +240,7 @@ export function PricingCheckout({ plans, loggedIn, userEmail, showAltChannels }:
         <p className="text-center text-[11px] text-muted">
           支付由 Stripe 处理 · 支持全球银行卡 / Apple Pay / Link 等
           <br />
-          付款成功后 Webhook 自动开通会员（通常数秒内到账）
+          订阅自动续费，可随时在「账户 → 管理订阅」中取消
         </p>
 
         {showAltChannels ? (

@@ -5,10 +5,11 @@ import { BookmarkButton } from "@/components/bookmark-button";
 import { ShareButton } from "@/components/share/share-button";
 import { StickyPaywall } from "@/components/sticky-paywall";
 import { getSessionUser } from "@/lib/auth";
-import { isBookmarked, recordRead } from "@/lib/me";
-import { markdownExcerpt } from "@/lib/content-preview";
+import { getPostReaderCount, isBookmarked, recordRead } from "@/lib/me";
+import { bodyTeaser } from "@/lib/content-preview";
 import { hasResearchAccess } from "@/lib/entitlements";
 import { RedactedMarkdown } from "@/lib/paywall";
+import { ArticleSummaryGate } from "@/components/article-summary-gate";
 import { extractTocFromMarkdown, shouldShowToc } from "@/lib/markdown-toc";
 import { buildPostMetadata } from "@/lib/post-metadata";
 import { getPostBySlug } from "@/lib/posts";
@@ -46,11 +47,14 @@ export default async function AnalysisDetailPage({
 
   const canViewFull = !post.is_premium || hasResearchAccess(user);
   const bookmarked = user ? await isBookmarked(user.id, post.id) : false;
+  // 摘要门社会证明：仅非订阅用户需要读者数
+  const readers = canViewFull ? 0 : await getPostReaderCount(post.id);
   if (user) recordRead(user.id, post.id).catch(() => null);
 
   const toggleHref = readerMode ? `/analysis/${post.slug}?reader=0` : `/analysis/${post.slug}`;
   const tocItems = extractTocFromMarkdown(post.content);
-  const showToc = readerMode && shouldShowToc(post.content);
+  // 仅订阅用户渲染正文，故目录侧栏也仅对其展示（否则锚点无对应内容）
+  const showToc = readerMode && canViewFull && shouldShowToc(post.content);
 
   return (
     <ReaderPrefsProvider enabled={readerMode}>
@@ -93,7 +97,9 @@ export default async function AnalysisDetailPage({
         <h1 className="mt-2 font-[var(--font-brand-serif)] text-3xl font-bold leading-snug text-foreground md:text-4xl">
           {post.title}
         </h1>
-        <p className="mt-2 text-[14px] leading-relaxed text-foreground-soft">{post.excerpt}</p>
+        {canViewFull ? (
+          <p className="article-lede mt-2 text-[14px] leading-relaxed">{post.excerpt}</p>
+        ) : null}
         <div className="mt-3 flex items-center gap-2">
           <span className="label-caps">作者</span>
           <span className="text-[12px] font-semibold">Ops Alpha AI · 编辑精选</span>
@@ -119,9 +125,18 @@ export default async function AnalysisDetailPage({
 
       <div className={`flex gap-8 ${readerMode ? "reader-content-flow" : ""} ${showToc ? "xl:pr-0" : ""}`}>
         <article className={`prose prose-sm md:prose-base min-w-0 max-w-none flex-1 py-5 ${readerMode ? "" : "prose-invert"}`}>
-          <RedactedMarkdown redact={false} tocItems={showToc && canViewFull ? tocItems : undefined}>
-            {canViewFull ? post.content : markdownExcerpt(post.content)}
-          </RedactedMarkdown>
+          {canViewFull ? (
+            <RedactedMarkdown redact={false} tocItems={showToc ? tocItems : undefined}>
+              {post.content}
+            </RedactedMarkdown>
+          ) : (
+            <ArticleSummaryGate
+              excerpt={post.excerpt}
+              teaser={bodyTeaser(post.content, 460)}
+              sections={tocItems}
+              readers={readers}
+            />
+          )}
         </article>
         {showToc ? <ArticleToc items={tocItems} readerMode /> : null}
       </div>
