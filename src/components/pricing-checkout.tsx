@@ -4,12 +4,13 @@ import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useRef, useState } from "react";
 import { formatYuan, type Plan } from "@/lib/payments/plans";
 
+const PAY_CHANNEL = "stripe" as const;
+
 type Props = {
   plans: Plan[];
   loggedIn: boolean;
-  userEmail?: string | null;       // 已登录用户的注册邮箱，用于 Gumroad 结账提醒
-  primaryChannel: "stripe" | "gumroad" | "alipay" | "wechat";
-  showAltChannels: boolean;       // 是否显示支付宝 / 微信 备选按钮
+  userEmail?: string | null;
+  showAltChannels: boolean;
 };
 
 type CheckoutResp = {
@@ -21,14 +22,7 @@ type CheckoutResp = {
     | { kind: "qrcode"; codeUrl: string };
 } | { error: string; code?: string };
 
-const CHANNEL_LABEL: Record<string, string> = {
-  stripe: "立即购买（Stripe · 卡 / Apple Pay）",
-  gumroad: "立即购买（Gumroad · 卡 / PayPal）",
-  alipay: "支付宝",
-  wechat: "微信支付",
-};
-
-export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, showAltChannels }: Props) {
+export function PricingCheckout({ plans, loggedIn, userEmail, showAltChannels }: Props) {
   const [selectedPlan, setSelectedPlan] = useState<string>(
     plans.find((p) => p.highlight)?.id ?? plans[0].id,
   );
@@ -48,7 +42,7 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
   }>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const submit = async (channel: "stripe" | "gumroad" | "alipay" | "wechat") => {
+  const submit = async (channel: typeof PAY_CHANNEL | "alipay" | "wechat") => {
     if (!loggedIn) {
       window.location.href = `/login?redirect=/pricing`;
       return;
@@ -59,7 +53,7 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
 
     // 先打开一个空白窗口（user gesture 同步触发，避免被弹窗拦截）。
     // 拿到 payUrl 后再赋值 location.href。
-    const popup = channel === "gumroad" || channel === "stripe" ? window.open("about:blank", "_blank") : null;
+    const popup = channel === "stripe" ? window.open("about:blank", "_blank") : null;
 
     try {
       const res = await fetch("/api/pay/create", {
@@ -75,7 +69,7 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
       }
 
       if (data.checkout.kind === "redirect") {
-        // gumroad → 新标签页打开 + 在当前页留兜底链接（国内 Gumroad 慢，避免当前页卡白屏）
+        // Stripe → 新标签页打开 + 在当前页留兜底链接
         if (popup) {
           popup.location.href = data.checkout.payUrl;
         } else {
@@ -136,7 +130,7 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
     };
   }, [qrDialog]);
 
-  // Gumroad 新标签支付：轮询 pending 订单，到账后跳转成功页
+  // Stripe 新标签支付：轮询 pending 订单，到账后跳转成功页
   useEffect(() => {
     if (!pendingRedirect) return;
 
@@ -209,75 +203,42 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
       <div className="mt-5 space-y-3">
         <button
           type="button"
-          onClick={() => submit(primaryChannel)}
+          onClick={() => submit(PAY_CHANNEL)}
           disabled={busy !== null}
           className="btn-primary w-full py-3.5 text-[15px] font-semibold disabled:opacity-50"
         >
-          {busy === primaryChannel ? "生成订单中..." : CHANNEL_LABEL[primaryChannel]}
+          {busy === PAY_CHANNEL ? "生成订单中..." : "立即订阅（Stripe · 卡 / Apple Pay）"}
         </button>
 
-        {primaryChannel === "stripe" ? (
-          <>
-            {loggedIn && userEmail ? (
-              <p className="text-center text-[11px] text-muted">
-                将使用注册邮箱 <span className="font-mono font-semibold text-foreground">{userEmail}</span> 预填 Stripe 结账页
-              </p>
-            ) : null}
-            <p className="text-center text-[11px] text-muted">
-              支付由 Stripe 处理 · 支持全球银行卡 / Apple Pay / Link 等 125+ 支付方式
-              <br />
-              付款成功后自动返回本站并开通会员（Webhook 通常在数秒内到账）
-            </p>
-          </>
+        {loggedIn && userEmail ? (
+          <p className="text-center text-[11px] text-muted">
+            将使用注册邮箱 <span className="font-mono font-semibold text-foreground">{userEmail}</span> 预填 Stripe 结账页
+          </p>
         ) : null}
+        <p className="text-center text-[11px] text-muted">
+          支付由 Stripe 处理 · 支持全球银行卡 / Apple Pay / Link 等
+          <br />
+          付款成功后 Webhook 自动开通会员（通常数秒内到账）
+        </p>
 
-        {primaryChannel === "gumroad" ? (
-          <>
-            {loggedIn && userEmail ? (
-              <div className="rounded border border-[color:var(--accent)]/40 bg-[color:var(--accent-soft)]/60 px-3 py-2 text-[12px]">
-                <p className="font-bold text-[color:var(--accent-strong)]">
-                  ⚠️ 结账请使用同一邮箱
-                </p>
-                <p className="mt-1 text-foreground">
-                  在 Gumroad 结账页填写邮箱时，请务必使用：
-                  <span className="mx-1 font-mono font-bold">{userEmail}</span>
-                </p>
-                <p className="mt-1 text-muted">
-                  否则 OPS Alpha 会员可能无法立即激活，需要联系客服手工对单。
-                </p>
-              </div>
-            ) : null}
-            <p className="text-center text-[11px] text-muted">
-              支付由 Gumroad 处理 · 接受全球银行卡 / PayPal · 自动续订 · 随时可取消
-              <br />
-              结账页点「Continue shopping」应回到定价页；若回到首页请改用上方链接或联系客服。
-            </p>
-          </>
-        ) : null}
-
-        {/* 备选通道（默认隐藏，仅在备案完成 / 配置生效后显示） */}
         {showAltChannels ? (
           <div className="grid gap-2 md:grid-cols-2">
-            {primaryChannel !== "alipay" ? (
-              <button
-                type="button"
-                onClick={() => submit("alipay")}
-                disabled={busy !== null}
-                className="flex items-center justify-center gap-2 rounded border border-[#1677ff]/60 bg-[#1677ff] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#0e5fd6] disabled:opacity-50"
-              >
-                {busy === "alipay" ? "生成订单中..." : "支付宝支付"}
-              </button>
-            ) : null}
-            {primaryChannel !== "wechat" ? (
-              <button
-                type="button"
-                onClick={() => submit("wechat")}
-                disabled={busy !== null}
-                className="flex items-center justify-center gap-2 rounded border border-[#09bb07]/60 bg-[#09bb07] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#08a006] disabled:opacity-50"
-              >
-                {busy === "wechat" ? "生成订单中..." : "微信支付"}
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => submit("alipay")}
+              disabled={busy !== null}
+              className="flex items-center justify-center gap-2 rounded border border-[#1677ff]/60 bg-[#1677ff] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#0e5fd6] disabled:opacity-50"
+            >
+              {busy === "alipay" ? "生成订单中..." : "支付宝支付"}
+            </button>
+            <button
+              type="button"
+              onClick={() => submit("wechat")}
+              disabled={busy !== null}
+              className="flex items-center justify-center gap-2 rounded border border-[#09bb07]/60 bg-[#09bb07] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#08a006] disabled:opacity-50"
+            >
+              {busy === "wechat" ? "生成订单中..." : "微信支付"}
+            </button>
           </div>
         ) : null}
       </div>
@@ -291,7 +252,7 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
       {pendingRedirect ? (
         <div className="mt-3 rounded border border-[color:var(--accent)] bg-[color:var(--accent-soft)] px-3 py-3 text-[12px]">
           <p className="font-bold text-[color:var(--accent-strong)]">
-            ✓ 已为你打开 Gumroad 支付页面（新标签）
+            ✓ 已为你打开 Stripe 结账页（新标签）
           </p>
           <p className="mt-1 text-foreground">
             订单号：<span className="mono">{pendingRedirect.outTradeNo}</span>
@@ -305,7 +266,7 @@ export function PricingCheckout({ plans, loggedIn, userEmail, primaryChannel, sh
             rel="noreferrer noopener"
             className="mt-2 inline-block break-all rounded bg-[color:var(--accent)] px-3 py-1.5 text-[12px] font-semibold text-[color:var(--background)] hover:bg-[color:var(--accent-strong)]"
           >
-            手动打开 Gumroad 支付页 →
+            手动打开 Stripe 结账页 →
           </a>
           <p className="mt-2 text-muted">
             付完后也可

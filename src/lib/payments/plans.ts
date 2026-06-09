@@ -1,7 +1,6 @@
 /**
- * 分产品线订阅（USD · Gumroad）
- * plan_id 写入订单与 Gumroad url_params，到账后开通对应 entitlement。
- * Gumroad permalink 仍按「时长」映射 env（三档月/季/年），产品线靠 plan_id 区分。
+ * 分产品线订阅（USD · Stripe Checkout）
+ * plan_id 写入订单 metadata，Webhook 到账后开通对应 entitlement。
  */
 
 export type ProductLine = "research" | "options" | "bundle";
@@ -61,25 +60,33 @@ function plan(
 }
 
 export const PLANS: Record<PlanId, Plan> = {
+  // 金额单位为美分，须与 Stripe Checkout line_items.unit_amount 一致。
+  // 定价梯度：单线 < Bundle < 两条单线之和；季付 ~13% off，年付 ~34% off。
   research_month: plan("research", "month", 999, "Research · 月付"),
-  research_quarter: plan("research", "quarter", 2499, "Research · 季付", { tagline: "省 $5" }),
-  research_year: plan("research", "year", 8799, "Research · 年付", { tagline: "省 $32" }),
-
-  // 金额与 Gumroad 现有三档 permalink 一致（同链接不同 plan_id）；拆独立产品后可改价
-  options_month: plan("options", "month", 999, "Option Alpha · 月付"),
-  options_quarter: plan("options", "quarter", 2499, "Option Alpha · 季付", { tagline: "省 $5" }),
-  options_year: plan("options", "year", 8799, "Option Alpha · 年付", { tagline: "省 $32" }),
-
-  bundle_month: plan("bundle", "month", 999, "全站 Bundle · 月付"),
-  bundle_quarter: plan("bundle", "quarter", 2499, "全站 Bundle · 季付", { tagline: "省 $5" }),
-  bundle_year: plan("bundle", "year", 8799, "全站 Bundle · 年付", {
-    tagline: "最划算",
+  research_quarter: plan("research", "quarter", 2599, "Research · 季付", { tagline: "省 $4 · $8.66/月" }),
+  research_year: plan("research", "year", 7900, "Research · 年付", {
+    tagline: "省 $41 · $6.58/月",
     highlight: true,
   }),
 
-  month: plan("bundle", "month", 999, "Legacy 月付"),
-  quarter: plan("bundle", "quarter", 2499, "Legacy 季付"),
-  year: plan("bundle", "year", 8799, "Legacy 年付"),
+  options_month: plan("options", "month", 1499, "Option Alpha · 月付"),
+  options_quarter: plan("options", "quarter", 3899, "Option Alpha · 季付", { tagline: "省 $6 · $13.00/月" }),
+  options_year: plan("options", "year", 11900, "Option Alpha · 年付", {
+    tagline: "省 $61 · $9.92/月",
+    highlight: true,
+  }),
+
+  bundle_month: plan("bundle", "month", 1999, "全站 Bundle · 月付", { tagline: "比分开买省 20%" }),
+  bundle_quarter: plan("bundle", "quarter", 5199, "全站 Bundle · 季付", { tagline: "省 $8 · $17.33/月" }),
+  bundle_year: plan("bundle", "year", 15900, "全站 Bundle · 年付", {
+    tagline: "最划算 · 省 $81 · $13.25/月",
+    highlight: true,
+  }),
+
+  // Legacy 裸 plan_id（兼容旧链接）→ 指向 Bundle 当前价
+  month: plan("bundle", "month", 1999, "Legacy 月付"),
+  quarter: plan("bundle", "quarter", 5199, "Legacy 季付"),
+  year: plan("bundle", "year", 15900, "Legacy 年付"),
 };
 
 export const PLAN_IDS = Object.keys(PLANS) as PlanId[];

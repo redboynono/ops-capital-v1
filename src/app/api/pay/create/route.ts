@@ -11,7 +11,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const CHANNELS: PayChannel[] = ["alipay", "wechat", "gumroad", "stripe"];
+const CHANNELS: PayChannel[] = ["stripe", "alipay", "wechat"];
 
 export async function POST(req: Request) {
   const user = await getSessionUser();
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
 
   if (!channel || !CHANNELS.includes(channel)) {
     return NextResponse.json(
-      { error: "pay_channel must be alipay | wechat | gumroad | stripe" },
+      { error: "pay_channel must be stripe | alipay | wechat" },
       { status: 400 },
     );
   }

@@ -1,8 +1,8 @@
-# Stripe Checkout 接入指南
+# Stripe Checkout 接入指南（主支付通道）
 
-> 文档：[Stripe Checkout](https://docs.stripe.com/payments/checkout) · [Checkout Sessions API](https://docs.stripe.com/api/checkout/sessions)
+> 文档：[Stripe 入门](https://docs.stripe.com/get-started) · [Checkout](https://docs.stripe.com/payments/checkout)
 
-OPS Alpha 已内置 Stripe 托管收银台（`mode=payment` 一次性付款），与现有 `orders` / `applyPaymentSuccess` 流程兼容。
+OPS Alpha **已全面切换为 Stripe**（Gumroad 仅保留历史 webhook，新订单不再创建 Gumroad 结账）。
 
 ---
 
@@ -61,7 +61,17 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 NEXT_PUBLIC_BASE_URL=https://opscapital.com
 ```
 
-保留 Gumroad 变量可作为备选；设 `PAY_PRIMARY_CHANNEL=gumroad` 可切回。
+---
+
+## 生产环境变量（当前）
+
+```bash
+PAYMENT_MODE=live
+STRIPE_SECRET_KEY=sk_live_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_BASE_URL=https://opscapital.com
+```
 
 ---
 

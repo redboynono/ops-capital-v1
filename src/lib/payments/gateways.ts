@@ -16,7 +16,6 @@
  */
 
 import type { Order } from "@/lib/payments/orders";
-import { buildGumroadCheckoutUrl } from "@/lib/payments/gumroad";
 import { createStripeCheckoutSession } from "@/lib/payments/stripe";
 
 export type CheckoutResult =
@@ -59,7 +58,9 @@ export async function createCheckout(
     return { kind: "redirect", payUrl };
   }
   if (order.pay_channel === "gumroad") {
-    return { kind: "redirect", payUrl: buildGumroadCheckoutUrl(order) };
+    throw new PaymentChannelNotConfiguredError(
+      "gumroad — 已停用，请使用 Stripe（/pricing）",
+    );
   }
   if (order.pay_channel === "alipay") return createLiveAlipayCheckout(order);
   if (order.pay_channel === "wechat") return createLiveWechatCheckout(order);

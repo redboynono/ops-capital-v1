@@ -61,7 +61,9 @@ export function PaySuccessPoller({
       ? "支付宝"
       : order.pay_channel === "wechat"
         ? "微信支付"
-        : "Gumroad";
+        : order.pay_channel === "gumroad"
+          ? "Gumroad（历史订单）"
+          : "Stripe";
 
   return (
     <>
@@ -91,8 +93,8 @@ export function PaySuccessPoller({
 
       {order.status === "pending" ? (
         <p className="mt-4 text-[13px] text-muted">
-          Gumroad 回调通常需要几秒到一分钟。页面会自动刷新（已检查 {polls} 次）。
-          若超过 5 分钟仍未开通，请确认结账邮箱与注册邮箱一致，或
+          Stripe Webhook 通常数秒内到账。页面会自动刷新（已检查 {polls} 次）。
+          若超过 5 分钟仍未开通，请
           <Link href="/contact" className="mx-1 text-accent-strong hover:underline">
             联系客服
           </Link>

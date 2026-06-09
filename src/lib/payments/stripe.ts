@@ -31,11 +31,8 @@ function stripeClient(): Stripe {
   return new Stripe(key);
 }
 
-/** 主支付通道：配置了 Stripe 且未强制 Gumroad 时优先 Stripe */
-export function getPrimaryPayChannel(): "stripe" | "gumroad" {
-  if (process.env.PAY_PRIMARY_CHANNEL === "gumroad") return "gumroad";
-  if (isStripeConfigured()) return "stripe";
-  if (process.env.GUMROAD_USERNAME?.trim()) return "gumroad";
+/** 主支付通道（已全面切换为 Stripe） */
+export function getPrimaryPayChannel(): "stripe" {
   return "stripe";
 }
 
