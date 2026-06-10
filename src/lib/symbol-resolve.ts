@@ -2,7 +2,7 @@
  * 统一标的代码：库内港股为 5 位（00700），Yahoo 为 0700.HK；加密为 BTC/ETH（行情用 BTC-USD）。
  */
 
-const CRYPTO_SHORTS = new Set(["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE"]);
+const CRYPTO_SHORTS = new Set(["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "LINK"]);
 
 export function normalizeInternalSymbol(raw: string): string {
   const s = raw.trim().toUpperCase();

@@ -13,12 +13,18 @@ export const metadata = {
 };
 
 const CORE_FACTORS = ["VALUATION", "GROWTH", "PROFITABILITY", "MOMENTUM", "REVISIONS"] as const;
-const FACTOR_LABEL: Record<(typeof CORE_FACTORS)[number], string> = {
+const CRYPTO_FACTORS = ["CRYPTO_VALUATION", "NETWORK", "TOKENOMICS", "MOMENTUM", "LIQUIDITY", "SECURITY"] as const;
+const FACTOR_LABEL: Record<string, string> = {
   VALUATION: "估值",
   GROWTH: "成长",
   PROFITABILITY: "盈利",
   MOMENTUM: "动能",
   REVISIONS: "上调",
+  CRYPTO_VALUATION: "估值",
+  NETWORK: "网络",
+  TOKENOMICS: "代币",
+  LIQUIDITY: "流动",
+  SECURITY: "安全",
 };
 
 const VERDICT_BG: Record<Verdict, string> = {
@@ -93,7 +99,7 @@ function MetricRow({ label, children }: { label: string; children: React.ReactNo
 }
 
 function ColumnCard({ col }: { col: CompareColumn }) {
-  const { symbol, profile, quote, metric, news, rating, grades, ticker, history } = col;
+  const { symbol, profile, quote, metric, news, rating, grades, ticker, history, isCrypto } = col;
   const m = metric?.metric ?? {};
   const change = quote?.dp ?? null;
   const changeClass =
@@ -152,7 +158,7 @@ function ColumnCard({ col }: { col: CompareColumn }) {
       </section>
 
       {/* Valuation / financials */}
-      <section className="border-b border-border py-2">
+      <section className={isCrypto ? "hidden" : "border-b border-border py-2"}>
         <SectionTitle>估值 / 财务</SectionTitle>
         <MetricRow label="市值">
           {fmtMcap(profile?.marketCapitalization ?? (m.marketCapitalization ?? null))}
@@ -180,13 +186,15 @@ function ColumnCard({ col }: { col: CompareColumn }) {
             <span className="mono">{rating?.ops_score != null ? rating.ops_score.toFixed(2) : "—"}</span>
           </span>
         </div>
-        <div className="flex items-center justify-between text-[12px]">
-          <span className="text-muted">Street</span>
-          <span className="flex items-center gap-1.5">
-            <VerdictBadge v={rating?.street_verdict} />
-            <span className="mono">{rating?.street_score != null ? rating.street_score.toFixed(2) : "—"}</span>
-          </span>
-        </div>
+        {!isCrypto ? (
+          <div className="flex items-center justify-between text-[12px]">
+            <span className="text-muted">Street</span>
+            <span className="flex items-center gap-1.5">
+              <VerdictBadge v={rating?.street_verdict} />
+              <span className="mono">{rating?.street_score != null ? rating.street_score.toFixed(2) : "—"}</span>
+            </span>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between text-[12px]">
           <span className="text-muted">Quant</span>
           <span className="mono font-semibold">
@@ -197,9 +205,9 @@ function ColumnCard({ col }: { col: CompareColumn }) {
 
       {/* Factor grades */}
       <section className="border-b border-border py-2">
-        <SectionTitle>五因子</SectionTitle>
-        <div className="grid grid-cols-5 gap-1">
-          {CORE_FACTORS.map((f) => {
+        <SectionTitle>{isCrypto ? "加密六因子" : "五因子"}</SectionTitle>
+        <div className={`grid gap-1 ${isCrypto ? "grid-cols-3" : "grid-cols-5"}`}>
+          {(isCrypto ? CRYPTO_FACTORS : CORE_FACTORS).map((f) => {
             const g = grades[f as FactorKey];
             return (
               <div key={f} className="flex flex-col items-center gap-0.5 rounded border border-border bg-surface-muted py-1">
