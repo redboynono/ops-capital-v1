@@ -3,8 +3,6 @@
  * Requires POLYGON_API_KEY in env.
  */
 
-import { isCryptoSymbol } from "@/lib/symbol-resolve";
-
 const BASE = "https://api.polygon.io";
 
 function apiKey(): string {
@@ -54,7 +52,6 @@ export function isUsEquityTicker(symbol: string): boolean {
   if (s.endsWith(".SS") || s.endsWith(".SZ")) return false;
   if (/-USD$/.test(s)) return false;
   if (s.includes("=")) return false; // forex USDCNY=X
-  if (isCryptoSymbol(s)) return false; // 裸 SOL/BTC 在 Polygon/Yahoo 是同名股票，非币
   return /^[A-Z][A-Z0-9.\-]{0,9}$/.test(s);
 }
 

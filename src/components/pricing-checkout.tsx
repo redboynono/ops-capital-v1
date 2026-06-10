@@ -2,6 +2,8 @@
 
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useRef, useState } from "react";
+import { useDict } from "@/components/locale-provider";
+import { fmt } from "@/lib/i18n/fmt";
 import { formatYuan, type Plan } from "@/lib/payments/plans";
 
 const PAY_CHANNEL = "stripe" as const;
@@ -34,6 +36,8 @@ export function PricingCheckout({
   trialEligible = false,
   trialDays = 0,
 }: Props) {
+  const dict = useDict();
+  const c = dict.pricing.checkout;
   const showTrial = trialEligible && trialDays > 0;
   const [selectedPlan, setSelectedPlan] = useState<string>(
     plans.find((p) => p.highlight)?.id ?? plans[0].id,
@@ -220,15 +224,17 @@ export function PricingCheckout({
           className="btn-primary w-full py-3.5 text-[15px] font-semibold disabled:opacity-50"
         >
           {busy === PAY_CHANNEL
-            ? "生成订单中..."
+            ? c.processing
             : showTrial
-              ? `免费试用 ${trialDays} 天，到期自动续费`
-              : "立即订阅（Stripe · 卡 / Apple Pay）"}
+              ? fmt(c.trialCtaFmt, { days: trialDays })
+              : loggedIn
+                ? c.subscribe
+                : c.loginFirst}
         </button>
 
         {showTrial ? (
           <p className="text-center text-[11px] text-[color:var(--accent-strong)]">
-            ✓ 首次订阅享 {trialDays} 天免费试用 · 试用期内可随时取消，不扣款
+            ✓ {fmt(c.trialNoteFmt, { days: trialDays })}
           </p>
         ) : null}
 
@@ -237,11 +243,7 @@ export function PricingCheckout({
             将使用注册邮箱 <span className="font-mono font-semibold text-foreground">{userEmail}</span> 预填 Stripe 结账页
           </p>
         ) : null}
-        <p className="text-center text-[11px] text-muted">
-          支付由 Stripe 处理 · 支持全球银行卡 / Apple Pay / Link 等
-          <br />
-          订阅自动续费，可随时在「账户 → 管理订阅」中取消
-        </p>
+        <p className="text-center text-[11px] text-muted">{c.stripeNote}</p>
 
         {showAltChannels ? (
           <div className="grid gap-2 md:grid-cols-2">

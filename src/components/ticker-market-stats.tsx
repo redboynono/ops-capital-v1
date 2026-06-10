@@ -51,7 +51,7 @@ export async function TickerMarketStats({ symbol }: { symbol: string }) {
           label="涨跌"
           value={
             snap.changeAbs != null
-              ? `${snap.changeAbs >= 0 ? "+" : "-"}${fmtMoney(Math.abs(snap.changeAbs), snap.currency)}`
+              ? `${snap.changeAbs >= 0 ? "+" : ""}${fmtMoney(Math.abs(snap.changeAbs), snap.currency)}`
               : "—"
           }
           sub={snap.prevClose != null ? `前收 ${fmtMoney(snap.prevClose, snap.currency)}` : undefined}

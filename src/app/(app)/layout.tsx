@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { LocaleProvider } from "@/components/locale-provider";
 import { SideNav } from "@/components/side-nav";
 import { MobileTabBar } from "@/components/mobile-nav";
 import {
@@ -7,21 +8,25 @@ import {
   TerminalFunctionBar,
 } from "@/components/terminal-chrome";
 import { getSessionUser } from "@/lib/auth";
+import { getDictionary, getLocale } from "@/lib/i18n";
 
-export const metadata: Metadata = {
-  title: "OPS Alpha · AI 驱动的中文投研桌面",
-  description:
-    "OPS Alpha 是 OPS Capital 旗下的 AI 投研与行情平台：深度研报、市场快讯、标的追踪与会员桌面。",
-  applicationName: "OPS Alpha",
-  appleWebApp: {
-    capable: true,
-    title: "OPS Alpha",
-    statusBarStyle: "black-translucent",
-  },
-  formatDetection: {
-    telephone: false,
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale();
+  const t = getDictionary(locale);
+  return {
+    title: t.meta.alphaTitle,
+    description: t.meta.alphaDescription,
+    applicationName: "OPS Alpha",
+    appleWebApp: {
+      capable: true,
+      title: "OPS Alpha",
+      statusBarStyle: "black-translucent",
+    },
+    formatDetection: {
+      telephone: false,
+    },
+  };
+}
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -31,18 +36,21 @@ export const viewport: Viewport = {
 };
 
 export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const user = await getSessionUser();
+  const [user, locale] = await Promise.all([getSessionUser(), getLocale()]);
+  const dict = getDictionary(locale);
 
   return (
-    <div className="terminal min-h-screen">
-      <TerminalTopBar userEmail={user?.email ?? null} />
-      <TerminalTickerTape />
-      <div className="flex min-h-[calc(100dvh-55px)] bg-[var(--background)]">
-        <SideNav user={user} />
-        <main className="terminal-main flex-1 min-w-0">{children}</main>
+    <LocaleProvider locale={locale}>
+      <div className="terminal min-h-screen">
+        <TerminalTopBar userEmail={user?.email ?? null} locale={locale} />
+        <TerminalTickerTape />
+        <div className="flex min-h-[calc(100dvh-55px)] bg-[var(--background)]">
+          <SideNav user={user} dict={dict} />
+          <main className="terminal-main flex-1 min-w-0">{children}</main>
+        </div>
+        <MobileTabBar />
+        <TerminalFunctionBar />
       </div>
-      <MobileTabBar />
-      <TerminalFunctionBar />
-    </div>
+    </LocaleProvider>
   );
 }

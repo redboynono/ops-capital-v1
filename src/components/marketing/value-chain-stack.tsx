@@ -1,5 +1,8 @@
 import Link from "next/link";
-import type { ValueChainLayer } from "@/lib/marketing/ai-value-chain";
+import type { Dictionary } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
+import type { Locale } from "@/lib/i18n/locale";
+import { layerLocalized, type ValueChainLayer } from "@/lib/marketing/ai-value-chain";
 import type { LayerLinkage } from "@/lib/marketing/value-chain-data";
 
 const layerTints = [
@@ -10,14 +13,6 @@ const layerTints = [
   "#f5f0e8",
   "#f8f3ec",
 ];
-
-const VERDICT_STYLE: Record<string, { bg: string; label: string }> = {
-  STRONG_BUY: { bg: "#166534", label: "强买" },
-  BUY: { bg: "#15803d", label: "买入" },
-  HOLD: { bg: "#92702a", label: "持有" },
-  SELL: { bg: "#b91c1c", label: "卖出" },
-  STRONG_SELL: { bg: "#7f1d1d", label: "强卖" },
-};
 
 type Props = {
   layers: ValueChainLayer[];
@@ -30,10 +25,13 @@ type Props = {
     line: string;
     bg: string;
   };
+  locale: Locale;
+  dict: Dictionary;
 };
 
-export function ValueChainStack({ layers, linkage, theme }: Props) {
+export function ValueChainStack({ layers, linkage, theme, locale, dict }: Props) {
   const ordered = [...layers].reverse();
+  const vc = dict.valueChain;
 
   return (
     <div className="space-y-3">
@@ -41,6 +39,7 @@ export function ValueChainStack({ layers, linkage, theme }: Props) {
         const depth = layers.length - 1 - i;
         const tint = layerTints[depth] ?? theme.bg;
         const data = linkage[layer.id];
+        const text = layerLocalized(layer, locale);
 
         return (
           <article
@@ -64,31 +63,47 @@ export function ValueChainStack({ layers, linkage, theme }: Props) {
                   {layer.id}
                 </p>
                 <p className="mt-1 text-[13px] leading-snug" style={{ color: theme.muted }}>
-                  {layer.roleZh}
+                  {text.role}
                 </p>
               </div>
 
               <div>
                 <h3 className="text-lg md:text-xl" style={{ letterSpacing: "-0.01em" }}>
-                  {layer.nameZh}
+                  {text.name}
                 </h3>
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   {layer.representatives.map((rep) => {
                     const sym = rep.symbol?.toUpperCase();
                     const rated = sym ? data?.symbols.find((s) => s.symbol === sym) : null;
-                    const verdict = rated?.ops_verdict ? VERDICT_STYLE[rated.ops_verdict] : null;
+                    const verdictKey = rated?.ops_verdict;
+                    const verdictLabel =
+                      verdictKey && verdictKey in vc.verdict
+                        ? vc.verdict[verdictKey as keyof typeof vc.verdict]
+                        : null;
+                    const verdictBg =
+                      verdictKey === "STRONG_BUY"
+                        ? "#166534"
+                        : verdictKey === "BUY"
+                          ? "#15803d"
+                          : verdictKey === "HOLD"
+                            ? "#92702a"
+                            : verdictKey === "SELL"
+                              ? "#b91c1c"
+                              : verdictKey === "STRONG_SELL"
+                                ? "#7f1d1d"
+                                : null;
 
                     const chip = (
                       <>
                         {rep.name}
                         {sym ? <span className="ml-1 font-mono opacity-60">{sym}</span> : null}
-                        {verdict ? (
+                        {verdictLabel && verdictBg ? (
                           <span
                             className="ml-1.5 inline-block rounded px-1 py-px text-[10px] font-semibold text-white"
-                            style={{ background: verdict.bg }}
+                            style={{ background: verdictBg }}
                           >
-                            {verdict.label}
+                            {verdictLabel}
                           </span>
                         ) : null}
                       </>
@@ -125,9 +140,9 @@ export function ValueChainStack({ layers, linkage, theme }: Props) {
 
                 <p className="mt-4 text-[13px] leading-[1.8]" style={{ color: theme.inkSoft }}>
                   <span className="font-semibold" style={{ color: theme.gold }}>
-                    2026 趋势 ·{" "}
+                    {vc.trendLabel}
                   </span>
-                  {layer.trend2026}
+                  {text.trend}
                 </p>
 
                 {data ? (
@@ -141,10 +156,10 @@ export function ValueChainStack({ layers, linkage, theme }: Props) {
                         className="font-semibold transition-opacity hover:opacity-70"
                         style={{ color: theme.ink }}
                       >
-                        {data.analysisCount} 篇研报 →
+                        {fmt(vc.analysisCountFmt, { n: data.analysisCount })}
                       </Link>
                     ) : (
-                      <span>暂无研报</span>
+                      <span>{vc.noAnalysis}</span>
                     )}
                     {data.newsCount > 0 ? (
                       <Link
@@ -152,7 +167,7 @@ export function ValueChainStack({ layers, linkage, theme }: Props) {
                         className="transition-opacity hover:opacity-70"
                         style={{ color: theme.inkSoft }}
                       >
-                        {data.newsCount} 条快讯
+                        {fmt(vc.newsCountFmt, { n: data.newsCount })}
                       </Link>
                     ) : null}
                     {data.compareSymbols.length >= 2 ? (
@@ -161,7 +176,7 @@ export function ValueChainStack({ layers, linkage, theme }: Props) {
                         className="transition-opacity hover:opacity-70"
                         style={{ color: theme.gold }}
                       >
-                        对比标的
+                        {vc.compare}
                       </Link>
                     ) : null}
                     {data.latestAnalysis ? (
@@ -171,7 +186,7 @@ export function ValueChainStack({ layers, linkage, theme }: Props) {
                         style={{ color: theme.inkSoft }}
                         title={data.latestAnalysis.title}
                       >
-                        最新：{data.latestAnalysis.title}
+                        {fmt(vc.latestFmt, { title: data.latestAnalysis.title })}
                       </Link>
                     ) : null}
                   </div>
@@ -183,7 +198,7 @@ export function ValueChainStack({ layers, linkage, theme }: Props) {
       })}
 
       <p className="pt-2 text-center text-[11px] tracking-[0.24em]" style={{ color: theme.muted }}>
-        L5 应用层 ↑ ··· L0 制造层 ↓ · 点击标的 / 研报直达 OPS Alpha
+        {vc.footer}
       </p>
     </div>
   );

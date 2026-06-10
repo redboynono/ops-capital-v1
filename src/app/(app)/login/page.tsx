@@ -3,6 +3,8 @@
 import { FormEvent, Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useDict, useLocale } from "@/components/locale-provider";
+import { LangSwitch } from "@/components/lang-switch";
 import {
   KeyRound,
   Loader2,
@@ -97,6 +99,8 @@ function useCaptcha() {
 /* ------------------------------------------------------------------ */
 
 function LoginInner() {
+  const locale = useLocale();
+  const L = useDict().login;
   const router = useRouter();
   const sp = useSearchParams();
   const initialTab = sp.get("tab") === "signin" ? "signin" : "signup";
@@ -147,23 +151,23 @@ function LoginInner() {
     setError(null);
 
     if (!captchaInput.trim()) {
-      setError("请输入图形验证码");
+      setError(L.errors.captcha);
       return;
     }
 
     if (tab === "signin") {
       if (!identifier.trim() || !password) {
-        setError("请填写账号和密码");
+        setError(L.errors.credentials);
         return;
       }
     } else {
-      if (!email.trim()) return setError("请输入邮箱");
-      if (!password || password.length < 6) return setError("密码至少 6 位");
-      if (password !== confirmPassword) return setError("两次密码不一致");
+      if (!email.trim()) return setError(L.errors.email);
+      if (!password || password.length < 6) return setError(L.errors.passwordLen);
+      if (password !== confirmPassword) return setError(L.errors.passwordMatch);
       const digits = phone.replace(/\D/g, "");
-      if (!digits) return setError("请输入手机号");
+      if (!digits) return setError(L.errors.phone);
       if (countryCode === "+86" && !/^1\d{10}$/.test(digits)) {
-        return setError("请输入有效的中国大陆手机号");
+        return setError(L.errors.phoneCn);
       }
     }
 
@@ -197,21 +201,20 @@ function LoginInner() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
-        setError(data.error ?? (tab === "signin" ? "登录失败" : "注册失败"));
-        // 验证码相关错误自动刷新
-        if (data.error?.includes("验证码")) {
+        setError(data.error ?? (tab === "signin" ? L.errors.signinFail : L.errors.signupFail));
+        if (data.error?.includes("验证码") || data.error?.toLowerCase().includes("captcha")) {
           captcha.refresh();
           setCaptchaInput("");
         }
         return;
       }
-      flashToast(tab === "signin" ? "欢迎回来" : "注册成功，欢迎加入 OPS Alpha");
+      flashToast(tab === "signin" ? L.welcomeBack : L.welcomeNew);
       window.setTimeout(() => {
         router.push(redirectTo);
         router.refresh();
       }, 700);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "请求失败");
+      setError(err instanceof Error ? err.message : L.errors.requestFail);
     } finally {
       setLoading(false);
     }
@@ -223,12 +226,15 @@ function LoginInner() {
 
       <div className="mx-auto w-full max-w-[440px] px-4 py-12">
         <header className="mb-6">
-          <Link
-            href="/"
-            className="label-caps inline-flex items-center gap-1 hover:text-accent-strong"
-          >
-            ← OPS Capital
-          </Link>
+          <div className="flex items-center justify-between gap-3">
+            <Link
+              href="/"
+              className="label-caps inline-flex items-center gap-1 hover:text-accent-strong"
+            >
+              {L.back}
+            </Link>
+            <LangSwitch locale={locale} compact />
+          </div>
           <h1
             className="mt-3 text-[34px] font-bold leading-[1.15] tracking-tight text-foreground"
             style={{
@@ -236,10 +242,10 @@ function LoginInner() {
                 '"Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", serif',
             }}
           >
-            {tab === "signin" ? "登录 OPS Alpha" : "注册 OPS Alpha"}
+            {tab === "signin" ? L.signinTitle : L.signupTitle}
           </h1>
           <p className="mt-2 text-[13px] text-muted">
-            {tab === "signin" ? "欢迎回来，继续你的投研工作台" : "完善信息以快速注册"}
+            {tab === "signin" ? L.signinSub : L.signupSub}
           </p>
         </header>
 
@@ -257,7 +263,7 @@ function LoginInner() {
                 : "text-muted hover:text-foreground"
             }`}
           >
-            登录
+            {L.tabSignin}
           </button>
           <button
             type="button"
@@ -271,7 +277,7 @@ function LoginInner() {
                 : "text-muted hover:text-foreground"
             }`}
           >
-            注册
+            {L.tabSignup}
           </button>
         </div>
 
@@ -279,14 +285,14 @@ function LoginInner() {
           {tab === "signin" ? (
             // ----------- 登录 -----------
             <div>
-              <label className="label-caps">账号</label>
+              <label className="label-caps">{L.account}</label>
               <div className="mt-1">
                 <FieldShell icon={<User className="h-4 w-4" strokeWidth={1.5} />}>
                   <input
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     className={baseInputClass}
-                    placeholder="邮箱或用户名"
+                    placeholder={L.accountPlaceholder}
                     autoComplete="username"
                     required
                   />
@@ -297,14 +303,14 @@ function LoginInner() {
             // ----------- 注册 -----------
             <>
               <div>
-                <label className="label-caps">姓名</label>
+                <label className="label-caps">{L.nameSection}</label>
                 <div className="mt-1 space-y-2">
                   <FieldShell icon={<User className="h-4 w-4" strokeWidth={1.5} />}>
                     <input
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       className={baseInputClass}
-                      placeholder="用户名（可选）"
+                      placeholder={L.username}
                       autoComplete="username"
                     />
                   </FieldShell>
@@ -313,7 +319,7 @@ function LoginInner() {
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
                       className={baseInputClass}
-                      placeholder="名"
+                      placeholder={L.firstName}
                       autoComplete="given-name"
                     />
                   </FieldShell>
@@ -322,7 +328,7 @@ function LoginInner() {
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
                       className={baseInputClass}
-                      placeholder="姓"
+                      placeholder={L.lastName}
                       autoComplete="family-name"
                     />
                   </FieldShell>
@@ -330,7 +336,7 @@ function LoginInner() {
               </div>
 
               <div>
-                <label className="label-caps">邮箱</label>
+                <label className="label-caps">{L.email}</label>
                 <div className="mt-1">
                   <FieldShell icon={<Mail className="h-4 w-4" strokeWidth={1.5} />}>
                     <input
@@ -347,7 +353,7 @@ function LoginInner() {
               </div>
 
               <div>
-                <label className="label-caps">手机号</label>
+                <label className="label-caps">{L.phone}</label>
                 <div className="mt-1 flex h-11 items-center gap-2 rounded border border-border bg-surface px-3 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
                   <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted">
                     <Phone className="h-4 w-4" strokeWidth={1.5} />
@@ -381,7 +387,7 @@ function LoginInner() {
 
           {/* 密码 */}
           <div>
-            <label className="label-caps">密码</label>
+            <label className="label-caps">{L.password}</label>
             <div className="mt-1">
               <FieldShell
                 icon={<KeyRound className="h-4 w-4" strokeWidth={1.5} />}
@@ -391,7 +397,7 @@ function LoginInner() {
                     onClick={() => setShowPwd((v) => !v)}
                     className="ml-2 text-[11px] font-semibold text-muted hover:text-accent"
                   >
-                    {showPwd ? "隐藏" : "显示"}
+                    {showPwd ? L.hidePwd : L.showPwd}
                   </button>
                 }
               >
@@ -400,7 +406,7 @@ function LoginInner() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className={baseInputClass}
-                  placeholder={tab === "signup" ? "至少 6 位" : "请输入密码"}
+                  placeholder={tab === "signup" ? L.passwordPlaceholderSignup : L.passwordPlaceholderSignin}
                   autoComplete={tab === "signin" ? "current-password" : "new-password"}
                   required
                   minLength={tab === "signup" ? 6 : undefined}
@@ -411,7 +417,7 @@ function LoginInner() {
 
           {tab === "signup" ? (
             <div>
-              <label className="label-caps">确认密码</label>
+              <label className="label-caps">{L.confirmPassword}</label>
               <div className="mt-1">
                 <FieldShell icon={<KeyRound className="h-4 w-4" strokeWidth={1.5} />}>
                   <input
@@ -419,7 +425,7 @@ function LoginInner() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className={baseInputClass}
-                    placeholder="再输入一次"
+                    placeholder={L.confirmPlaceholder}
                     autoComplete="new-password"
                     required
                     minLength={6}
@@ -431,7 +437,7 @@ function LoginInner() {
 
           {/* 图形验证码 */}
           <div>
-            <label className="label-caps">图形验证码</label>
+            <label className="label-caps">{L.captcha}</label>
             <div className="mt-1 flex h-11 items-center gap-2 rounded border border-border bg-surface px-3 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
               <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted">
                 <ShieldCheck className="h-4 w-4" strokeWidth={1.5} />
@@ -440,7 +446,7 @@ function LoginInner() {
                 value={captchaInput}
                 onChange={(e) => setCaptchaInput(e.target.value.replace(/\s/g, ""))}
                 className={baseInputClass}
-                placeholder="区分大小写不敏感"
+                placeholder={L.captchaPlaceholder}
                 autoComplete="off"
                 maxLength={6}
                 required
@@ -453,8 +459,8 @@ function LoginInner() {
                 }}
                 disabled={captcha.loading}
                 className="ml-2 flex items-center gap-1 rounded border border-border px-1 py-0.5 text-muted transition hover:border-accent hover:text-accent disabled:opacity-50"
-                aria-label="刷新验证码"
-                title="刷新"
+                aria-label={L.refreshCaptcha}
+                title={L.refreshCaptcha}
               >
                 {captcha.loading ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -469,8 +475,8 @@ function LoginInner() {
                   captcha.refresh();
                 }}
                 className="ml-1 h-9 overflow-hidden rounded border border-border transition hover:border-accent"
-                aria-label="点击刷新验证码"
-                title="点击刷新"
+                aria-label={L.refreshCaptcha}
+                title={L.refreshCaptcha}
                 style={{ width: 120 }}
                 dangerouslySetInnerHTML={{
                   __html:
@@ -496,17 +502,17 @@ function LoginInner() {
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>处理中…</span>
+                <span>{L.processing}</span>
               </>
             ) : (
-              <span>{tab === "signin" ? "登录" : "注册"}</span>
+              <span>{tab === "signin" ? L.submitSignin : L.submitSignup}</span>
             )}
           </button>
 
           <p className="pt-1 text-center text-[12px] text-muted">
             {tab === "signin" ? (
               <>
-                还没有账号？
+                {L.noAccount}
                 <button
                   type="button"
                   onClick={() => {
@@ -515,12 +521,12 @@ function LoginInner() {
                   }}
                   className="ml-1 font-semibold text-accent hover:text-accent-strong"
                 >
-                  立即注册
+                  {L.signupLink}
                 </button>
               </>
             ) : (
               <>
-                已有账号？
+                {L.hasAccount}
                 <button
                   type="button"
                   onClick={() => {
@@ -529,7 +535,7 @@ function LoginInner() {
                   }}
                   className="ml-1 font-semibold text-accent hover:text-accent-strong"
                 >
-                  返回登录
+                  {L.signinLink}
                 </button>
               </>
             )}
@@ -537,13 +543,13 @@ function LoginInner() {
         </form>
 
         <p className="mt-6 text-center text-[11px] text-muted">
-          注册即表示同意 OPS Capital 的
+          {L.agree}
           <Link className="mx-1 hover:text-accent-strong" href="/terms">
-            服务条款
+            {L.terms}
           </Link>
-          与
+          {L.and}
           <Link className="ml-1 hover:text-accent-strong" href="/privacy">
-            隐私政策
+            {L.privacy}
           </Link>
         </p>
       </div>

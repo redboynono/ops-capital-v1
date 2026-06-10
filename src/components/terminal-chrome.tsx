@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { GlobalSearch } from "@/components/global-search";
+import { LangSwitch } from "@/components/lang-switch";
 import { MobileMenuButton, MobileNavDrawer } from "@/components/mobile-nav";
+import type { Locale } from "@/lib/i18n/locale-types";
 
 // Symbols to poll via Yahoo Finance (/api/quotes). No key needed; works for
 // US stocks, HK, A-shares, indices, crypto.
@@ -168,7 +170,13 @@ function useUSMarketStatus() {
   return { label, tone };
 }
 
-export function TerminalTopBar({ userEmail }: { userEmail?: string | null }) {
+export function TerminalTopBar({
+  userEmail,
+  locale,
+}: {
+  userEmail?: string | null;
+  locale: Locale;
+}) {
   const timeStr = useNowHK();
   const mkt = useUSMarketStatus();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -197,6 +205,7 @@ export function TerminalTopBar({ userEmail }: { userEmail?: string | null }) {
       </div>
 
       <div className="flex items-center gap-2 md:gap-3">
+        <LangSwitch locale={locale} compact className="hidden sm:inline-flex" />
         <GlobalSearch />
         {userEmail ? (
           <>

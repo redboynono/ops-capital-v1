@@ -38,8 +38,6 @@ create table if not exists tickers (
   symbol varchar(32) primary key,
   name varchar(255) not null,
   exchange enum('NASDAQ','NYSE','HKEX','SSE','SZSE','CRYPTO','OTHER') not null default 'OTHER',
-  asset_class enum('equity','crypto','etf') not null default 'equity',
-  coingecko_id varchar(64) null,
   sector varchar(64) null,
   updated_at datetime not null default current_timestamp on update current_timestamp
 );
@@ -103,12 +101,6 @@ insert ignore into tickers (symbol, name, exchange, sector) values
   ('09988','阿里巴巴 H','HKEX','Internet'),
   ('03690','美团','HKEX','Internet');
 
--- 加密标的归类 + CoinGecko id 映射（见 migrations/017_crypto_factors.sql）
-update tickers set asset_class = 'crypto' where exchange = 'CRYPTO';
-update tickers set coingecko_id = 'bitcoin'  where symbol = 'BTC';
-update tickers set coingecko_id = 'ethereum' where symbol = 'ETH';
-update tickers set coingecko_id = 'solana'   where symbol = 'SOL';
-
 -- OPS Rating · 评分系统（Seeking Alpha Ratings Summary / Factor Grades / Quant Ranking 对标）
 create table if not exists ticker_ratings (
   symbol varchar(32) primary key,
@@ -138,8 +130,7 @@ create table if not exists ticker_factor_grades (
   symbol varchar(32) not null,
   factor enum(
     'VALUATION','GROWTH','PROFITABILITY','MOMENTUM','REVISIONS',
-    'DIV_SAFETY','DIV_GROWTH','DIV_YIELD','DIV_CONSISTENCY',
-    'CRYPTO_VALUATION','NETWORK','TOKENOMICS','LIQUIDITY','SECURITY'
+    'DIV_SAFETY','DIV_GROWTH','DIV_YIELD','DIV_CONSISTENCY'
   ) not null,
   grade_now   varchar(3) null,
   grade_3m    varchar(3) null,
@@ -322,4 +313,43 @@ create table if not exists daily_briefings (
   unique key uk_user_date (user_id, brief_date),
   key idx_user_created (user_id, created_at),
   constraint fk_briefings_user foreign key (user_id) references users(id) on delete cascade
+);
+
+-- ============================================================
+-- social_ops_posts：社媒运营草稿与发布记录
+-- ============================================================
+create table if not exists social_ops_posts (
+  id              char(36)     not null primary key,
+  content_type    enum('analysis','news','rating_change','value_chain','custom') not null,
+  ref_key         varchar(128) null,
+  title           varchar(512) not null,
+  canonical_url   varchar(1024) not null,
+  x_copy          text         not null,
+  xhs_copy        text         not null,
+  utm_campaign    varchar(64)  null,
+  status          enum('draft','posted_x','posted_xhs','done') not null default 'draft',
+  notes           text         null,
+  posted_x_at     datetime(3)  null,
+  posted_xhs_at   datetime(3)  null,
+  created_by      varchar(255) null,
+  created_at      datetime(3)  not null default current_timestamp(3),
+  updated_at      datetime(3)  not null default current_timestamp(3) on update current_timestamp(3),
+  key idx_social_ops_status (status, updated_at desc),
+  key idx_social_ops_ref (content_type, ref_key)
+);
+
+-- ============================================================
+-- short_links：社媒短链接跳转
+-- ============================================================
+create table if not exists short_links (
+  code          varchar(12)   not null primary key,
+  target_url    varchar(2048) not null,
+  utm_source    varchar(32)   null,
+  utm_medium    varchar(32)   null,
+  utm_campaign  varchar(64)   null,
+  ref_key       varchar(128)  null,
+  clicks        int unsigned  not null default 0,
+  created_at    datetime(3)   not null default current_timestamp(3),
+  unique key uk_short_target (target_url(512)),
+  key idx_short_ref (ref_key)
 );

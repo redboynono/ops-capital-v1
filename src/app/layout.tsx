@@ -1,15 +1,20 @@
 import type { Metadata } from "next";
+import { getDictionary, getLocale, htmlLang } from "@/lib/i18n";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "OPS Capital · AI 与半导体价值链投资",
-  description:
-    "OPS Capital 深耕 AI 算力革命与半导体产业链，以自研六层价值链模型（L0–L5）系统追踪晶圆制造、芯片设计、算力基建、云分发、大模型与 Agent 应用。",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale();
+  const t = getDictionary(locale);
+  return {
+    title: t.meta.siteTitle,
+    description: t.meta.siteDescription,
+  };
+}
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const locale = await getLocale();
   return (
-    <html lang="zh-CN" className="antialiased">
+    <html lang={htmlLang(locale)} className="antialiased">
       <body className="min-h-screen">{children}</body>
     </html>
   );

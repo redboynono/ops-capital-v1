@@ -1,51 +1,20 @@
 import Link from "next/link";
 import type { SessionUser } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/admin";
+import type { Dictionary } from "@/lib/i18n";
+import { buildNavSections } from "@/lib/i18n/nav";
 import { OPTION_ALPHA } from "@/lib/option-alpha-brand";
 
-type NavItem = { href: string; label: string };
-
-const sections: { title: string; items: NavItem[] }[] = [
-  {
-    title: "MARKET",
-    items: [
-      { href: "/alpha",    label: "Alpha 首页" },
-      { href: "/picks",      label: "OPS 精选" },
-      { href: "/conviction", label: "OPS 榜单" },
-      { href: "/analysis", label: "深度研报" },
-      { href: "/news",     label: "市场快讯" },
-      { href: "/earnings", label: "财报日历" },
-      { href: "/rating-changes", label: "评级变动" },
-      { href: "/track-record", label: "评级战绩" },
-      { href: "/crypto",   label: "加密评分" },
-      { href: "/expiring-options", label: OPTION_ALPHA.navLabel },
-    ],
-  },
-  {
-    title: "SCREEN",
-    items: [
-      { href: "/screener",             label: "选股器" },
-      { href: "/compare",              label: "对比" },
-      { href: "/tickers",              label: "标的索引" },
-      { href: "/dashboard/watchlist",  label: "自选股" },
-    ],
-  },
-  {
-    title: "ACCOUNT",
-    items: [
-      { href: "/dashboard",           label: "会员中心" },
-      { href: "/dashboard/briefing",  label: "每日简报" },
-      { href: "/dashboard/portfolio", label: "模拟盘" },
-      { href: "/dashboard/alerts",    label: "实时提醒" },
-      { href: "/dashboard/library",   label: "收藏 / 历史" },
-      { href: "/dashboard/profile",   label: "资料" },
-      { href: "/pricing",           label: "订阅方案" },
-    ],
-  },
-];
-
-export async function SideNav({ user }: { user: SessionUser | null }) {
+export async function SideNav({
+  user,
+  dict,
+}: {
+  user: SessionUser | null;
+  dict: Dictionary;
+}) {
   const isAdmin = isAdminEmail(user?.email);
+  const n = dict.nav;
+  const sections = buildNavSections(dict, OPTION_ALPHA.navLabel);
 
   return (
     <aside className="sticky top-[55px] hidden h-[calc(100dvh-55px-24px)] w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface px-3 py-4 md:flex">
@@ -98,19 +67,22 @@ export async function SideNav({ user }: { user: SessionUser | null }) {
             </p>
             <div className="flex flex-col">
               <Link href="/admin" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
-                后台首页
+                {n.adminHome}
               </Link>
               <Link href="/admin/posts" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
-                文章库
+                {n.adminPosts}
               </Link>
               <Link href="/admin/editor" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
-                AI 编辑器
+                {n.adminEditor}
               </Link>
               <Link href="/admin/ratings" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
-                评级管理
+                {n.adminRatings}
               </Link>
               <Link href="/admin/picks" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
-                OPS 精选 管理
+                {n.adminPicks}
+              </Link>
+              <Link href="/admin/social" className="px-2 py-1 text-foreground-soft hover:bg-surface-muted hover:text-[color:var(--accent)]">
+                {n.adminSocial}
               </Link>
             </div>
           </div>

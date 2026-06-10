@@ -8,6 +8,7 @@ import { RatingChangesPanel } from "@/components/rating-changes-panel";
 import { TopRatedPanel } from "@/components/top-rated";
 import { getCachedPosts } from "@/lib/cached-data";
 import { getSessionUser } from "@/lib/auth";
+import { getDictionary, getLocale } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -15,21 +16,27 @@ export default async function Home() {
   const user = await getSessionUser();
   if (!user) redirect("/login?redirect=/alpha");
 
+  const locale = await getLocale();
+  const t = getDictionary(locale);
+  const a = t.alpha;
+
   const [analysis, news] = await Promise.all([
     getCachedPosts({ kind: "analysis", limit: 10 }),
     getCachedPosts({ kind: "news", limit: 10 }),
   ]);
 
+  const dateLocale = locale === "en" ? "en-US" : "zh-CN";
+
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 py-5 md:px-6">
-      <MarketSnapshot />
+      <MarketSnapshot dict={t} />
 
       <div className="mt-5">
         <ExpiringOptionsDirectSignals
           compact
           underlyings={["SPY", "QQQ"]}
           expirationDate={thisFridayIso()}
-          expiryLabel="本周五"
+          expiryLabel={a.expiryThisFriday}
         />
       </div>
 
@@ -39,25 +46,24 @@ export default async function Home() {
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-        {/* Trending Analysis */}
         <section className="card">
           <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
             <div>
-              <h2 className="text-[15px] font-bold text-foreground">深度研报</h2>
-              <p className="text-[11px] text-muted">AI 编辑精选 · 摘要免费 · 全文 Research Pro</p>
+              <h2 className="text-[15px] font-bold text-foreground">{a.analysisTitle}</h2>
+              <p className="text-[11px] text-muted">{a.analysisSub}</p>
             </div>
             <Link href="/analysis" className="text-[12px] font-semibold text-accent-strong hover:underline">
-              查看全部 →
+              {a.viewAll}
             </Link>
           </header>
           <div className="px-4">
             {analysis.length === 0 ? (
               <p className="py-10 text-center text-[13px] text-muted">
-                暂无分析文章。先到
+                {a.noAnalysis}
                 <Link href="/admin/editor" className="mx-1 text-accent-strong hover:underline">
-                  编辑器
+                  {a.editor}
                 </Link>
-                生成一篇。
+                {a.noAnalysisEnd}
               </p>
             ) : (
               analysis.map((p) => <PostRow key={p.id} post={p} />)
@@ -65,20 +71,19 @@ export default async function Home() {
           </div>
         </section>
 
-        {/* Trending News */}
         <section className="card">
           <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
             <div>
-              <h2 className="text-[15px] font-bold text-foreground">今日快讯</h2>
-              <p className="text-[11px] text-muted">精选市场事件 · 全文免费</p>
+              <h2 className="text-[15px] font-bold text-foreground">{a.newsTitle}</h2>
+              <p className="text-[11px] text-muted">{a.newsSub}</p>
             </div>
             <Link href="/news" className="text-[12px] font-semibold text-accent-strong hover:underline">
-              全部快讯 →
+              {a.allNews}
             </Link>
           </header>
           <div className="px-4 py-1">
             {news.length === 0 ? (
-              <p className="py-10 text-center text-[13px] text-muted">暂无快讯。</p>
+              <p className="py-10 text-center text-[13px] text-muted">{a.noNews}</p>
             ) : (
               <ol className="sa-list">
                 {news.map((n) => (
@@ -90,7 +95,7 @@ export default async function Home() {
                         </Link>
                       ))}
                       <span className="label-caps">
-                        {new Date(n.created_at).toLocaleString("zh-CN", {
+                        {new Date(n.created_at).toLocaleString(dateLocale, {
                           month: "2-digit",
                           day: "2-digit",
                           hour: "2-digit",
@@ -112,26 +117,21 @@ export default async function Home() {
       <section className="mt-5 card p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-[15px] font-bold text-foreground">Research Pro · 深度研报全文</h3>
-            <p className="mt-0.5 text-[12px] text-muted">
-              摘要免费 · 全文与估值框架 · 可与 OPS 精选配合使用
-            </p>
+            <h3 className="text-[15px] font-bold text-foreground">{a.researchProTitle}</h3>
+            <p className="mt-0.5 text-[12px] text-muted">{a.researchProSub}</p>
           </div>
           <div className="flex gap-2">
             <Link href="/pricing?product=research" className="btn-primary px-3 py-1.5 text-[12px]">
-              订阅 Research
+              {a.subscribeResearch}
             </Link>
             <Link href="/login?tab=signup" className="btn-outline px-3 py-1.5 text-[12px]">
-              免费注册
+              {a.freeSignup}
             </Link>
           </div>
         </div>
       </section>
 
-      <p className="mt-6 text-[11px] leading-relaxed text-muted-soft">
-        免责声明：Ops Alpha 内容由 AI 编辑流水线辅助生成，仅供投资学习与研究参考，不构成任何买卖建议。
-        投资有风险，决策需谨慎。
-      </p>
+      <p className="mt-6 text-[11px] leading-relaxed text-muted-soft">{a.disclaimer}</p>
     </div>
   );
 }

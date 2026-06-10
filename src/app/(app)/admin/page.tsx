@@ -61,6 +61,11 @@ export default async function AdminHome() {
           <h2 className="mt-1 text-lg font-bold">文章管理</h2>
           <p className="mt-1 text-[13px] text-muted">列表编辑、批量发布 / 下架。</p>
         </Link>
+        <Link href="/admin/social" className="card p-4 hover:border-accent">
+          <p className="label-caps">Social Ops</p>
+          <h2 className="mt-1 text-lg font-bold">社媒运营</h2>
+          <p className="mt-1 text-[13px] text-muted">X / 小红书文案池、UTM 链接、草稿与发布追踪。</p>
+        </Link>
       </div>
     </div>
   );
