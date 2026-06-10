@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/admin";
 import { runJobTs } from "@/lib/observability";
 import { listAllTickers } from "@/lib/tickers";
 import { generateAndSaveRating } from "@/lib/ai/generateRating";
+import { generateAndSaveCryptoRating } from "@/lib/crypto/scoreFactors";
+import { getAssetClass } from "@/lib/ratings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,11 +54,16 @@ async function handle(req: Request): Promise<NextResponse> {
     const o: Out = { total: targets.length, refreshed: 0, skipped: 0, failures: [] };
     for (const t of targets) {
       try {
-        await generateAndSaveRating(
-          t.symbol,
-          { name: t.name, sector: t.sector },
-          "CRON",
-        );
+        const assetClass = await getAssetClass(t.symbol);
+        if (assetClass === "crypto") {
+          await generateAndSaveCryptoRating(t.symbol, "CRON");
+        } else {
+          await generateAndSaveRating(
+            t.symbol,
+            { name: t.name, sector: t.sector },
+            "CRON",
+          );
+        }
         o.refreshed++;
         await new Promise((r) => setTimeout(r, 500));
       } catch (e) {

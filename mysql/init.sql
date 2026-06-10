@@ -38,6 +38,8 @@ create table if not exists tickers (
   symbol varchar(32) primary key,
   name varchar(255) not null,
   exchange enum('NASDAQ','NYSE','HKEX','SSE','SZSE','CRYPTO','OTHER') not null default 'OTHER',
+  asset_class enum('equity','crypto','etf') not null default 'equity',
+  coingecko_id varchar(64) null,
   sector varchar(64) null,
   updated_at datetime not null default current_timestamp on update current_timestamp
 );
@@ -101,6 +103,12 @@ insert ignore into tickers (symbol, name, exchange, sector) values
   ('09988','阿里巴巴 H','HKEX','Internet'),
   ('03690','美团','HKEX','Internet');
 
+-- 加密标的归类 + CoinGecko id 映射（见 migrations/017_crypto_factors.sql）
+update tickers set asset_class = 'crypto' where exchange = 'CRYPTO';
+update tickers set coingecko_id = 'bitcoin'  where symbol = 'BTC';
+update tickers set coingecko_id = 'ethereum' where symbol = 'ETH';
+update tickers set coingecko_id = 'solana'   where symbol = 'SOL';
+
 -- OPS Rating · 评分系统（Seeking Alpha Ratings Summary / Factor Grades / Quant Ranking 对标）
 create table if not exists ticker_ratings (
   symbol varchar(32) primary key,
@@ -130,7 +138,8 @@ create table if not exists ticker_factor_grades (
   symbol varchar(32) not null,
   factor enum(
     'VALUATION','GROWTH','PROFITABILITY','MOMENTUM','REVISIONS',
-    'DIV_SAFETY','DIV_GROWTH','DIV_YIELD','DIV_CONSISTENCY'
+    'DIV_SAFETY','DIV_GROWTH','DIV_YIELD','DIV_CONSISTENCY',
+    'CRYPTO_VALUATION','NETWORK','TOKENOMICS','LIQUIDITY','SECURITY'
   ) not null,
   grade_now   varchar(3) null,
   grade_3m    varchar(3) null,

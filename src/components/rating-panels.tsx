@@ -1,5 +1,6 @@
 import {
   CORE_FACTORS,
+  CRYPTO_FACTORS,
   DIVIDEND_FACTORS,
   FACTOR_LABELS,
   VERDICT_LABELS,
@@ -7,6 +8,7 @@ import {
   type Grade,
   type RatingRow,
   type Verdict,
+  getAssetClass,
   getFactorGrades,
   getRating,
 } from "@/lib/ratings";
@@ -104,7 +106,8 @@ function ScoreBox({ value }: { value: number | null }) {
 // -------- public panels --------
 
 export async function RatingsSummary({ symbol }: { symbol: string }) {
-  const r = await getRating(symbol);
+  const [r, assetClass] = await Promise.all([getRating(symbol), getAssetClass(symbol)]);
+  const isCrypto = assetClass === "crypto";
   return (
     <section className="card p-3">
       <header className="flex items-center justify-between">
@@ -120,11 +123,13 @@ export async function RatingsSummary({ symbol }: { symbol: string }) {
           verdict={r?.ops_verdict ?? null}
           score={r?.ops_score ? Number(r.ops_score) : null}
         />
-        <RatingRowLine
-          label="Street"
-          verdict={r?.street_verdict ?? null}
-          score={r?.street_score ? Number(r.street_score) : null}
-        />
+        {!isCrypto ? (
+          <RatingRowLine
+            label="Street"
+            verdict={r?.street_verdict ?? null}
+            score={r?.street_score ? Number(r.street_score) : null}
+          />
+        ) : null}
         <RatingRowLine
           label="OPS Quant"
           verdict={null}
@@ -178,14 +183,19 @@ function RatingRowLine({
 }
 
 export async function FactorGrades({ symbol }: { symbol: string }) {
-  const map = await getFactorGrades(symbol);
-  const rating = await getRating(symbol);
-  const factors = CORE_FACTORS.map((f) => ({ key: f, row: map.get(f) }));
+  const [map, rating, assetClass] = await Promise.all([
+    getFactorGrades(symbol),
+    getRating(symbol),
+    getAssetClass(symbol),
+  ]);
+  const isCrypto = assetClass === "crypto";
+  const factorSet: readonly FactorKey[] = isCrypto ? CRYPTO_FACTORS : CORE_FACTORS;
+  const factors = factorSet.map((f) => ({ key: f, row: map.get(f) }));
   const hasAny = factors.some((f) => f.row?.grade_now);
 
   return (
     <section className="card p-3">
-      <p className="label-caps">Factor Grades</p>
+      <p className="label-caps">{isCrypto ? "Crypto Factor Grades" : "Factor Grades"}</p>
 
       {hasAny ? (
         <>
@@ -208,7 +218,7 @@ export async function FactorGrades({ symbol }: { symbol: string }) {
         <p className="py-6 text-center text-[12px] text-muted">暂无因子评级。</p>
       )}
 
-      {rating?.has_dividend ? <DividendInline symbol={symbol} map={map} /> : null}
+      {!isCrypto && rating?.has_dividend ? <DividendInline symbol={symbol} map={map} /> : null}
     </section>
   );
 }
