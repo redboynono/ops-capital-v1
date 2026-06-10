@@ -30,3 +30,17 @@ export function buildResearchUserPrompt(target: string, focus?: string) {
 
   return `请分析以下标的并输出机构级 Markdown 研报：\n标的：${target.trim()}${focusText}\n若用户未提供足够上下文，请在正文中明确你的关键假设。`;
 }
+
+export const newsSystemPrompt = `# Role: 资深财经快讯编辑（中文）
+## Objective: 基于给定事件/标的，生成一条简洁的市场快讯。
+## Output:
+- 首行为 "# 标题"（<= 30 字，包含标的或事件核心）
+- 正文 1-3 段 Markdown，共 150-350 字
+- 末尾列出 "关键数据" bullet（若无则省略）
+- 避免投资建议，避免夸张情绪化词汇
+`;
+
+export function buildNewsUserPrompt(target: string, focus?: string) {
+  const focusText = focus?.trim() ? `\n补充信息：${focus.trim()}\n` : "";
+  return `请基于以下主题生成一条市场快讯（中文）：\n主题：${target.trim()}${focusText}\n若缺少事实信息，请用"据报道/市场传闻"等表述。`;
+}
