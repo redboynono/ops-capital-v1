@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
-import { buildResearchUserPrompt, researchSystemPrompt } from "@/lib/ai/researchSystemPrompt";
+import {
+  buildNewsUserPrompt,
+  buildResearchUserPrompt,
+  newsSystemPrompt,
+  researchSystemPrompt,
+} from "@/lib/ai/researchSystemPrompt";
 
 type GeneratePayload = {
   target?: string;
   focus?: string;
+  kind?: "analysis" | "news";
 };
 
 export async function POST(req: Request) {
@@ -15,7 +21,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "target is required" }, { status: 400 });
     }
 
-    const userPrompt = buildResearchUserPrompt(target, body.focus);
+    const kind = body.kind === "news" ? "news" : "analysis";
+    const systemPrompt = kind === "news" ? newsSystemPrompt : researchSystemPrompt;
+    const userPrompt =
+      kind === "news" ? buildNewsUserPrompt(target, body.focus) : buildResearchUserPrompt(target, body.focus);
     const geminiApiKey = process.env.GEMINI_API_KEY;
 
     let content: unknown;
@@ -42,7 +51,7 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           systemInstruction: {
-            parts: [{ text: researchSystemPrompt }],
+            parts: [{ text: systemPrompt }],
           },
           contents: [
             {
@@ -73,6 +82,7 @@ export async function POST(req: Request) {
       const apiKey = process.env.OPENAI_API_KEY;
       const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
       const baseUrl = (process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "");
+      const chatPath = process.env.OPENAI_CHAT_PATH ?? "/chat/completions";
 
       if (!apiKey) {
         return NextResponse.json(
@@ -81,7 +91,7 @@ export async function POST(req: Request) {
         );
       }
 
-      const response = await fetch(`${baseUrl}/chat/completions`, {
+      const response = await fetch(`${baseUrl}${chatPath}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -90,8 +100,9 @@ export async function POST(req: Request) {
         body: JSON.stringify({
           model,
           temperature: 0.35,
+          max_tokens: Number(process.env.OPENAI_MAX_TOKENS ?? 4096),
           messages: [
-            { role: "system", content: researchSystemPrompt },
+            { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
         }),
@@ -106,6 +117,13 @@ export async function POST(req: Request) {
       }
 
       const data = await response.json();
+      // MiniMax-style error envelope: base_resp.status_code !== 0 with HTTP 200
+      if (data?.base_resp && data.base_resp.status_code !== 0) {
+        return NextResponse.json(
+          { error: "Upstream model API error", detail: data.base_resp.status_msg ?? JSON.stringify(data.base_resp) },
+          { status: 502 },
+        );
+      }
       content = data?.choices?.[0]?.message?.content;
     }
 
@@ -113,7 +131,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Empty model response" }, { status: 502 });
     }
 
-    return NextResponse.json({ content });
+    // Strip reasoning blocks emitted by reasoning models (e.g. MiniMax M2.7 <think>...</think>)
+    const cleaned = content
+      .replace(/<think>[\s\S]*?<\/think>\s*/gi, "")
+      .replace(/^\s*```(?:markdown|md)?\s*\n?/i, "")
+      .replace(/\n?```\s*$/i, "")
+      .trim();
+
+    return NextResponse.json({ content: cleaned });
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown error";
     return NextResponse.json({ error: "Failed to generate report", detail }, { status: 500 });
