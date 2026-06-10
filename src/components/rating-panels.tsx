@@ -12,6 +12,7 @@ import {
   getFactorGrades,
   getRating,
 } from "@/lib/ratings";
+import { FactorRadar } from "@/components/factor-radar";
 
 // -------- color palettes --------
 
@@ -196,6 +197,18 @@ export async function FactorGrades({ symbol }: { symbol: string }) {
   return (
     <section className="card p-3">
       <p className="label-caps">{isCrypto ? "Crypto Factor Grades" : "Factor Grades"}</p>
+
+      {hasAny && isCrypto ? (
+        <div className="mx-auto mt-2 max-w-[260px]">
+          <FactorRadar
+            uid={`tk-${symbol}`}
+            axes={factors.map(({ key, row }) => ({
+              label: FACTOR_LABELS[key].split(" ").pop() ?? key,
+              grade: (row?.grade_now ?? null) as Grade | null,
+            }))}
+          />
+        </div>
+      ) : null}
 
       {hasAny ? (
         <>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ComparePicker } from "@/components/compare-picker";
+import { FactorRadar } from "@/components/factor-radar";
 import { Sparkline } from "@/components/sparkline";
 import { COMPARE_MAX, loadCompareData, parseCompareSymbols, type CompareColumn } from "@/lib/compare";
 import type { FactorKey, Grade, Verdict } from "@/lib/ratings";
@@ -206,17 +207,27 @@ function ColumnCard({ col }: { col: CompareColumn }) {
       {/* Factor grades */}
       <section className="border-b border-border py-2">
         <SectionTitle>{isCrypto ? "加密六因子" : "五因子"}</SectionTitle>
-        <div className={`grid gap-1 ${isCrypto ? "grid-cols-3" : "grid-cols-5"}`}>
-          {(isCrypto ? CRYPTO_FACTORS : CORE_FACTORS).map((f) => {
-            const g = grades[f as FactorKey];
-            return (
-              <div key={f} className="flex flex-col items-center gap-0.5 rounded border border-border bg-surface-muted py-1">
-                <span className={`mono text-[12px] font-bold ${gradeColor(g)}`}>{g ?? "—"}</span>
-                <span className="text-[9px] text-muted">{FACTOR_LABEL[f]}</span>
-              </div>
-            );
-          })}
-        </div>
+        {isCrypto ? (
+          <FactorRadar
+            uid={`cmp-${symbol}`}
+            axes={CRYPTO_FACTORS.map((f) => ({
+              label: FACTOR_LABEL[f] ?? f,
+              grade: grades[f as FactorKey] ?? null,
+            }))}
+          />
+        ) : (
+          <div className="grid grid-cols-5 gap-1">
+            {CORE_FACTORS.map((f) => {
+              const g = grades[f as FactorKey];
+              return (
+                <div key={f} className="flex flex-col items-center gap-0.5 rounded border border-border bg-surface-muted py-1">
+                  <span className={`mono text-[12px] font-bold ${gradeColor(g)}`}>{g ?? "—"}</span>
+                  <span className="text-[9px] text-muted">{FACTOR_LABEL[f]}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* News */}
