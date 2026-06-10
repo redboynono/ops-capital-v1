@@ -6,6 +6,10 @@ import { isSubscriptionActive, subscriptionDaysLeft } from "@/lib/subscription";
 import { getMemberStats, listBookmarks, listHistory } from "@/lib/me";
 import { getCachedPosts } from "@/lib/cached-data";
 import { listWatchlist } from "@/lib/tickers";
+import { formatDate } from "@/lib/i18n/common";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
+import { postTitle } from "@/lib/i18n/post-locale";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +20,10 @@ function hrefFor(kind: "analysis" | "news", slug: string) {
 export default async function DashboardPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
+
+  const locale = await getLocale();
+  const d = getDictionary(locale).dashboard;
+  const c = getDictionary(locale).common;
 
   const [stats, bookmarks, history, latest, watchlist] = await Promise.all([
     getMemberStats(user.id),
@@ -37,75 +45,77 @@ export default async function DashboardPage() {
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 md:px-6">
       <header className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
         <div>
-          <span className="label-caps">会员桌面</span>
-          <h1 className="mt-1 text-2xl font-bold text-foreground">欢迎回来</h1>
+          <span className="label-caps">{d.label}</span>
+          <h1 className="mt-1 text-2xl font-bold text-foreground">{d.welcome}</h1>
           <p className="mt-1 text-[13px] text-muted">{user.email}</p>
         </div>
         <div className="flex items-center gap-3 text-[12px] text-muted">
-          <Link href="/dashboard/watchlist" className="hover:text-accent-strong">自选股</Link>
+          <Link href="/dashboard/watchlist" className="hover:text-accent-strong">{d.watchlist}</Link>
           <span>·</span>
-          <Link href="/dashboard/library" className="hover:text-accent-strong">收藏/历史</Link>
+          <Link href="/dashboard/library" className="hover:text-accent-strong">{d.library}</Link>
           <span>·</span>
-          <Link href="/dashboard/profile" className="hover:text-accent-strong">资料</Link>
+          <Link href="/dashboard/profile" className="hover:text-accent-strong">{d.profile}</Link>
         </div>
       </header>
 
-      {/* 订阅状态条 */}
       <section
         className="card flex flex-wrap items-center justify-between gap-3 p-4"
         style={subscribed ? { background: "var(--accent-soft)", borderColor: "#f6c7b6" } : {}}
       >
         <div>
-          <p className="label-caps">订阅状态</p>
+          <p className="label-caps">{d.subStatus}</p>
           <p className="mt-0.5 text-lg font-bold">
-            {subscribed ? `会员有效${left !== null ? ` · 剩余 ${left} 天` : ""}` : "尚未订阅"}
+            {subscribed
+              ? `${d.subActiveFmt}${left !== null ? fmt(d.daysLeftFmt, { n: left }) : ""}`
+              : d.notSubscribed}
           </p>
           <p className="mt-0.5 text-[12px] text-muted">
             {subscribed
-              ? `Research Pro ${research ? "✓" : "—"} · Option Alpha ${options ? "✓" : "—"}`
-              : "可按需订阅 Research Pro、Option Alpha 或全站 Bundle。"}
+              ? fmt(d.entitlementsFmt, {
+                  research: research ? "✓" : "—",
+                  options: options ? "✓" : "—",
+                })
+              : d.entitlementsHint}
           </p>
         </div>
         <div className="flex gap-2">
           {subscribed ? null : (
             <Link href="/pricing" className="btn-primary px-3 py-1.5 text-[12px]">
-              查看订阅方案
+              {d.viewPricing}
             </Link>
           )}
           <Link href="/analysis" className="btn-outline px-3 py-1.5 text-[12px]">
-            浏览分析
+            {d.browseAnalysis}
           </Link>
         </div>
       </section>
 
-      {/* 关键指标 */}
       <section className="mt-4 grid grid-cols-3 gap-3 text-center">
         <div className="card p-3">
-          <p className="label-caps">本周新分析</p>
+          <p className="label-caps">{d.newThisWeek}</p>
           <p className="mt-1 font-mono text-2xl font-bold text-foreground">{stats.newThisWeek}</p>
         </div>
         <div className="card p-3">
-          <p className="label-caps">我的收藏</p>
+          <p className="label-caps">{d.bookmarks}</p>
           <p className="mt-1 font-mono text-2xl font-bold text-foreground">{stats.bookmarks}</p>
         </div>
         <div className="card p-3">
-          <p className="label-caps">累计阅读</p>
+          <p className="label-caps">{d.readCount}</p>
           <p className="mt-1 font-mono text-2xl font-bold text-foreground">{stats.readCount}</p>
         </div>
       </section>
 
       <section className="mt-5 grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-        {/* 左：近期阅读 + 收藏 */}
         <div className="space-y-4">
           <div className="card">
             <header className="flex items-center justify-between border-b border-border px-4 py-2">
-              <p className="label-caps">近期阅读</p>
+              <p className="label-caps">{d.recentReads}</p>
               <Link href="/dashboard/library?tab=history" className="text-[12px] text-accent-strong hover:underline">
-                查看全部 →
+                {c.viewAll}
               </Link>
             </header>
             {history.length === 0 ? (
-              <p className="px-4 py-8 text-center text-[13px] text-muted">还没有阅读记录。</p>
+              <p className="px-4 py-8 text-center text-[13px] text-muted">{d.noHistory}</p>
             ) : (
               <ul className="divide-y divide-border">
                 {history.map((h) => (
@@ -114,7 +124,7 @@ export default async function DashboardPage() {
                       {h.title}
                     </Link>
                     <span className="shrink-0 text-[11px] text-muted">
-                      {new Date(h.read_at).toLocaleDateString("zh-CN")}
+                      {formatDate(locale, h.read_at)}
                     </span>
                   </li>
                 ))}
@@ -124,15 +134,13 @@ export default async function DashboardPage() {
 
           <div className="card">
             <header className="flex items-center justify-between border-b border-border px-4 py-2">
-              <p className="label-caps">我的收藏</p>
+              <p className="label-caps">{d.myBookmarks}</p>
               <Link href="/dashboard/library?tab=bookmarks" className="text-[12px] text-accent-strong hover:underline">
-                查看全部 →
+                {c.viewAll}
               </Link>
             </header>
             {bookmarks.length === 0 ? (
-              <p className="px-4 py-8 text-center text-[13px] text-muted">
-                暂无收藏。在分析详情页点击收藏按钮即可。
-              </p>
+              <p className="px-4 py-8 text-center text-[13px] text-muted">{d.noBookmarks}</p>
             ) : (
               <ul className="divide-y divide-border">
                 {bookmarks.map((b) => (
@@ -141,7 +149,7 @@ export default async function DashboardPage() {
                       {b.title}
                     </Link>
                     <span className="shrink-0 text-[11px] text-muted">
-                      {new Date(b.bookmarked_at).toLocaleDateString("zh-CN")}
+                      {formatDate(locale, b.bookmarked_at)}
                     </span>
                   </li>
                 ))}
@@ -150,22 +158,21 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* 右：自选股 + 最新分析 */}
         <div className="space-y-4">
           <div className="card">
             <header className="flex items-center justify-between border-b border-border px-4 py-2">
-              <p className="label-caps">自选股</p>
+              <p className="label-caps">{d.watchlistTitle}</p>
               <Link href="/dashboard/watchlist" className="text-[12px] text-accent-strong hover:underline">
-                管理 →
+                {c.manage}
               </Link>
             </header>
             {watchlist.length === 0 ? (
               <p className="px-4 py-8 text-center text-[13px] text-muted">
-                未添加自选。去
+                {d.noWatchlist}
                 <Link href="/dashboard/watchlist" className="mx-1 text-accent-strong hover:underline">
-                  自选股
+                  {d.noWatchlistLink}
                 </Link>
-                添加代码。
+                {d.noWatchlistEnd}
               </p>
             ) : (
               <ul className="divide-y divide-border">
@@ -183,21 +190,21 @@ export default async function DashboardPage() {
 
           <div className="card">
             <header className="flex items-center justify-between border-b border-border px-4 py-2">
-              <p className="label-caps">最新分析</p>
-              <Link href="/analysis" className="text-[12px] text-accent-strong hover:underline">全部 →</Link>
+              <p className="label-caps">{d.latestAnalysis}</p>
+              <Link href="/analysis" className="text-[12px] text-accent-strong hover:underline">{c.viewAll}</Link>
             </header>
             {latest.length === 0 ? (
-              <p className="px-4 py-8 text-center text-[13px] text-muted">暂无。</p>
+              <p className="px-4 py-8 text-center text-[13px] text-muted">{c.none}</p>
             ) : (
               <ul className="divide-y divide-border">
                 {latest.map((p) => (
                   <li key={p.id} className="row-hover px-4 py-2">
                     <Link href={`/analysis/${p.slug}`} className="link-title block text-[13px] leading-snug">
-                      {p.title}
+                      {postTitle(p, locale)}
                     </Link>
                     <p className="mt-0.5 text-[11px] text-muted">
-                      {p.is_premium ? "PRO · " : ""}
-                      {new Date(p.created_at).toLocaleDateString("zh-CN")}
+                      {p.is_premium ? c.pro : ""}
+                      {formatDate(locale, p.created_at)}
                     </p>
                   </li>
                 ))}

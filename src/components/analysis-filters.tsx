@@ -1,18 +1,23 @@
 import Link from "next/link";
-
-const PERIODS = [
-  { value: "", label: "全部时间" },
-  { value: "week", label: "近一周" },
-  { value: "month", label: "近一月" },
-] as const;
+import { getDictionary } from "@/lib/i18n";
+import type { Locale } from "@/lib/i18n/locale-types";
 
 type Props = {
   sectors: string[];
   current: { symbol?: string; sector?: string; period?: string };
+  locale: Locale;
 };
 
-export function AnalysisFilters({ sectors, current }: Props) {
+export function AnalysisFilters({ sectors, current, locale }: Props) {
+  const f = getDictionary(locale).analysis.filters;
+  const all = getDictionary(locale).common.all;
   const base = "/analysis";
+
+  const PERIODS = [
+    { value: "", label: f.allTime },
+    { value: "week", label: f.week },
+    { value: "month", label: f.month },
+  ] as const;
 
   function href(extra: Record<string, string | undefined>) {
     const p = new URLSearchParams();
@@ -27,7 +32,7 @@ export function AnalysisFilters({ sectors, current }: Props) {
   return (
     <div className="mb-4 flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2 text-[12px]">
-        <span className="label-caps text-muted">时间</span>
+        <span className="label-caps text-muted">{f.time}</span>
         {PERIODS.map((t) => (
           <Link
             key={t.value || "all"}
@@ -44,7 +49,7 @@ export function AnalysisFilters({ sectors, current }: Props) {
       </div>
       {sectors.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 text-[12px]">
-          <span className="label-caps text-muted">行业</span>
+          <span className="label-caps text-muted">{f.sector}</span>
           <Link
             href={href({ sector: undefined })}
             className={
@@ -53,7 +58,7 @@ export function AnalysisFilters({ sectors, current }: Props) {
                 : "rounded border border-border px-2 py-0.5 text-muted hover:border-accent"
             }
           >
-            全部
+            {all}
           </Link>
           {sectors.map((s) => (
             <Link

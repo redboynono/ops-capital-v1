@@ -22,9 +22,11 @@ create table if not exists users (
 create table if not exists posts (
   id char(36) primary key,
   title text not null,
+  title_en varchar(512) null,
   slug varchar(255) not null unique,
   kind enum('analysis','news') not null default 'analysis',
   excerpt text not null,
+  excerpt_en text null,
   content longtext not null,
   is_premium boolean not null default true,
   is_published boolean not null default false,

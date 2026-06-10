@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useDict } from "@/components/locale-provider";
 
 export function BookmarkButton({
   postId,
@@ -9,6 +10,7 @@ export function BookmarkButton({
   postId: string;
   initialBookmarked: boolean;
 }) {
+  const c = useDict().common;
   const [bookmarked, setBookmarked] = useState(initialBookmarked);
   const [pending, startTransition] = useTransition();
 
@@ -44,7 +46,7 @@ export function BookmarkButton({
       }`}
     >
       <span aria-hidden>{bookmarked ? "★" : "☆"}</span>
-      {bookmarked ? "已收藏" : "收藏"}
+      {bookmarked ? c.bookmarked : c.bookmark}
     </button>
   );
 }

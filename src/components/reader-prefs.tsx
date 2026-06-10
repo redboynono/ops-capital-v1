@@ -10,11 +10,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useDict } from "@/components/locale-provider";
 import {
   DEFAULT_READER_PREFS,
-  READER_FONT_LABELS,
-  READER_LINE_LABELS,
-  READER_WIDTH_LABELS,
   loadReaderPreferences,
   saveReaderPreferences,
   type ReaderContentWidth,
@@ -103,9 +101,27 @@ function Segmented<T extends string>({
 }
 
 export function ReaderPrefsToolbar() {
+  const r = useDict().reader;
   const ctx = useContext(ReaderPrefsContext);
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const fontLabels: Record<ReaderFontSize, string> = {
+    sm: r.fontSmall,
+    md: r.fontMedium,
+    lg: r.fontLarge,
+    xl: r.fontLarge,
+  };
+  const lineLabels: Record<ReaderLineHeight, string> = {
+    compact: r.lineTight,
+    normal: r.lineNormal,
+    relaxed: r.lineLoose,
+  };
+  const widthLabels: Record<ReaderContentWidth, string> = {
+    narrow: r.widthNarrow,
+    standard: r.widthMedium,
+    wide: r.widthWide,
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -137,7 +153,7 @@ export function ReaderPrefsToolbar() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="rounded-sm border border-border px-2 py-0.5 font-mono text-[11px] hover:border-accent hover:text-accent-strong"
-        title="阅读设置"
+        title={r.settings}
         aria-expanded={open}
         aria-haspopup="dialog"
       >
@@ -146,31 +162,31 @@ export function ReaderPrefsToolbar() {
       {open ? (
         <div
           role="dialog"
-          aria-label="阅读设置"
+          aria-label={r.settings}
           className="absolute right-0 top-full z-50 mt-1 w-[220px] rounded-sm border border-[#d8d0c2] bg-[#f5f1ea] p-3 shadow-lg"
         >
           <Segmented<ReaderFontSize>
-            label="字号"
+            label={r.fontSize}
             value={prefs.fontSize}
             options={["sm", "md", "lg", "xl"] as const}
-            labels={READER_FONT_LABELS}
+            labels={fontLabels}
             onChange={(fontSize) => setPrefs({ fontSize })}
           />
           <div className="mt-3">
             <Segmented<ReaderLineHeight>
-              label="行距"
+              label={r.lineHeight}
               value={prefs.lineHeight}
               options={["compact", "normal", "relaxed"] as const}
-              labels={READER_LINE_LABELS}
+              labels={lineLabels}
               onChange={(lineHeight) => setPrefs({ lineHeight })}
             />
           </div>
           <div className="mt-3">
             <Segmented<ReaderContentWidth>
-              label="版心"
+              label={r.width}
               value={prefs.width}
               options={["narrow", "standard", "wide"] as const}
-              labels={READER_WIDTH_LABELS}
+              labels={widthLabels}
               onChange={(width) => setPrefs({ width })}
             />
           </div>
@@ -183,7 +199,7 @@ export function ReaderPrefsToolbar() {
               }}
               className="mt-3 w-full rounded-sm border border-[#d8d0c2] py-1 font-mono text-[10px] text-[#6b5c3f] hover:border-[#b08b57]"
             >
-              恢复默认
+              {r.reset}
             </button>
           ) : null}
         </div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Send, Sparkles, User2 } from "lucide-react";
 import { AiAnswerBody } from "@/components/ai-answer";
+import { useDict } from "@/components/locale-provider";
 
 type Context =
   | { kind: "ticker"; symbol: string; suggestions?: string[] }
@@ -11,29 +12,20 @@ type Context =
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
-const DEFAULT_SUGGESTIONS_TICKER = [
-  "按 Factsheet：当前估值贵不贵？",
-  "OPS 评级与 Street 一致预期差在哪？",
-  "未来 3-6 个月最关键催化剂？",
-  "最大下行风险是什么？",
-];
-const DEFAULT_SUGGESTIONS_POST = [
-  "本文最核心的观点用一句话总结",
-  "本文的论点有什么薄弱环节？",
-  "和当前最新数据相比有没有过时的地方？",
-];
-
 export function AskAI({
   context,
   loggedIn,
-  title = "用数据问 AI",
-  subtitle = "Factsheet 约束 · 回答带 [来源] 脚注，可点击角标查看",
+  title,
+  subtitle,
 }: {
   context: Context;
   loggedIn: boolean;
   title?: string;
   subtitle?: string;
 }) {
+  const dict = useDict();
+  const a = dict.askAi;
+  const nav = dict.nav;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,7 +33,7 @@ export function AskAI({
 
   const suggestions =
     context.suggestions ??
-    (context.kind === "ticker" ? DEFAULT_SUGGESTIONS_TICKER : DEFAULT_SUGGESTIONS_POST);
+    (context.kind === "ticker" ? a.suggestionsTicker : a.suggestionsPost);
 
   async function ask(question: string) {
     if (!question.trim() || loading) return;
@@ -49,7 +41,6 @@ export function AskAI({
 
     setLoading(true);
     setError(null);
-    // 在 user msg 后面预占一个空 assistant 槽，流式 chunk 直接 append 进去
     const baseHistory: ChatMessage[] = [...messages, { role: "user", content: question }];
     setMessages([...baseHistory, { role: "assistant", content: "" }]);
     setDraft("");
@@ -65,7 +56,6 @@ export function AskAI({
         body: JSON.stringify(payload),
       });
 
-      // 错误响应（仍然是 JSON，不是 stream）
       const ct = res.headers.get("content-type") ?? "";
       if (!res.ok || !res.body || ct.includes("application/json")) {
         const data = await res.json().catch(() => ({}));
@@ -81,7 +71,6 @@ export function AskAI({
         const chunk = decoder.decode(value, { stream: true });
         if (!chunk) continue;
         acc += chunk;
-        // 实时回填最后一个 assistant message
         setMessages((prev) => {
           const out = [...prev];
           const last = out[out.length - 1];
@@ -92,8 +81,8 @@ export function AskAI({
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "请求失败");
-      setMessages(baseHistory); // keep user msg, drop assistant placeholder
+      setError(err instanceof Error ? err.message : a.requestFail);
+      setMessages(baseHistory);
     } finally {
       setLoading(false);
     }
@@ -109,12 +98,11 @@ export function AskAI({
           <Sparkles className="h-3.5 w-3.5 text-[#0a0a0d]" strokeWidth={2.4} />
         </span>
         <div className="flex-1">
-          <h3 className="text-[13px] font-bold text-foreground">{title}</h3>
-          <p className="text-[10px] text-muted">{subtitle}</p>
+          <h3 className="text-[13px] font-bold text-foreground">{title ?? a.title}</h3>
+          <p className="text-[10px] text-muted">{subtitle ?? a.subtitle}</p>
         </div>
       </header>
 
-      {/* 历史 */}
       {messages.length > 0 ? (
         <div className="mb-3 space-y-3 max-h-[480px] overflow-y-auto rounded border border-border bg-surface-muted p-3">
           {messages.map((m, i) => {
@@ -126,13 +114,13 @@ export function AskAI({
                 role={m.role}
                 content={m.content}
                 streaming={isStreamingAssistant}
+                thinking={a.thinking}
               />
             );
           })}
         </div>
       ) : null}
 
-      {/* 推荐问题 */}
       {messages.length === 0 ? (
         <div className="mb-3 flex flex-wrap gap-1.5">
           {suggestions.map((s) => (
@@ -149,7 +137,6 @@ export function AskAI({
         </div>
       ) : null}
 
-      {/* 输入框 */}
       {loggedIn ? (
         <form
           onSubmit={(e) => {
@@ -162,9 +149,7 @@ export function AskAI({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={
-              context.kind === "ticker"
-                ? "问点关于这只标的的具体问题…"
-                : "问点关于这篇文章的具体问题…"
+              context.kind === "ticker" ? a.placeholderTicker : a.placeholderPost
             }
             disabled={loading}
             className="flex-1 bg-transparent text-[12px] text-foreground placeholder:text-muted-soft outline-none"
@@ -175,7 +160,7 @@ export function AskAI({
             disabled={!draft.trim() || loading}
             className="inline-flex h-7 items-center justify-center rounded-sm px-2 disabled:opacity-40"
             style={{ background: "var(--accent)", color: "#0a0a0d" }}
-            aria-label="发送"
+            aria-label={a.send}
           >
             <Send className="h-3.5 w-3.5" strokeWidth={2} />
           </button>
@@ -183,9 +168,9 @@ export function AskAI({
       ) : (
         <div className="rounded border border-dashed border-border bg-surface-muted px-3 py-3 text-[12px] text-muted">
           <Link href="/login" className="text-accent-strong hover:underline">
-            登录
-          </Link>{" "}
-          后即可向 AI 提问；非会员每日有问答额度。
+            {nav.login}
+          </Link>
+          {a.loginHint}
         </div>
       )}
 
@@ -200,10 +185,12 @@ function Bubble({
   role,
   content,
   streaming = false,
+  thinking,
 }: {
   role: "user" | "assistant";
   content: string;
   streaming?: boolean;
+  thinking: string;
 }) {
   if (role === "user") {
     return (
@@ -215,7 +202,6 @@ function Bubble({
       </div>
     );
   }
-  // assistant
   const empty = !content;
   return (
     <div className="flex items-start gap-2">
@@ -229,7 +215,7 @@ function Bubble({
       </span>
       <div className="flex-1 text-[12px] leading-relaxed text-foreground-soft">
         {empty && streaming ? (
-          <span className="text-muted">AI 正在思考…</span>
+          <span className="text-muted">{thinking}</span>
         ) : (
           <AiAnswerBody content={content} streaming={streaming} />
         )}

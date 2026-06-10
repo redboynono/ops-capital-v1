@@ -160,7 +160,7 @@ export function PricingCheckout({
         if (data.status === "paid") {
           window.location.href = `/pay/success?out_trade_no=${encodeURIComponent(pendingRedirect.outTradeNo)}`;
         } else if (data.status === "failed") {
-          setError("支付失败，请重新下单或联系客服。");
+          setError(c.payFailRetry);
           setPendingRedirect(null);
         }
       } catch {
@@ -193,7 +193,10 @@ export function PricingCheckout({
                   <p className="label-caps">{p.name}</p>
                   <p className="mt-1 font-mono text-3xl font-bold">{formatYuan(p.amount)}</p>
                   <p className="mt-0.5 text-[11px] text-muted">
-                    {p.durationMonths} 个月 · ${(p.amount / p.durationMonths / 100).toFixed(2)}/月
+                    {fmt(c.planMonthsFmt, {
+                      n: p.durationMonths,
+                      price: (p.amount / p.durationMonths / 100).toFixed(2),
+                    })}
                   </p>
                 </div>
                 {p.highlight ? <span className="badge-premium">PRO</span> : null}
@@ -240,7 +243,7 @@ export function PricingCheckout({
 
         {loggedIn && userEmail ? (
           <p className="text-center text-[11px] text-muted">
-            将使用注册邮箱 <span className="font-mono font-semibold text-foreground">{userEmail}</span> 预填 Stripe 结账页
+            {fmt(c.stripeEmailFmt, { email: userEmail })}
           </p>
         ) : null}
         <p className="text-center text-[11px] text-muted">{c.stripeNote}</p>
@@ -253,7 +256,7 @@ export function PricingCheckout({
               disabled={busy !== null}
               className="flex items-center justify-center gap-2 rounded border border-[#1677ff]/60 bg-[#1677ff] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#0e5fd6] disabled:opacity-50"
             >
-              {busy === "alipay" ? "生成订单中..." : "支付宝支付"}
+              {busy === "alipay" ? c.creatingOrder : c.alipay}
             </button>
             <button
               type="button"
@@ -261,7 +264,7 @@ export function PricingCheckout({
               disabled={busy !== null}
               className="flex items-center justify-center gap-2 rounded border border-[#09bb07]/60 bg-[#09bb07] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#08a006] disabled:opacity-50"
             >
-              {busy === "wechat" ? "生成订单中..." : "微信支付"}
+              {busy === "wechat" ? c.creatingOrder : c.wechatPay}
             </button>
           </div>
         ) : null}
@@ -276,31 +279,28 @@ export function PricingCheckout({
       {pendingRedirect ? (
         <div className="mt-3 rounded border border-[color:var(--accent)] bg-[color:var(--accent-soft)] px-3 py-3 text-[12px]">
           <p className="font-bold text-[color:var(--accent-strong)]">
-            ✓ 已为你打开 Stripe 结账页（新标签）
+            {c.stripeOpened}
           </p>
           <p className="mt-1 text-foreground">
-            订单号：<span className="mono">{pendingRedirect.outTradeNo}</span>
+            {c.orderNo}<span className="mono">{pendingRedirect.outTradeNo}</span>
           </p>
-          <p className="mt-1 text-muted">
-            如果新标签页没打开（被浏览器拦截 / 国内访问慢），请手动点：
-          </p>
+          <p className="mt-1 text-muted">{c.stripeBlocked}</p>
           <a
             href={pendingRedirect.url}
             target="_blank"
             rel="noreferrer noopener"
             className="mt-2 inline-block break-all rounded bg-[color:var(--accent)] px-3 py-1.5 text-[12px] font-semibold text-[color:var(--background)] hover:bg-[color:var(--accent-strong)]"
           >
-            手动打开 Stripe 结账页 →
+            {c.stripeManual}
           </a>
           <p className="mt-2 text-muted">
-            付完后也可
             <a
               href={`/pay/success?out_trade_no=${encodeURIComponent(pendingRedirect.outTradeNo)}`}
               className="mx-1 font-semibold text-accent-strong hover:underline"
             >
-              打开支付确认页
+              {c.payConfirm}
             </a>
-            （自动轮询开通状态）
+            {c.payPolling}
           </p>
         </div>
       ) : null}
@@ -317,8 +317,8 @@ export function PricingCheckout({
           >
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div>
-                <span className="label-caps">微信支付</span>
-                <h2 className="mt-0.5 text-lg font-bold">请使用微信扫码支付</h2>
+                <span className="label-caps">{c.wechatPay}</span>
+                <h2 className="mt-0.5 text-lg font-bold">{c.wechatTitle}</h2>
               </div>
               <button
                 type="button"
@@ -336,7 +336,10 @@ export function PricingCheckout({
               </div>
               <p className="mt-3 font-mono text-xl font-bold">{formatYuan(qrDialog.amount)}</p>
               <p className="mt-0.5 text-[11px] text-muted">
-                {qrDialog.durationMonths} 个月会员 · 订单 {qrDialog.outTradeNo}
+                {fmt(c.wechatOrderFmt, {
+                  months: qrDialog.durationMonths,
+                  order: qrDialog.outTradeNo,
+                })}
               </p>
 
               {qrDialog.isMock ? (
@@ -346,7 +349,7 @@ export function PricingCheckout({
                   rel="noreferrer"
                   className="mt-3 text-[11px] text-[color:var(--accent-strong)] hover:underline"
                 >
-                  [MOCK 模式] 点此打开模拟支付触发页 →
+                  {c.wechatMock}
                 </a>
               ) : null}
 
@@ -354,12 +357,12 @@ export function PricingCheckout({
                 {polled === "pending" ? (
                   <>
                     <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[color:var(--accent)]" />
-                    等待支付中... (每 3s 检查一次)
+                    {c.wechatPending}
                   </>
                 ) : polled === "paid" ? (
-                  <span className="text-[color:var(--success)]">✓ 支付成功，跳转中...</span>
+                  <span className="text-[color:var(--success)]">{c.wechatPaid}</span>
                 ) : (
-                  <span className="text-[color:var(--danger)]">订单失败，请重新发起</span>
+                  <span className="text-[color:var(--danger)]">{c.wechatFailed}</span>
                 )}
               </div>
             </div>

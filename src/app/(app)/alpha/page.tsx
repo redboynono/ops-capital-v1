@@ -66,7 +66,7 @@ export default async function Home() {
                 {a.noAnalysisEnd}
               </p>
             ) : (
-              analysis.map((p) => <PostRow key={p.id} post={p} />)
+              analysis.map((p) => <PostRow key={p.id} post={p} locale={locale} />)
             )}
           </div>
         </section>

@@ -16,13 +16,19 @@ import { getPostBySlug } from "@/lib/posts";
 import { listTickersForPost } from "@/lib/tickers";
 import { ArticleToc } from "@/components/article-toc";
 import { ReaderModeShell, ReaderPrefsProvider, ReaderPrefsToolbar } from "@/components/reader-prefs";
+import { formatDate } from "@/lib/i18n/common";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { postExcerpt, postTitle } from "@/lib/i18n/post-locale";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const post = await getPostBySlug(slug);
-  if (!post || post.kind !== "analysis") return { title: "分析 · OPS Alpha" };
+  if (!post || post.kind !== "analysis") {
+    const locale = await getLocale();
+    return { title: getDictionary(locale).meta.analysisTitle };
+  }
   return buildPostMetadata(post, "analysis");
 }
 
@@ -35,9 +41,12 @@ export default async function AnalysisDetailPage({
 }) {
   const { slug } = await params;
   const { reader } = await searchParams;
-  // 默认进入阅读模式；?reader=0 才显示终端视图
   const readerMode = reader !== "0";
-  const post = await getPostBySlug(slug);
+  const [locale, post] = await Promise.all([getLocale(), getPostBySlug(slug)]);
+  const dict = getDictionary(locale);
+  const t = dict.analysis;
+  const c = dict.common;
+
   if (!post || post.kind !== "analysis") notFound();
 
   const [user, tickers] = await Promise.all([
@@ -47,21 +56,21 @@ export default async function AnalysisDetailPage({
 
   const canViewFull = !post.is_premium || hasResearchAccess(user);
   const bookmarked = user ? await isBookmarked(user.id, post.id) : false;
-  // 摘要门社会证明：仅非订阅用户需要读者数
   const readers = canViewFull ? 0 : await getPostReaderCount(post.id);
   if (user) recordRead(user.id, post.id).catch(() => null);
 
   const toggleHref = readerMode ? `/analysis/${post.slug}?reader=0` : `/analysis/${post.slug}`;
   const tocItems = extractTocFromMarkdown(post.content);
-  // 仅订阅用户渲染正文，故目录侧栏也仅对其展示（否则锚点无对应内容）
   const showToc = readerMode && canViewFull && shouldShowToc(post.content);
+  const title = postTitle(post, locale);
+  const excerpt = postExcerpt(post, locale);
 
   return (
     <ReaderPrefsProvider enabled={readerMode}>
     <div className="mx-auto w-full max-w-[840px] px-4 py-6 md:px-6">
       <nav className="flex items-center justify-between text-[12px] text-muted">
         <div>
-          <Link href="/analysis" className="hover:text-accent-strong">分析</Link>
+          <Link href="/analysis" className="hover:text-accent-strong">{t.breadcrumb}</Link>
           <span className="mx-1">/</span>
           <span>{post.slug}</span>
         </div>
@@ -70,9 +79,9 @@ export default async function AnalysisDetailPage({
           <Link
             href={toggleHref}
             className="rounded-sm border border-border px-2 py-0.5 font-mono text-[11px] hover:border-accent hover:text-accent-strong"
-            title="切换阅读模式"
+            title={t.readerToggle}
           >
-            {readerMode ? "☾ 终端视图" : "☀ 阅读模式"}
+            {readerMode ? t.readerTerminal : t.readerReading}
           </Link>
         </div>
       </nav>
@@ -83,26 +92,24 @@ export default async function AnalysisDetailPage({
           {post.is_premium ? (
             <span className="badge-premium">Research</span>
           ) : (
-            <span className="badge-free">公开</span>
+            <span className="badge-free">{c.public}</span>
           )}
-          {tickers.map((t) => (
-            <Link key={t.symbol} href={`/t/${t.symbol}`} className="chip">
-              {t.symbol}
+          {tickers.map((tk) => (
+            <Link key={tk.symbol} href={`/t/${tk.symbol}`} className="chip">
+              {tk.symbol}
             </Link>
           ))}
-          <span className="label-caps">
-            {new Date(post.created_at).toLocaleDateString("zh-CN")}
-          </span>
+          <span className="label-caps">{formatDate(locale, post.created_at)}</span>
         </div>
         <h1 className="mt-2 font-[var(--font-brand-serif)] text-3xl font-bold leading-snug text-foreground md:text-4xl">
-          {post.title}
+          {title}
         </h1>
-        {canViewFull ? (
-          <p className="article-lede mt-2 text-[14px] leading-relaxed">{post.excerpt}</p>
+        {canViewFull && excerpt ? (
+          <p className="article-lede mt-2 text-[14px] leading-relaxed">{excerpt}</p>
         ) : null}
         <div className="mt-3 flex items-center gap-2">
-          <span className="label-caps">作者</span>
-          <span className="text-[12px] font-semibold">Ops Alpha AI · 编辑精选</span>
+          <span className="label-caps">{c.author}</span>
+          <span className="text-[12px] font-semibold">{c.authorLine}</span>
           <span className="mx-2 h-3 w-px bg-border" />
           {user ? <BookmarkButton postId={post.id} initialBookmarked={bookmarked} /> : null}
           <span className="mx-2 h-3 w-px bg-border" />
@@ -111,10 +118,10 @@ export default async function AnalysisDetailPage({
             data={{
               type: "post",
               kind: "analysis",
-              title: post.title,
-              excerpt: post.excerpt,
+              title,
+              excerpt,
               content: canViewFull ? post.content : null,
-              tickers: tickers.map((t) => t.symbol),
+              tickers: tickers.map((tk) => tk.symbol),
               createdAt: post.created_at,
             }}
             urlPath={`/analysis/${post.slug}`}
@@ -131,24 +138,25 @@ export default async function AnalysisDetailPage({
             </RedactedMarkdown>
           ) : (
             <ArticleSummaryGate
-              excerpt={post.excerpt}
+              excerpt={excerpt}
               teaser={bodyTeaser(post.content, 460)}
               sections={tocItems}
               readers={readers}
+              locale={locale}
             />
           )}
         </article>
         {showToc ? <ArticleToc items={tocItems} readerMode /> : null}
       </div>
 
-      {!canViewFull ? <StickyPaywall loggedIn={Boolean(user)} product="research" /> : null}
+      {!canViewFull ? <StickyPaywall loggedIn={Boolean(user)} product="research" locale={locale} /> : null}
 
       {canViewFull ? (
         <AskAI context={{ kind: "post", slug: post.slug }} loggedIn={Boolean(user)} />
       ) : null}
 
       <p className={`mt-8 pt-4 text-[11px] leading-relaxed ${readerMode ? "border-t border-[#d8d0c2] text-[#6b5c3f]" : "border-t border-border text-muted-soft"}`}>
-        免责声明：本文由 AI 编辑流水线生成并经人工复核，仅为研究观点，不构成投资建议。
+        {t.detailDisclaimer}
       </p>
       </ReaderModeShell>
     </div>

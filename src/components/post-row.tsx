@@ -1,43 +1,40 @@
 import Link from "next/link";
 import { ShareButton } from "@/components/share/share-button";
+import { formatRelative } from "@/lib/i18n/common";
+import { getDictionary } from "@/lib/i18n";
+import type { Locale } from "@/lib/i18n/locale-types";
+import { postExcerpt, postTitle } from "@/lib/i18n/post-locale";
 import { normalizeInternalSymbol } from "@/lib/symbol-resolve";
 
 type Post = {
   id: string;
   title: string;
+  title_en?: string | null;
   slug: string;
   kind: "analysis" | "news";
-  excerpt?: string;
+  excerpt?: string | null;
+  excerpt_en?: string | null;
   is_premium: number | boolean;
   created_at: string;
   tickers?: string[];
 };
 
-function formatRelative(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  if (Number.isNaN(diff)) return "";
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d} 天前`;
-  return new Date(iso).toLocaleDateString("zh-CN");
-}
-
 export function PostRow({
   post,
   dense = false,
-  /** 列表页关闭，避免每条研报 hydration 一个 Share 弹窗组件 */
+  locale = "zh",
   showShare = false,
 }: {
   post: Post;
   dense?: boolean;
+  locale?: Locale;
   showShare?: boolean;
 }) {
+  const dict = getDictionary(locale);
   const href = post.kind === "news" ? `/news/${post.slug}` : `/analysis/${post.slug}`;
   const premium = !!post.is_premium;
+  const title = postTitle(post, locale);
+  const excerpt = postExcerpt(post, locale);
 
   return (
     <article className={`row-hover border-b border-border py-3 ${dense ? "text-[13px]" : ""}`}>
@@ -49,22 +46,22 @@ export function PostRow({
                 {post.kind === "analysis" ? "Research" : "PRO"}
               </span>
             ) : (
-              <span className="badge-free">公开</span>
+              <span className="badge-free">{dict.common.public}</span>
             )}
             {post.tickers?.slice(0, 3).map((s) => (
               <Link key={s} href={`/t/${encodeURIComponent(normalizeInternalSymbol(s))}`} className="chip">
                 {s}
               </Link>
             ))}
-            <span className="label-caps">{formatRelative(post.created_at)}</span>
+            <span className="label-caps">{formatRelative(locale, post.created_at, dict.common)}</span>
           </div>
 
           <Link href={href} className="link-title mt-1 block text-[15px] leading-snug">
-            {post.title}
+            {title}
           </Link>
 
-          {!dense && post.excerpt ? (
-            <p className="mt-1 line-clamp-2 text-[13px] text-muted">{post.excerpt}</p>
+          {!dense && excerpt ? (
+            <p className="mt-1 line-clamp-2 text-[13px] text-muted">{excerpt}</p>
           ) : null}
         </div>
 
@@ -74,8 +71,8 @@ export function PostRow({
             data={{
               type: "post",
               kind: post.kind,
-              title: post.title,
-              excerpt: post.excerpt,
+              title,
+              excerpt,
               tickers: post.tickers,
               createdAt: post.created_at,
             }}
