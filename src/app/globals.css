@@ -427,6 +427,96 @@ a:hover {
   color: #6b5c3f;
 }
 
+/* ---------- FT 式付费墙（真实正文 13% + 渐隐 + 订阅卡） ---------- */
+.ft-gate-preview {
+  position: relative;
+}
+.ft-gate-fade {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 7.5em;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--background) 92%);
+}
+.ft-gate-stats {
+  margin-top: 0.75rem;
+  font-size: 14.5px;
+  line-height: 1.8;
+  color: var(--foreground-soft);
+}
+.ft-gate-stats strong {
+  color: var(--foreground);
+}
+.ft-gate-cta {
+  margin-top: 1.25rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
+.ft-gate-cta-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.ft-gate-cta-login {
+  margin-top: 1.5rem;
+  font-size: 14px;
+  color: var(--foreground-soft);
+}
+.ft-gate-cta-login a {
+  color: var(--accent-strong);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ft-gate-cta-btn {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.6rem 1.5rem;
+  background: #0d7680;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.ft-gate-cta-btn:hover {
+  background: #0a5a62;
+}
+.ft-gate-cta-price {
+  margin-top: 0.75rem;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Reader mode（米色纸张）下的 FT 付费墙 */
+.reader-mode .ft-gate-fade {
+  background: linear-gradient(to bottom, transparent, #f5f1ea 92%);
+}
+.reader-mode .ft-gate-stats {
+  color: #3a3a3a;
+}
+.reader-mode .ft-gate-stats strong {
+  color: #1a1a1a;
+}
+.reader-mode .ft-gate-cta {
+  background: #f0e8da;
+  border-color: #e2d8c5;
+}
+.reader-mode .ft-gate-cta-title {
+  color: #2a2a2a;
+}
+.reader-mode .ft-gate-cta-login {
+  color: #4a4438;
+}
+.reader-mode .ft-gate-cta-login a {
+  color: #0d7680;
+}
+.reader-mode .ft-gate-cta-price {
+  color: #8a7a55;
+}
+
 .link-title {
   color: var(--foreground);
   font-weight: 600;

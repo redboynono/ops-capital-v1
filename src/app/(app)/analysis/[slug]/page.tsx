@@ -5,11 +5,11 @@ import { BookmarkButton } from "@/components/bookmark-button";
 import { ShareButton } from "@/components/share/share-button";
 import { StickyPaywall } from "@/components/sticky-paywall";
 import { getSessionUser } from "@/lib/auth";
-import { getPostReaderCount, isBookmarked, recordRead } from "@/lib/me";
-import { bodyTeaser } from "@/lib/content-preview";
+import { isBookmarked, recordRead } from "@/lib/me";
+import { splitForPaywall } from "@/lib/content-preview";
 import { hasResearchAccess } from "@/lib/entitlements";
 import { RedactedMarkdown } from "@/lib/paywall";
-import { ArticleSummaryGate } from "@/components/article-summary-gate";
+import { FtPaywallGate } from "@/components/ft-paywall-gate";
 import { extractTocFromMarkdown, shouldShowToc } from "@/lib/markdown-toc";
 import { buildPostMetadata } from "@/lib/post-metadata";
 import { getPostBySlug } from "@/lib/posts";
@@ -47,8 +47,6 @@ export default async function AnalysisDetailPage({
 
   const canViewFull = !post.is_premium || hasResearchAccess(user);
   const bookmarked = user ? await isBookmarked(user.id, post.id) : false;
-  // 摘要门社会证明：仅非订阅用户需要读者数
-  const readers = canViewFull ? 0 : await getPostReaderCount(post.id);
   if (user) recordRead(user.id, post.id).catch(() => null);
 
   const toggleHref = readerMode ? `/analysis/${post.slug}?reader=0` : `/analysis/${post.slug}`;
@@ -130,11 +128,10 @@ export default async function AnalysisDetailPage({
               {post.content}
             </RedactedMarkdown>
           ) : (
-            <ArticleSummaryGate
-              excerpt={post.excerpt}
-              teaser={bodyTeaser(post.content, 460)}
-              sections={tocItems}
-              readers={readers}
+            <FtPaywallGate
+              split={splitForPaywall(post.content)}
+              loggedIn={Boolean(user)}
+              loginRedirect={`/analysis/${post.slug}`}
             />
           )}
         </article>
