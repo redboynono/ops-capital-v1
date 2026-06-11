@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { X_CHAR_LIMIT } from "@/lib/social/constants";
+import { X_CHAR_LIMIT, X_PREMIUM_TARGET } from "@/lib/social/constants";
 import type { SocialPoolItem } from "@/lib/social/pool";
 import type { SocialOpsRecord } from "@/lib/social/records";
 
@@ -152,7 +152,7 @@ export function SocialOpsPanel() {
         <header className="border-b border-border px-3 py-2">
           <h2 className="text-[12px] font-bold text-foreground">推荐内容池</h2>
           <p className="mt-0.5 text-[11px] text-muted">
-            评级变动 · 快讯 · 研报 · 六层价值链 · 试用 CTA（已排除未完成草稿）
+            X Premium 长文模板 · 评级变动 · 快讯 · 研报 · 价值链 · 试用 CTA
           </p>
         </header>
         {pool.length === 0 ? (
@@ -174,19 +174,23 @@ export function SocialOpsPanel() {
                   </div>
                   <span className="mono text-[10px] text-muted">P{item.priority}</span>
                 </div>
+                <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded border border-border bg-surface-muted p-2 font-sans text-[11px] leading-relaxed text-foreground-soft">
+                  {item.xCopy}
+                </pre>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
                     className="btn-outline px-2.5 py-1 text-[11px]"
-                    onClick={() => void copyText(item.xCopy, "X 文案已复制")}
+                    onClick={() => void copyText(item.xCopy, "X 长文已复制")}
                   >
-                    复制 X
+                    复制 X 长文
                     <span
                       className={`ml-1 mono text-[9px] ${
                         xLen(item.xCopy) > X_CHAR_LIMIT ? "text-[color:var(--danger)]" : "text-muted"
                       }`}
                     >
-                      ({xLen(item.xCopy)}/{X_CHAR_LIMIT})
+                      ({xLen(item.xCopy)} chars
+                      {xLen(item.xCopy) <= X_PREMIUM_TARGET ? " · Premium" : ""})
                     </span>
                   </button>
                   <button

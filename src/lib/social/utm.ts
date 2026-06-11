@@ -9,6 +9,7 @@ export function withUtm(
   u.searchParams.set("utm_source", opts.source);
   u.searchParams.set("utm_medium", opts.medium ?? "social");
   if (opts.campaign) u.searchParams.set("utm_campaign", opts.campaign);
+  if (opts.source === "x") u.searchParams.set("lang", "en");
   return u.toString();
 }
 

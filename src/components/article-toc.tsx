@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useDict } from "@/components/locale-provider";
 import type { TocItem } from "@/lib/markdown-toc";
 
 type Props = {
   items: TocItem[];
-  /** When true, use reader-mode cream styling */
   readerMode?: boolean;
 };
 
 export function ArticleToc({ items, readerMode }: Props) {
+  const tocLabel = useDict().analysis.tocLabel;
   const [active, setActive] = useState<string | null>(items[0]?.id ?? null);
 
   useEffect(() => {
@@ -39,9 +40,9 @@ export function ArticleToc({ items, readerMode }: Props) {
   return (
     <nav
       className={`sticky top-24 hidden max-h-[calc(100vh-8rem)] w-48 shrink-0 overflow-y-auto border-l pl-4 text-[12px] xl:block ${border}`}
-      aria-label="目录"
+      aria-label={tocLabel}
     >
-      <p className={`label-caps mb-2 text-[10px] ${muted}`}>目录</p>
+      <p className={`label-caps mb-2 text-[10px] ${muted}`}>{tocLabel}</p>
       <ul className="space-y-1">
         {items.map((it) => (
           <li key={it.id} style={{ paddingLeft: it.level === 3 ? 12 : 0 }}>

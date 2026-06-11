@@ -5,7 +5,16 @@ import { X_CHAR_LIMIT } from "@/lib/social/constants";
 import { getOrCreateShortLink } from "@/lib/social/short-link";
 import { withUtm, slugifyCampaign } from "@/lib/social/utm";
 
-export { X_CHAR_LIMIT } from "@/lib/social/constants";
+export { X_CHAR_LIMIT, X_PREMIUM_TARGET } from "@/lib/social/constants";
+
+const CRYPTO_TICKERS = new Set(["BTC", "ETH", "SOL", "BNB", "DOGE", "XRP", "ADA", "AVAX", "LINK"]);
+
+const RESEARCH_SECTIONS = [
+  "Macro & liquidity mapping",
+  "Fundamentals & competitive moat",
+  "Catalysts & valuation framework",
+  "Tail risks & position sizing",
+];
 
 function xLen(s: string): number {
   return [...s].length;
@@ -16,45 +25,77 @@ function truncateX(s: string, max: number): string {
   return [...s].slice(0, Math.max(0, max - 1)).join("") + "…";
 }
 
-/** 文章核心摘要（BLUF 主体，保留中文原意） */
-export function extractCoreSummary(excerpt?: string): string {
-  if (!excerpt) return "";
-  const t = excerpt.replace(/^BLUF:\s*/i, "").trim().replace(/\s+/g, " ");
-  const sentences = t.split(/(?<=[。！？!?])\s*/).filter(Boolean);
-  const core = (sentences.slice(0, 2).join("") || t).trim();
-  return core;
+function pickEn(zh: string, en?: string | null): string {
+  return (en?.trim() || zh).replace(/\s+/g, " ").trim();
 }
 
-function xHashtags(tickers: string[] = [], max = 2): string {
-  const tags = [...new Set([...tickers.slice(0, 1).map((t) => `#${t}`), "#AI", "#Semiconductors"])];
-  return tags.slice(0, max).join(" ");
+/** 长文摘要：英文优先，最多 5 句 / 520 字 */
+export function extractCoreSummary(excerpt?: string, excerptEn?: string | null): string {
+  const useEn = !!excerptEn?.trim();
+  const raw = (excerptEn?.trim() || excerpt || "").replace(/^BLUF:\s*/i, "").trim().replace(/\s+/g, " ");
+  if (!raw) return "";
+  const splitRe = useEn ? /(?<=[.!?])\s+/ : /(?<=[。！？!?])\s*/;
+  const sentences = raw.split(splitRe).filter(Boolean);
+  const maxSentences = useEn ? 5 : 3;
+  const core = (sentences.slice(0, maxSentences).join(useEn ? " " : "") || raw).trim();
+  return useEn ? truncateX(core, 520) : truncateX(core, 280);
 }
 
-/** 拼装 X 文案，硬限制在 limit 字符内（含链接与话题） */
-function buildShortXCopy(opts: {
-  lead: string;
-  body?: string;
+const VERDICT_EN: Record<string, string> = {
+  STRONG_BUY: "Strong Buy",
+  BUY: "Buy",
+  HOLD: "Hold",
+  SELL: "Sell",
+  STRONG_SELL: "Strong Sell",
+  强买: "Strong Buy",
+  买入: "Buy",
+  持有: "Hold",
+  卖出: "Sell",
+  强卖: "Strong Sell",
+};
+
+const RATING_LABEL_EN: Record<string, string> = {
+  首次覆盖: "Initiated coverage",
+  "OPS 评级": "OPS rating",
+  "OPS 目标价": "OPS target",
+  "Quant 评分": "Quant score",
+};
+
+function enRatingValue(v: string | null): string {
+  if (!v || v === "—") return "—";
+  return VERDICT_EN[v] ?? v;
+}
+
+function enRatingLabel(label: string): string {
+  return RATING_LABEL_EN[label] ?? label;
+}
+
+function xHashtags(tickers: string[] = [], extra: string[] = []): string {
+  const primary = tickers.slice(0, 1).map((t) => `$${t}`);
+  const tags = new Set<string>([...primary]);
+  for (const t of extra) tags.add(t);
+  if (tickers.some((t) => CRYPTO_TICKERS.has(t))) tags.add("#Crypto");
+  tags.add("#AI");
+  tags.add("#Semiconductors");
+  tags.add("#OPS Alpha");
+  return [...tags].slice(0, 6).join(" ");
+}
+
+type PremiumXBlock = {
+  lines: string[];
   url: string;
   tickers?: string[];
-  limit?: number;
-}): string {
-  const limit = opts.limit ?? X_CHAR_LIMIT;
-  const tags = xHashtags(opts.tickers);
-  const footer = `\n\n${opts.url}\n\n${tags}`;
-  const footerLen = xLen(footer);
-  let head = opts.lead;
-  if (opts.body) head += `\n\n${opts.body}`;
+  extraTags?: string[];
+};
 
-  if (xLen(head + footer) <= limit) return head + footer;
-
-  const bodyBudget = limit - footerLen - xLen(opts.lead) - 2;
-  if (opts.body && bodyBudget > 24) {
-    head = `${opts.lead}\n\n${truncateX(opts.body, bodyBudget)}`;
-    if (xLen(head + footer) <= limit) return head + footer;
-  }
-
-  head = truncateX(opts.lead, limit - footerLen - 1);
-  return head + footer;
+/** Premium 长文：结构化多段，仅在极端超长时兜底截断 */
+function buildPremiumXCopy(block: PremiumXBlock): string {
+  const tags = xHashtags(block.tickers, block.extraTags);
+  const footer = `\n\n${block.url}\n\n${tags}`;
+  let body = block.lines.filter(Boolean).join("\n\n");
+  const maxBody = X_CHAR_LIMIT - xLen(footer) - 1;
+  if (xLen(body) > maxBody) body = truncateX(body, maxBody);
+  return `${body}${footer}`;
 }
 
 function xUrlForPost(path: string, campaign: string): string {
@@ -77,51 +118,93 @@ function pathForInput(input: SocialCopyInput): { path: string; refKey: string } 
   return { path: input.path, refKey: slugifyCampaign(input.title) };
 }
 
-function rebuildXCopy(input: SocialCopyInput, xUrl: string): string {
+function buildXCopy(input: SocialCopyInput, xUrl: string): string {
   if (input.type === "post") {
     const ticker = input.tickers?.[0];
+    const title = pickEn(input.title, input.title_en);
+    const thesis = extractCoreSummary(input.excerpt, input.excerpt_en);
+
     if (input.kind === "news") {
-      return buildShortXCopy({
-        lead: ticker ? `$${ticker} · OPS Alpha 快讯` : "OPS Alpha 快讯",
-        body: extractCoreSummary(input.excerpt) || truncateX(input.title, 100),
+      const lines = [
+        "⚡ Market flash · OPS Alpha",
+        ticker ? `$${ticker} · ${title}` : title,
+        thesis ? `Context\n${thesis}` : undefined,
+        "Full note at the link below.",
+      ].filter((l): l is string => !!l);
+      return buildPremiumXCopy({
+        lines,
         url: xUrl,
         tickers: input.tickers,
+        extraTags: ["#Markets"],
       });
     }
-    return buildShortXCopy({
-      lead: ticker
-        ? `$${ticker} · ${truncateX(input.title, 42)}`
-        : truncateX(input.title, 56),
-      body: extractCoreSummary(input.excerpt) || "深度研报已发布，详见链接。",
+
+    const lines = [
+      "🔬 Deep research · OPS Alpha",
+      ticker ? `$${ticker} · ${title}` : title,
+      thesis ? `Thesis\n${thesis}` : "New institutional-grade research is live.",
+      `What's inside\n${RESEARCH_SECTIONS.map((s) => `· ${s}`).join("\n")}`,
+      "Free summary on site · full report & valuation framework with Research Pro.",
+    ];
+    return buildPremiumXCopy({
+      lines,
       url: xUrl,
       tickers: input.tickers,
+      extraTags: ["#DeepResearch", "#FinTwit"],
     });
   }
+
   if (input.type === "rating_change") {
     const { change } = input;
-    return buildShortXCopy({
-      lead: `$${change.symbol} 评级变动`,
-      body: `${change.label}：${change.from_value ?? "—"} → ${change.to_value ?? "—"}`,
+    const lines = [
+      "📊 Rating update · OPS Alpha",
+      `$${change.symbol}${change.name ? ` · ${change.name}` : ""}`,
+      `${enRatingLabel(change.label)}: ${enRatingValue(change.from_value)} → ${enRatingValue(change.to_value)}`,
+      change.ai_note?.trim() ? `Note\n${change.ai_note.trim()}` : undefined,
+      "Factsheet, factor grades & OPS history at the link.",
+    ].filter((l): l is string => !!l);
+    return buildPremiumXCopy({
+      lines,
       url: xUrl,
       tickers: [change.symbol],
+      extraTags: ["#Ratings"],
     });
   }
+
   if (input.type === "value_chain") {
-    const reps = input.layer.representatives
-      .slice(0, 3)
-      .map((r) => (r.symbol ? r.symbol : r.name))
+    const { layer } = input;
+    const reps = layer.representatives
+      .slice(0, 5)
+      .map((r) => (r.symbol ? `${r.name} (${r.symbol})` : r.name))
       .join(" · ");
-    return buildShortXCopy({
-      lead: `AI 价值链 ${input.layer.id} · ${input.layer.nameZh}`,
-      body: truncateX(input.layer.trend2026, 100) || `代表：${reps}`,
+    const lines = [
+      `🧱 AI Value Chain · ${layer.id}`,
+      `${layer.nameEn} · ${layer.roleEn}`,
+      `2026 setup\n${layer.trend2026En}`,
+      reps ? `Names to watch\n${reps}` : undefined,
+      "Explore the full L0–L5 framework on OPS Capital.",
+    ].filter((l): l is string => !!l);
+    return buildPremiumXCopy({
+      lines,
       url: xUrl,
-      tickers: input.layer.representatives.map((r) => r.symbol).filter(Boolean) as string[],
+      tickers: layer.representatives.map((r) => r.symbol).filter(Boolean) as string[],
+      extraTags: ["#ValueChain"],
     });
   }
-  return buildShortXCopy({
-    lead: truncateX(input.title, 80),
-    body: input.excerpt ? extractCoreSummary(input.excerpt) || truncateX(input.excerpt, 100) : undefined,
+
+  const title = pickEn(input.title, input.title_en);
+  const thesis = input.excerpt
+    ? extractCoreSummary(input.excerpt, input.excerpt_en)
+    : "";
+  const lines = [
+    "OPS Alpha",
+    title,
+    thesis || undefined,
+  ].filter((l): l is string => !!l);
+  return buildPremiumXCopy({
+    lines,
     url: xUrl,
+    extraTags: ["#FinTwit"],
   });
 }
 
@@ -130,13 +213,15 @@ export type SocialCopyInput =
       type: "post";
       kind: "analysis" | "news";
       title: string;
+      title_en?: string | null;
       slug: string;
       excerpt?: string;
+      excerpt_en?: string | null;
       tickers?: string[];
     }
   | { type: "rating_change"; change: RatingChange }
   | { type: "value_chain"; layer: ValueChainLayer }
-  | { type: "custom"; title: string; path: string; excerpt?: string };
+  | { type: "custom"; title: string; path: string; excerpt?: string; title_en?: string | null; excerpt_en?: string | null };
 
 export type SocialCopyBundle = {
   title: string;
@@ -166,29 +251,12 @@ export function buildSocialCopy(input: SocialCopyInput): SocialCopyBundle {
     const xUrl = xUrlForPost(path, campaign);
     const xhsUrl = withUtm(path, { source: "xhs", campaign });
     const bundle = buildShareBundle(postShareInput(input), xhsUrl);
-    const ticker = input.tickers?.[0];
-    const xCopy =
-      input.kind === "news"
-        ? buildShortXCopy({
-            lead: ticker ? `$${ticker} · OPS Alpha flash` : "OPS Alpha market flash",
-            body: truncateX(input.title.replace(/\s+/g, " "), 90),
-            url: xUrl,
-            tickers: input.tickers,
-          })
-        : buildShortXCopy({
-            lead: ticker
-              ? `$${ticker} · ${truncateX(input.title, 42)}`
-              : truncateX(input.title, 56),
-            body: extractCoreSummary(input.excerpt) || "深度研报已发布，详见链接。",
-            url: xUrl,
-            tickers: input.tickers,
-          });
     return {
       title: input.title,
       canonicalUrl: xUrl,
       xUrl,
       xhsUrl,
-      xCopy,
+      xCopy: buildXCopy(input, xUrl),
       xhsCopy: bundle.xiaohongshuText,
       utmCampaign: campaign,
     };
@@ -200,19 +268,13 @@ export function buildSocialCopy(input: SocialCopyInput): SocialCopyBundle {
     const campaign = slugifyCampaign(`rating_${change.symbol}`);
     const xUrl = xUrlForPost(path, campaign);
     const xhsUrl = withUtm(path, { source: "xhs", campaign });
-    const xCopy = buildShortXCopy({
-      lead: `$${change.symbol} rating: ${change.from_value ?? "—"} → ${change.to_value ?? "—"}`,
-      body: change.label,
-      url: xUrl,
-      tickers: [change.symbol],
-    });
     const xhsCopy = `${change.symbol} 评级变动 · ${change.label}\n${change.from_value ?? "—"} → ${change.to_value ?? "—"}\n\n${xhsUrl}\n\n#${change.symbol} #投研 #OPS Alpha #半导体`;
     return {
       title: `${change.symbol} 评级变动`,
       canonicalUrl: xUrl,
       xUrl,
       xhsUrl,
-      xCopy,
+      xCopy: buildXCopy(input, xUrl),
       xhsCopy,
       utmCampaign: campaign,
     };
@@ -227,19 +289,13 @@ export function buildSocialCopy(input: SocialCopyInput): SocialCopyBundle {
       .slice(0, 4)
       .map((r) => (r.symbol ? `${r.name} (${r.symbol})` : r.name))
       .join(" · ");
-    const xCopy = buildShortXCopy({
-      lead: `AI Value Chain ${layer.id}`,
-      body: truncateX(`Key: ${reps}`, 80),
-      url: xUrl,
-      tickers: layer.representatives.map((r) => r.symbol).filter(Boolean) as string[],
-    });
     const xhsCopy = `AI 产业六层价值链 · ${layer.id} ${layer.nameZh}\n${layer.roleZh}\n\n代表：${reps}\n\n${layer.trend2026.slice(0, 180)}…\n\n完整框架 👉 ${xhsUrl}\n\n#AI投资 #半导体 #价值链 #OPS Alpha #${layer.id}`;
     return {
       title: `${layer.id} · ${layer.nameZh}`,
       canonicalUrl: xUrl,
       xUrl,
       xhsUrl,
-      xCopy,
+      xCopy: buildXCopy(input, xUrl),
       xhsCopy,
       utmCampaign: campaign,
     };
@@ -248,18 +304,13 @@ export function buildSocialCopy(input: SocialCopyInput): SocialCopyBundle {
   const campaign = slugifyCampaign(input.title);
   const xUrl = withUtm(input.path, { source: "x", campaign });
   const xhsUrl = withUtm(input.path, { source: "xhs", campaign });
-  const xCopy = buildShortXCopy({
-    lead: truncateX(input.title, 100),
-    body: input.excerpt ? truncateX(input.excerpt, 80) : undefined,
-    url: xUrl,
-  });
   const xhsCopy = `${input.title}\n\n${input.excerpt ?? ""}\n\n${xhsUrl}\n\n#OPS Alpha #投研`;
   return {
     title: input.title,
     canonicalUrl: xUrl,
     xUrl,
     xhsUrl,
-    xCopy,
+    xCopy: buildXCopy(input, xUrl),
     xhsCopy,
     utmCampaign: campaign,
   };
@@ -276,12 +327,11 @@ export async function buildSocialCopyAsync(input: SocialCopyInput): Promise<Soci
       campaign: bundle.utmCampaign,
       refKey,
     });
-    const xCopy = rebuildXCopy(input, short.url);
     return {
       ...bundle,
       xUrl: short.url,
       canonicalUrl: short.url,
-      xCopy,
+      xCopy: buildXCopy(input, short.url),
       shortCode: short.code,
     };
   } catch {

@@ -15,6 +15,7 @@
  *   --slug=SLUG         只处理单篇
  *   --force             即使已有英文字段也重译
  *   --retranslate-cjk   重译 title_en/excerpt_en 仍含中文的条目
+ *   --content           回填 content_en 正文（较慢，建议 --limit=20）
  */
 
 import mysql from "mysql2/promise";
@@ -30,9 +31,11 @@ const args = Object.fromEntries(
 const DRY_RUN = args["dry-run"] === "true";
 const FORCE = args.force === "true";
 const RETRANSLATE_CJK = args["retranslate-cjk"] === "true";
-const LIMIT = Math.max(1, Number(args.limit ?? 100));
-const DELAY_MS = Math.max(0, Number(args.delay ?? 600));
+const TRANSLATE_CONTENT = args.content === "true";
+const LIMIT = Math.max(1, Number(args.limit ?? (TRANSLATE_CONTENT ? 20 : 100)));
+const DELAY_MS = Math.max(0, Number(args.delay ?? (TRANSLATE_CONTENT ? 1200 : 600)));
 const SLUG = args.slug?.trim() || null;
+const CONTENT_CHUNK = 9000;
 
 const MYSQL_URL = process.env.MYSQL_URL;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -101,6 +104,77 @@ Summary: ${excerpt.slice(0, 500)}`,
   return raw;
 }
 
+function parseMarkdownBody(raw, fallback) {
+  const cleaned = raw.replace(/^\s*```(?:markdown)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+  const marker = cleaned.match(/^EN_MARKDOWN:\s*\n?([\s\S]+)$/im);
+  const body = (marker?.[1] ?? cleaned).trim();
+  if (!body) throw new Error("empty markdown translation");
+  return body;
+}
+
+async function translateContentChunk(chunk, strict) {
+  const res = await fetch(`${OPENAI_BASE_URL}${OPENAI_CHAT_PATH}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
+    signal: AbortSignal.timeout(180_000),
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      temperature: 0.15,
+      max_tokens: 16000,
+      messages: [
+        {
+          role: "system",
+          content: strict
+            ? "Institutional equity research editor. Translate markdown to English only. Preserve headings, lists, tables, numbers, tickers. No Chinese characters."
+            : "Translate financial research markdown to English. Preserve markdown structure, numbers, and ticker symbols.",
+        },
+        {
+          role: "user",
+          content: `${strict ? "No Chinese characters in output.\n\n" : ""}Translate this markdown section to English. Start output with EN_MARKDOWN: then the translated markdown.\n\n${chunk}`,
+        },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Upstream ${res.status}: ${t.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const raw = data?.choices?.[0]?.message?.content;
+  if (!raw || typeof raw !== "string") throw new Error("empty content translation");
+  return parseMarkdownBody(raw, chunk);
+}
+
+async function translatePostContent(content) {
+  if (!content.trim()) return content;
+  const chunks = [];
+  if (content.length <= CONTENT_CHUNK) {
+    chunks.push(content);
+  } else {
+    const parts = content.split(/(?=^## )/m);
+    let buf = "";
+    for (const part of parts) {
+      if ((buf + part).length > CONTENT_CHUNK && buf) {
+        chunks.push(buf);
+        buf = part;
+      } else {
+        buf += part;
+      }
+    }
+    if (buf) chunks.push(buf);
+  }
+  const out = [];
+  for (const chunk of chunks) {
+    let translated = await translateContentChunk(chunk, false);
+    if (hasCjk(translated)) {
+      translated = await translateContentChunk(chunk, true);
+    }
+    if (hasCjk(translated)) throw new Error("content translation still contains CJK");
+    out.push(translated);
+  }
+  return out.join("\n\n").trim();
+}
+
 async function translateTitleExcerpt(title, excerpt) {
   let raw = await callTranslate(title, excerpt, false);
   let out = parseLines(raw, title, excerpt);
@@ -120,6 +194,8 @@ async function listTargets(conn) {
   if (SLUG) {
     wheres.push("slug = ?");
     params.push(SLUG);
+  } else if (TRANSLATE_CONTENT) {
+    if (!FORCE) wheres.push("(content_en is null or length(trim(content_en)) = 0)");
   } else if (RETRANSLATE_CJK) {
     wheres.push("(title_en is not null and title_en != '' or excerpt_en is not null and excerpt_en != '')");
   } else if (!FORCE) {
@@ -127,7 +203,7 @@ async function listTargets(conn) {
   }
   const fetchLimit = RETRANSLATE_CJK ? Math.min(500, LIMIT * 3) : LIMIT;
   const [rows] = await conn.query(
-    `select id, slug, title, excerpt, title_en, excerpt_en
+    `select id, slug, title, excerpt, content, title_en, excerpt_en, content_en
        from posts
       where ${wheres.join(" and ")}
       order by created_at desc
@@ -148,7 +224,7 @@ await runJob({ jobName: "backfill-post-i18n", mysqlUrl: MYSQL_URL }, async (ctx)
     const targets = await listTargets(conn);
     ctx.itemsTotal = targets.length;
     console.log(
-      `[backfill-post-i18n] targets=${targets.length} dry_run=${DRY_RUN} force=${FORCE} retranslate_cjk=${RETRANSLATE_CJK}`,
+      `[backfill-post-i18n] targets=${targets.length} dry_run=${DRY_RUN} force=${FORCE} content=${TRANSLATE_CONTENT} retranslate_cjk=${RETRANSLATE_CJK}`,
     );
 
     let ok = 0;
@@ -163,14 +239,20 @@ await runJob({ jobName: "backfill-post-i18n", mysqlUrl: MYSQL_URL }, async (ctx)
           continue;
         }
 
-        const { titleEn, excerptEn } = await translateTitleExcerpt(row.title, row.excerpt);
-        await conn.execute(`update posts set title_en = ?, excerpt_en = ? where id = ?`, [
-          titleEn,
-          excerptEn,
-          row.id,
-        ]);
-        console.log(`  ✓ ${label}`);
-        console.log(`    EN title: ${titleEn.slice(0, 72)}`);
+        if (TRANSLATE_CONTENT) {
+          const contentEn = await translatePostContent(row.content);
+          await conn.execute(`update posts set content_en = ? where id = ?`, [contentEn, row.id]);
+          console.log(`  ✓ ${label} (content ${contentEn.length} chars)`);
+        } else {
+          const { titleEn, excerptEn } = await translateTitleExcerpt(row.title, row.excerpt);
+          await conn.execute(`update posts set title_en = ?, excerpt_en = ? where id = ?`, [
+            titleEn,
+            excerptEn,
+            row.id,
+          ]);
+          console.log(`  ✓ ${label}`);
+          console.log(`    EN title: ${titleEn.slice(0, 72)}`);
+        }
         ok++;
         if (DELAY_MS > 0) await sleep(DELAY_MS);
       } catch (err) {
@@ -181,7 +263,14 @@ await runJob({ jobName: "backfill-post-i18n", mysqlUrl: MYSQL_URL }, async (ctx)
 
     ctx.itemsOk = ok;
     ctx.itemsFailed = failed;
-    ctx.meta = { dryRun: DRY_RUN, force: FORCE, retranslateCjk: RETRANSLATE_CJK, limit: LIMIT, slug: SLUG };
+    ctx.meta = {
+      dryRun: DRY_RUN,
+      force: FORCE,
+      content: TRANSLATE_CONTENT,
+      retranslateCjk: RETRANSLATE_CJK,
+      limit: LIMIT,
+      slug: SLUG,
+    };
   } finally {
     await conn.end();
   }

@@ -5,6 +5,8 @@ type LocalizedPost = {
   title_en?: string | null;
   excerpt?: string | null;
   excerpt_en?: string | null;
+  content?: string;
+  content_en?: string | null;
 };
 
 export function postTitle(post: LocalizedPost, locale: Locale): string {
@@ -15,4 +17,13 @@ export function postTitle(post: LocalizedPost, locale: Locale): string {
 export function postExcerpt(post: LocalizedPost, locale: Locale): string {
   if (locale === "en" && post.excerpt_en?.trim()) return post.excerpt_en.trim();
   return post.excerpt ?? "";
+}
+
+export function postContent(post: LocalizedPost, locale: Locale): string {
+  if (locale === "en" && post.content_en?.trim()) return post.content_en.trim();
+  return post.content ?? "";
+}
+
+export function hasEnglishBody(post: LocalizedPost): boolean {
+  return !!post.content_en?.trim();
 }

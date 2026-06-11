@@ -320,6 +320,8 @@ export const en: Dictionary = {
     readerToggle: "Toggle reading mode",
     detailDisclaimer:
       "Disclaimer: AI-assisted research with human review. Views only—not investment advice.",
+    tocLabel: "Contents",
+    bodyZhOnly: "English full text is being prepared. Showing Chinese version for now.",
     noPosts: "No articles yet.",
     listFooterFmt: "Showing latest {n} · narrow with filters above",
     filters: {

@@ -28,6 +28,7 @@ create table if not exists posts (
   excerpt text not null,
   excerpt_en text null,
   content longtext not null,
+  content_en longtext null,
   is_premium boolean not null default true,
   is_published boolean not null default false,
   created_at datetime not null default current_timestamp,

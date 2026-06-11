@@ -61,6 +61,18 @@ export async function getOrCreateShortLink(opts: {
   throw new Error("short link code collision");
 }
 
+/** X 短链落地页强制英文（兼容存量 target_url 无 lang 参数） */
+export function ensureEnglishLandingForX(targetUrl: string): string {
+  try {
+    const u = new URL(targetUrl);
+    if (u.searchParams.get("utm_source") !== "x") return targetUrl;
+    u.searchParams.set("lang", "en");
+    return u.toString();
+  } catch {
+    return targetUrl;
+  }
+}
+
 export async function resolveShortLink(code: string): Promise<string | null> {
   const rows = await mysqlQuery<Pick<ShortLinkRow, "target_url">[]>(
     "select target_url from short_links where code = ? limit 1",
@@ -68,5 +80,5 @@ export async function resolveShortLink(code: string): Promise<string | null> {
   );
   if (!rows[0]) return null;
   await mysqlQuery("update short_links set clicks = clicks + 1 where code = ?", [code]);
-  return rows[0].target_url;
+  return ensureEnglishLandingForX(rows[0].target_url);
 }

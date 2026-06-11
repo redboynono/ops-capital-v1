@@ -13,6 +13,9 @@
 | `GUMROAD_*` | 已配置 |
 | `OPENAI_*` | 已配置 |
 | `CRON_SECRET` | 已配置 |
+| `X_API_KEY` / `X_API_SECRET` / `X_ACCESS_TOKEN` / `X_ACCESS_TOKEN_SECRET` | X 自动发帖（[Developer Portal](https://developer.x.com/) · User authentication · Read and Write） |
+| `X_AUTO_POST_ENABLED` | 设为 `0` 可暂停自动发帖（默认有凭据即启用） |
+| `X_POST_MIN_INTERVAL_HOURS` | 两条 X 帖最小间隔，默认 `20` |
 
 ## Cron（`crontab -l`）
 
@@ -25,6 +28,7 @@
 | `ops-alpha-alerts-check.sh` | 每 15min |
 | `/api/cron/ratings` | 每天 03:00 |
 | `ops-alpha-snapshot-ratings.sh` | 每天 16:30（美东收盘后，安装脚本新增） |
+| `ops-alpha-social-x.sh` → `/api/cron/social-x` | 每天 10:00 自动发 1 条 X 长文 |
 
 日志：`/var/log/ops-alpha-*.log`
 

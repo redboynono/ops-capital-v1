@@ -14,6 +14,7 @@ export type PostRow = {
   excerpt: string;
   excerpt_en: string | null;
   content: string;
+  content_en: string | null;
   is_premium: number;
   is_published: number;
   created_at: string;
@@ -125,7 +126,7 @@ export async function listPostSectors(): Promise<string[]> {
 
 export async function getPostBySlug(slug: string): Promise<PostRow | null> {
   const rows = await mysqlQuery<PostRow[]>(
-    `select id, title, title_en, slug, kind, excerpt, excerpt_en, content, is_premium, is_published, created_at, author_id
+    `select id, title, title_en, slug, kind, excerpt, excerpt_en, content, content_en, is_premium, is_published, created_at, author_id
      from posts where slug = ? and is_published = 1 limit 1`,
     [slug],
   );
@@ -150,7 +151,7 @@ export async function listAllPostsAdmin(opts: {
   if (published === "draft") wheres.push("p.is_published = 0");
 
   const rows = await mysqlQuery<PostRow[]>(
-    `select p.id, p.title, p.title_en, p.slug, p.kind, p.excerpt, p.excerpt_en, p.content, p.is_premium, p.is_published, p.created_at, p.author_id
+    `select p.id, p.title, p.title_en, p.slug, p.kind, p.excerpt, p.excerpt_en, p.content, p.content_en, p.is_premium, p.is_published, p.created_at, p.author_id
        from posts p
       where ${wheres.join(" and ")}
       order by p.created_at desc
@@ -162,7 +163,7 @@ export async function listAllPostsAdmin(opts: {
 
 export async function getPostByIdAdmin(id: string): Promise<AdminPostRow | null> {
   const rows = await mysqlQuery<PostRow[]>(
-    `select id, title, title_en, slug, kind, excerpt, excerpt_en, content, is_premium, is_published, created_at, author_id
+    `select id, title, title_en, slug, kind, excerpt, excerpt_en, content, content_en, is_premium, is_published, created_at, author_id
        from posts where id = ? limit 1`,
     [id],
   );

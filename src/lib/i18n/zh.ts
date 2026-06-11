@@ -317,6 +317,8 @@ export const zh = {
     readerToggle: "切换阅读模式",
     detailDisclaimer:
       "免责声明：本文由 AI 编辑流水线生成并经人工复核，仅为研究观点，不构成投资建议。",
+    tocLabel: "目录",
+    bodyZhOnly: "正文英文版生成中，当前显示中文版。",
     noPosts: "暂无文章。",
     listFooterFmt: "已显示最近 {n} 篇 · 使用上方筛选缩小范围",
     filters: {

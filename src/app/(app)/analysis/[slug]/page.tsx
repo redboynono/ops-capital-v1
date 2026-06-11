@@ -18,7 +18,7 @@ import { ArticleToc } from "@/components/article-toc";
 import { ReaderModeShell, ReaderPrefsProvider, ReaderPrefsToolbar } from "@/components/reader-prefs";
 import { formatDate } from "@/lib/i18n/common";
 import { getDictionary, getLocale } from "@/lib/i18n";
-import { postExcerpt, postTitle } from "@/lib/i18n/post-locale";
+import { hasEnglishBody, postContent, postExcerpt, postTitle } from "@/lib/i18n/post-locale";
 
 export const dynamic = "force-dynamic";
 
@@ -60,10 +60,13 @@ export default async function AnalysisDetailPage({
   if (user) recordRead(user.id, post.id).catch(() => null);
 
   const toggleHref = readerMode ? `/analysis/${post.slug}?reader=0` : `/analysis/${post.slug}`;
-  const tocItems = extractTocFromMarkdown(post.content);
-  const showToc = readerMode && canViewFull && shouldShowToc(post.content);
   const title = postTitle(post, locale);
   const excerpt = postExcerpt(post, locale);
+  let body = postContent(post, locale);
+  if (/^#\s+/m.test(body)) body = body.replace(/^#\s+[^\n]+\n+/, "");
+  const tocItems = extractTocFromMarkdown(body);
+  const showToc = readerMode && canViewFull && shouldShowToc(body);
+  const showZhBodyNotice = locale === "en" && canViewFull && !hasEnglishBody(post);
 
   return (
     <ReaderPrefsProvider enabled={readerMode}>
@@ -120,7 +123,7 @@ export default async function AnalysisDetailPage({
               kind: "analysis",
               title,
               excerpt,
-              content: canViewFull ? post.content : null,
+              content: canViewFull ? body : null,
               tickers: tickers.map((tk) => tk.symbol),
               createdAt: post.created_at,
             }}
@@ -132,14 +135,19 @@ export default async function AnalysisDetailPage({
 
       <div className={`flex gap-8 ${readerMode ? "reader-content-flow" : ""} ${showToc ? "xl:pr-0" : ""}`}>
         <article className={`prose prose-sm md:prose-base min-w-0 max-w-none flex-1 py-5 ${readerMode ? "" : "prose-invert"}`}>
+          {showZhBodyNotice ? (
+            <p className="not-prose mb-4 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-200">
+              {t.bodyZhOnly}
+            </p>
+          ) : null}
           {canViewFull ? (
             <RedactedMarkdown redact={false} tocItems={showToc ? tocItems : undefined}>
-              {post.content}
+              {body}
             </RedactedMarkdown>
           ) : (
             <ArticleSummaryGate
               excerpt={excerpt}
-              teaser={bodyTeaser(post.content, 460)}
+              teaser={bodyTeaser(body, 460)}
               sections={tocItems}
               readers={readers}
               locale={locale}

@@ -1,0 +1,1 @@
+ALTER TABLE posts ADD COLUMN content_en LONGTEXT NULL AFTER content;

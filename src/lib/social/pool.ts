@@ -92,8 +92,10 @@ export async function buildSocialContentPool(limit = 12): Promise<SocialPoolItem
       type: "post",
       kind: "news",
       title: p.title,
+      title_en: p.title_en,
       slug: p.slug,
       excerpt: p.excerpt,
+      excerpt_en: p.excerpt_en,
       tickers: p.tickers,
     });
     items.push(
@@ -116,8 +118,10 @@ export async function buildSocialContentPool(limit = 12): Promise<SocialPoolItem
       type: "post",
       kind: "analysis",
       title: p.title,
+      title_en: p.title_en,
       slug: p.slug,
       excerpt: p.excerpt,
+      excerpt_en: p.excerpt_en,
       tickers: p.tickers,
     });
     items.push(
@@ -154,7 +158,8 @@ export async function buildSocialContentPool(limit = 12): Promise<SocialPoolItem
     type: "custom",
     title: "OPS Alpha · AI & semiconductor research terminal",
     path: "/pricing",
-    excerpt: "7-day free trial · Ratings, deep research, daily news · L0–L5 value chain.",
+    excerpt:
+      "Institutional-grade AI research for semiconductors & compute. Six-layer value chain (L0–L5), OPS ratings, deep research, and daily news. New users: 7-day free trial on Research Pro.",
   });
   items.push(
     toPoolItem(
