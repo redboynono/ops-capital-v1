@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { applyLandingLocaleCookie } from "@/lib/i18n/locale";
 import { siteUrl } from "@/lib/seo";
 import { resolveShortLink } from "@/lib/social/short-link";
 
@@ -13,5 +14,6 @@ export async function GET(
   if (!target) {
     return NextResponse.redirect(siteUrl("/"), 302);
   }
-  return NextResponse.redirect(target, 302);
+  const res = NextResponse.redirect(target, 302);
+  return applyLandingLocaleCookie(res, target);
 }

@@ -67,10 +67,12 @@ export async function postTweet(text: string): Promise<XPostResult> {
   };
 
   const signature = oauthSignature("POST", url, oauthParams, cfg.apiSecret, cfg.accessTokenSecret);
+  const signed = { ...oauthParams, oauth_signature: signature };
   const header =
     "OAuth " +
-    Object.entries({ ...oauthParams, oauth_signature: signature })
-      .map(([k, v]) => `${percentEncode(k)}="${percentEncode(v)}"`)
+    Object.keys(signed)
+      .sort()
+      .map((k) => `${k}="${percentEncode(signed[k as keyof typeof signed]!)}"`)
       .join(", ");
 
   const res = await fetch(url, {
@@ -92,8 +94,8 @@ export async function postTweet(text: string): Promise<XPostResult> {
     const msg =
       json.errors?.map((e) => e.detail || e.message).filter(Boolean).join("; ") ||
       json.detail ||
-      `X API ${res.status}`;
-    throw new Error(msg);
+      `X API HTTP ${res.status}`;
+    throw new Error(`${msg} (HTTP ${res.status})`);
   }
 
   const tweetId = json.data?.id;
