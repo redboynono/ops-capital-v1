@@ -7,6 +7,8 @@ import { ReaderModeShell, ReaderPrefsProvider, ReaderPrefsToolbar } from "@/comp
 import { plainTeaser } from "@/lib/content-preview";
 import { hasResearchAccess } from "@/lib/entitlements";
 import { getSessionUser } from "@/lib/auth";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
 import { computePerformance, getPickBySlug } from "@/lib/picks";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +46,12 @@ export default async function PickDetailPage({
 }) {
   const { slug } = await params;
   const { reader } = await searchParams;
-  // 默认进入阅读模式；?reader=0 才显示终端视图
   const readerMode = reader !== "0";
+
+  const locale = await getLocale();
+  const dict = getDictionary(locale);
+  const d = dict.picks.detail;
+  const conv = dict.picks.conviction;
 
   const pick = await getPickBySlug(slug);
   if (!pick || !pick.is_published) notFound();
@@ -56,7 +62,11 @@ export default async function PickDetailPage({
   const toggleHref = readerMode ? `/picks/${pick.slug}?reader=0` : `/picks/${pick.slug}`;
 
   const statusLabel =
-    pick.status === "open" ? "开仓中" : pick.status === "closed" ? "已平仓" : "已止损";
+    pick.status === "open"
+      ? d.statusOpen
+      : pick.status === "closed"
+        ? d.statusClosed
+        : d.statusStopped;
   const statusCls =
     pick.status === "open"
       ? "text-[color:var(--success)] border-[color:var(--success)]"
@@ -65,13 +75,15 @@ export default async function PickDetailPage({
         : "text-muted border-border";
 
   const headlinePct = pick.status === "open" ? perf.unrealizedPct : perf.realizedPct;
+  const convictionLabel =
+    pick.conviction === "high" ? conv.high : pick.conviction === "low" ? conv.low : conv.medium;
 
   return (
     <ReaderPrefsProvider enabled={readerMode}>
     <div className="mx-auto w-full max-w-[880px] px-4 py-6 md:px-6">
       <nav className="flex items-center justify-between text-[12px] text-muted">
         <div>
-          <Link href="/picks" className="hover:text-accent-strong">OPS 精选</Link>
+          <Link href="/picks" className="hover:text-accent-strong">{d.breadcrumb}</Link>
           <span className="mx-1">/</span>
           <span className="font-mono">{pick.ticker_symbol}</span>
         </div>
@@ -104,13 +116,12 @@ export default async function PickDetailPage({
             href={toggleHref}
             className="rounded-sm border border-border px-2 py-0.5 font-mono text-[11px] hover:border-accent hover:text-accent-strong"
           >
-            {readerMode ? "☾ 终端视图" : "☀ 阅读模式"}
+            {readerMode ? d.readerTerminal : d.readerReading}
           </Link>
         </div>
       </nav>
 
       <ReaderModeShell>
-        {/* Header block */}
         <header className={readerMode ? "border-b border-[#d8d0c2] pb-4" : "border-b border-border pb-4"}>
           <div className="flex flex-wrap items-center gap-2">
             <span className={`mono rounded-sm border px-1.5 py-0.5 text-[10px] font-semibold ${statusCls}`}>
@@ -119,54 +130,51 @@ export default async function PickDetailPage({
             <Link href={`/t/${pick.ticker_symbol}`} className="chip font-mono">
               {pick.ticker_symbol}
             </Link>
-            {pick.is_premium ? <span className="badge-premium">PRO</span> : <span className="badge-free">公开</span>}
+            {pick.is_premium ? <span className="badge-premium">PRO</span> : <span className="badge-free">{d.public}</span>}
             <span className="label-caps">{fmtDate(pick.entry_date)}</span>
           </div>
           <h1 className="mt-2 text-3xl font-bold leading-tight">{pick.title}</h1>
           {pick.subtitle ? <p className="mt-1 text-[14px] text-muted">{pick.subtitle}</p> : null}
 
-          {/* Performance strip */}
           <div className={`mt-4 grid grid-cols-2 gap-3 rounded-sm border p-3 md:grid-cols-5 ${readerMode ? "border-[#d8d0c2] bg-[#efe8dc]" : "border-border bg-surface-muted"}`}>
             <div>
-              <p className="label-caps text-[10px]">入场价</p>
+              <p className="label-caps text-[10px]">{d.entryPrice}</p>
               <p className="mt-0.5 font-mono text-[17px] font-bold">{fmtPrice(pick.entry_price)}</p>
               <p className="font-mono text-[10px] text-muted">{fmtDate(pick.entry_date)}</p>
             </div>
             <div>
-              <p className="label-caps text-[10px]">{pick.status === "open" ? "当前价" : "平仓价"}</p>
+              <p className="label-caps text-[10px]">{pick.status === "open" ? d.currentPrice : d.closePrice}</p>
               <p className="mt-0.5 font-mono text-[17px] font-bold">{fmtPrice(perf.currentPrice)}</p>
-              <p className="font-mono text-[10px] text-muted">持有 {perf.daysHeld}D</p>
+              <p className="font-mono text-[10px] text-muted">{fmt(d.heldFmt, { n: perf.daysHeld })}</p>
             </div>
             <div>
-              <p className="label-caps text-[10px]">收益</p>
+              <p className="label-caps text-[10px]">{d.return}</p>
               <p className={`mt-0.5 font-mono text-[17px] font-bold ${returnClass(headlinePct)}`}>
                 {fmtPct(headlinePct)}
               </p>
               <p className="font-mono text-[10px] text-muted">
-                {pick.status === "open" ? "浮动" : "已实现"}
+                {pick.status === "open" ? d.unrealized : d.realized}
               </p>
             </div>
             <div>
-              <p className="label-caps text-[10px]">目标价</p>
+              <p className="label-caps text-[10px]">{d.targetPrice}</p>
               <p className="mt-0.5 font-mono text-[17px] font-bold">
                 {canViewFull ? fmtPrice(pick.target_price) : "🔒 Pro"}
               </p>
-              <p className="font-mono text-[10px] text-muted">{pick.horizon_months}M 期限</p>
+              <p className="font-mono text-[10px] text-muted">{fmt(d.horizonFmt, { n: pick.horizon_months })}</p>
             </div>
             <div>
-              <p className="label-caps text-[10px]">止损</p>
+              <p className="label-caps text-[10px]">{d.stop}</p>
               <p className="mt-0.5 font-mono text-[17px] font-bold text-[color:var(--danger)]">
                 {canViewFull ? fmtPrice(pick.stop_price) : "🔒 Pro"}
               </p>
-              <p className="font-mono text-[10px] text-muted">
-                {pick.conviction === "high" ? "高信念" : pick.conviction === "low" ? "低信念" : "中等"}
-              </p>
+              <p className="font-mono text-[10px] text-muted">{convictionLabel}</p>
             </div>
           </div>
 
           {pick.status !== "open" && pick.close_reason ? (
             <p className="mt-3 rounded-sm border border-dashed border-border px-3 py-2 text-[12px] text-muted">
-              <span className="label-caps mr-2">平仓原因</span>
+              <span className="label-caps mr-2">{d.closeReason}</span>
               {pick.close_reason}
             </p>
           ) : null}
@@ -175,11 +183,11 @@ export default async function PickDetailPage({
         <div className={`space-y-6 py-5 ${readerMode ? "reader-content-flow" : ""}`}>
           {canViewFull ? (
             <>
-              <PickSection title="投资逻辑" md={pick.thesis_md} readerMode={readerMode} />
-              <PickSection title="催化剂" md={pick.catalysts_md} readerMode={readerMode} />
-              <PickSection title="风险提示" md={pick.risks_md} readerMode={readerMode} />
-              <PickSection title="估值分析" md={pick.valuation_md} readerMode={readerMode} />
-              <PickSection title="退出纪律" md={pick.sell_discipline_md} readerMode={readerMode} />
+              <PickSection title={d.sections.thesis} md={pick.thesis_md} readerMode={readerMode} />
+              <PickSection title={d.sections.catalysts} md={pick.catalysts_md} readerMode={readerMode} />
+              <PickSection title={d.sections.risks} md={pick.risks_md} readerMode={readerMode} />
+              <PickSection title={d.sections.valuation} md={pick.valuation_md} readerMode={readerMode} />
+              <PickSection title={d.sections.discipline} md={pick.sell_discipline_md} readerMode={readerMode} />
             </>
           ) : (
             <div className="space-y-4">
@@ -194,7 +202,7 @@ export default async function PickDetailPage({
         {!canViewFull ? <StickyPaywall loggedIn={Boolean(user)} product="research" /> : null}
 
         <p className={`mt-8 pt-4 text-[11px] leading-relaxed ${readerMode ? "border-t border-[#d8d0c2] text-[#6b5c3f]" : "border-t border-border text-muted-soft"}`}>
-          免责声明：本 OPS Pick 为研究观点，不构成投资建议。入场价与目标价为发布时刻基于公开信息的量化模型判断。
+          {d.disclaimer}
         </p>
       </ReaderModeShell>
     </div>

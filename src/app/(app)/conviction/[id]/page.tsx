@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getListPerformance } from "@/lib/conviction";
+import { getDictionary, getLocale } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,9 @@ export default async function ConvictionDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const locale = await getLocale();
+  const d = getDictionary(locale).conviction.detail;
+
   const { id } = await params;
   const perf = await getListPerformance(id);
   if (!perf) notFound();
@@ -37,7 +41,7 @@ export default async function ConvictionDetailPage({
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 md:px-6">
       <nav className="text-[12px] text-muted">
         <Link href="/conviction" className="hover:text-accent-strong">
-          OPS 榜单
+          {d.breadcrumb}
         </Link>
         <span className="mx-1">/</span>
         <span>{list.period_label}</span>
@@ -55,18 +59,18 @@ export default async function ConvictionDetailPage({
           </div>
           <div className="flex flex-wrap items-start gap-x-6 gap-y-2 text-right mono">
             <div className={pnlClass(total_return_pct)}>
-              <p className="label-caps text-[10px]">当期加权净值</p>
+              <p className="label-caps text-[10px]">{d.navReturn}</p>
               <p className="text-3xl font-bold">{fmtPct(total_return_pct)}</p>
             </div>
             {benchmark ? (
               <div className={pnlClass(benchmark.return_pct)}>
-                <p className="label-caps text-[10px]">SPY 同期</p>
+                <p className="label-caps text-[10px]">{d.navSpy}</p>
                 <p className="text-xl font-semibold">{fmtPct(benchmark.return_pct)}</p>
               </div>
             ) : null}
             {alpha_pct != null ? (
               <div className={pnlClass(alpha_pct)}>
-                <p className="label-caps text-[10px]">超额收益 α</p>
+                <p className="label-caps text-[10px]">{d.navAlpha}</p>
                 <p className="text-xl font-semibold">{fmtPct(alpha_pct)}</p>
               </div>
             ) : null}
@@ -83,20 +87,20 @@ export default async function ConvictionDetailPage({
         <table className="w-full min-w-[760px] text-[12px]">
           <thead>
             <tr className="border-b border-border bg-surface-muted text-left text-[11px] uppercase tracking-wider text-muted">
-              <th className="px-3 py-2 font-normal">代码</th>
-              <th className="px-3 py-2 font-normal text-right">权重</th>
-              <th className="px-3 py-2 font-normal text-right">建仓价</th>
-              <th className="px-3 py-2 font-normal text-right">现价</th>
-              <th className="px-3 py-2 font-normal text-right">回报</th>
-              <th className="px-3 py-2 font-normal text-right">加权贡献</th>
-              <th className="px-3 py-2 font-normal">逻辑</th>
+              <th className="px-3 py-2 font-normal">{d.colSymbol}</th>
+              <th className="px-3 py-2 font-normal text-right">{d.colWeight}</th>
+              <th className="px-3 py-2 font-normal text-right">{d.colEntry}</th>
+              <th className="px-3 py-2 font-normal text-right">{d.colPrice}</th>
+              <th className="px-3 py-2 font-normal text-right">{d.colReturn}</th>
+              <th className="px-3 py-2 font-normal text-right">{d.colContribution}</th>
+              <th className="px-3 py-2 font-normal">{d.colThesis}</th>
             </tr>
           </thead>
           <tbody>
             {picks.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-3 py-6 text-center text-muted">
-                  本榜单暂无标的
+                  {d.emptyPicks}
                 </td>
               </tr>
             ) : (
@@ -135,7 +139,7 @@ export default async function ConvictionDetailPage({
       </section>
 
       <p className="mt-6 border-t border-border pt-3 text-[11px] leading-relaxed text-muted-soft">
-        说明：每份榜单于 publish_date 建仓，当期净值 = sum(weight × return) / sum(weight)；该计算公平对待无法实时定价的标的。本榜单为研究记录，不构成投资建议。
+        {d.disclaimer}
       </p>
     </div>
   );

@@ -2,8 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useDict } from "@/components/locale-provider";
 
 export function AddToWatchlistForm() {
+  const w = useDict().watchlistUi;
   const [symbol, setSymbol] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -24,13 +26,13 @@ export function AddToWatchlistForm() {
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          setError(data?.error ?? "添加失败");
+          setError(data?.error ?? w.addFail);
           return;
         }
         setSymbol("");
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "网络错误");
+        setError(err instanceof Error ? err.message : w.networkErr);
       }
     });
   };
@@ -40,11 +42,11 @@ export function AddToWatchlistForm() {
       <input
         value={symbol}
         onChange={(e) => setSymbol(e.target.value)}
-        placeholder="输入代码，例：NVDA / BTC / 00700"
+        placeholder={w.placeholder}
         className="w-64 rounded border border-border bg-surface px-3 py-1.5 text-[13px] outline-none focus:border-accent"
       />
       <button type="submit" disabled={pending} className="btn-primary px-3 py-1.5 text-[12px]">
-        {pending ? "添加中..." : "加入自选"}
+        {pending ? w.adding : w.add}
       </button>
       {error ? <span className="text-[11px] text-[color:var(--danger)]">{error}</span> : null}
     </form>
@@ -52,6 +54,7 @@ export function AddToWatchlistForm() {
 }
 
 export function RemoveFromWatchlistButton({ symbol }: { symbol: string }) {
+  const w = useDict().watchlistUi;
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const remove = () => {
@@ -66,7 +69,7 @@ export function RemoveFromWatchlistButton({ symbol }: { symbol: string }) {
   };
   return (
     <button type="button" onClick={remove} disabled={pending} className="text-[12px] text-muted hover:text-[color:var(--danger)]">
-      {pending ? "..." : "移除"}
+      {pending ? "..." : w.remove}
     </button>
   );
 }

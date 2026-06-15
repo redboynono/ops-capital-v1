@@ -17,11 +17,8 @@ import {
   hasOptionAlphaAccess,
   OPTION_ALPHA_FREE_PREVIEW_SYMBOL,
 } from "@/lib/entitlements";
-
-export const metadata = {
-  title: OPTION_ALPHA.pageTitle,
-  description: OPTION_ALPHA.description,
-};
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +38,9 @@ export default async function ExpiringOptionsPage({
   const user = await getSessionUser();
   if (!user) redirect(`/login?redirect=${encodeURIComponent(loginRedirect)}`);
 
+  const locale = await getLocale();
+  const o = getDictionary(locale).optionsPage;
+
   const optionPro = hasOptionAlphaAccess(user);
   const previewOnly =
     !optionPro &&
@@ -55,17 +55,16 @@ export default async function ExpiringOptionsPage({
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 py-5 md:px-6">
       <header className="mb-4 border-b border-border pb-3">
-        <span className="label-caps">{OPTION_ALPHA.labelCaps}</span>
-        <h1 className="mt-1 text-2xl font-bold text-foreground">{OPTION_ALPHA.name}</h1>
+        <span className="label-caps">{o.labelCaps}</span>
+        <h1 className="mt-1 text-2xl font-bold text-foreground">{o.title}</h1>
         <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted">
-          {OPTION_ALPHA.description}。以<strong className="text-foreground-soft">表格 + 操作提示</strong>
-          直接给出要跟的合约（标的、到期、行权价、C/P），默认本周五/下周五到期。
+          {o.description} {o.intro}
         </p>
         <p className="mt-2 text-[11px] text-muted-soft">
-          扫描标的：{ZERO_DTE_WATCHLIST.join(" · ")}（亦可下方输入任意美股）
+          {fmt(o.scanFmt, { list: ZERO_DTE_WATCHLIST.join(" · ") })}
         </p>
         <div className="mt-3">
-          <Suspense fallback={<p className="text-[12px] text-muted">加载到期日…</p>}>
+          <Suspense fallback={<p className="text-[12px] text-muted">{o.loadingExpiry}</p>}>
             <ExpiringOptionsExpiryPicker
               week={expiry.week}
               thisFriday={expiry.thisFriday}
@@ -77,9 +76,9 @@ export default async function ExpiringOptionsPage({
       </header>
 
       <section className="card mb-5 p-4">
-        <h2 className="text-[15px] font-bold text-foreground">按标的筛选</h2>
+        <h2 className="text-[15px] font-bold text-foreground">{o.filterBySymbol}</h2>
         <p className="mt-1 text-[12px] text-muted">
-          输入代码后只显示该标的在 {expiry.label}（{expiry.expirationDate}）的提示表。
+          {fmt(o.filterSubFmt, { label: expiry.label, date: expiry.expirationDate })}
         </p>
         <div className="mt-3">
           <ExpiringOptionsSymbolForm initialSymbol={querySymbol} week={expiry.week} />
@@ -90,8 +89,7 @@ export default async function ExpiringOptionsPage({
         <div className="mb-5">
           <ProductPaywallCard product="options" loggedIn compact />
           <p className="mt-2 text-[12px] text-muted">
-            免费预览仅支持 <span className="font-mono font-bold">{OPTION_ALPHA_FREE_PREVIEW_SYMBOL}</span>。
-            你输入了 {querySymbol}，请订阅后查看。
+            {fmt(o.previewOnlyFmt, { symbol: OPTION_ALPHA_FREE_PREVIEW_SYMBOL, query: querySymbol })}
           </p>
         </div>
       ) : null}
@@ -128,8 +126,7 @@ export default async function ExpiringOptionsPage({
           <ProductPaywallCard product="options" loggedIn />
           {!optionPro ? (
             <p className="mt-2 text-[11px] text-muted">
-              免费预览：无标的时看全市场 Top 信号；输入{" "}
-              <span className="font-mono">{OPTION_ALPHA_FREE_PREVIEW_SYMBOL}</span> 可看该标的表。
+              {fmt(o.freePreviewHint, { symbol: OPTION_ALPHA_FREE_PREVIEW_SYMBOL })}
             </p>
           ) : null}
         </div>
@@ -138,7 +135,7 @@ export default async function ExpiringOptionsPage({
       {querySymbol ? null : (
         <details className="mb-5 group" open>
           <summary className="cursor-pointer text-[13px] font-semibold text-accent-strong hover:underline">
-            展开：AI 文字策略与多标的成交雷达
+            {o.expandAi}
           </summary>
           <div className="mt-4 space-y-5">
             <ExpiringOptionsPlaybook
@@ -157,7 +154,7 @@ export default async function ExpiringOptionsPage({
 
       <p className="mt-5 text-[12px] text-muted-soft">
         <Link href="/alpha" className="text-accent-strong hover:underline">
-          ← 返回 Alpha 首页
+          {o.backAlpha}
         </Link>
       </p>
     </div>

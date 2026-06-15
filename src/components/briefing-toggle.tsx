@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useDict } from "@/components/locale-provider";
 
 export function BriefingToggle({ initialEnabled }: { initialEnabled: boolean }) {
+  const b = useDict().briefingUi;
   const [enabled, setEnabled] = useState(initialEnabled);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -23,9 +25,9 @@ export function BriefingToggle({ initialEnabled }: { initialEnabled: boolean }) 
         throw new Error(data?.error ?? `HTTP ${res.status}`);
       }
       setEnabled(next);
-      setMsg(next ? "已开启每日邮件简报" : "已关闭每日邮件简报");
+      setMsg(next ? b.enabled : b.disabled);
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "更新失败");
+      setMsg(err instanceof Error ? err.message : b.updateFail);
     } finally {
       setBusy(false);
     }
@@ -34,10 +36,8 @@ export function BriefingToggle({ initialEnabled }: { initialEnabled: boolean }) 
   return (
     <div className="flex items-center justify-between gap-3 py-2 text-[13px]">
       <div className="flex flex-col">
-        <span className="text-foreground">每日邮件简报</span>
-        <span className="text-[11px] text-muted">
-          基于自选股，每日 8:30 (北京) 自动汇总发送到你的邮箱
-        </span>
+        <span className="text-foreground">{b.title}</span>
+        <span className="text-[11px] text-muted">{b.subtitle}</span>
         {msg ? <span className="mt-1 text-[10px] text-accent-strong">{msg}</span> : null}
       </div>
       <button

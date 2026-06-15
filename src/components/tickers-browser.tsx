@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Search, X, Globe2 } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
+import { useDict } from "@/components/locale-provider";
+import { fmt } from "@/lib/i18n/fmt";
 import type { TickerRow } from "@/lib/tickers";
 import { normalizeInternalSymbol } from "@/lib/symbol-resolve";
 
@@ -21,6 +23,7 @@ type LiveHit = {
 };
 
 export function TickersBrowser({ tickers, exchangeLabels }: Props) {
+  const b = useDict().tickersPage.browser;
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
   const [liveHits, setLiveHits] = useState<LiveHit[]>([]);
@@ -51,7 +54,6 @@ export function TickersBrowser({ tickers, exchangeLabels }: Props) {
   const total = tickers.length;
   const matched = grouped.filtered.length;
 
-  // ---- 全市场实时查询（Finnhub + Yahoo）当索引无匹配且 ≥ 2 字符 ----
   useEffect(() => {
     const q = deferred.trim();
     if (q.length < 2 || matched > 0) {
@@ -91,14 +93,13 @@ export function TickersBrowser({ tickers, exchangeLabels }: Props) {
 
   return (
     <>
-      {/* 搜索框 */}
       <div className="mb-4">
         <div className="flex h-10 items-center gap-2 rounded border border-border bg-surface px-3 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
           <Search className="h-4 w-4 text-muted" strokeWidth={1.5} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索代码、名称或行业（如 NVDA、英伟达、Semiconductors）"
+            placeholder={b.searchPlaceholder}
             className="flex-1 bg-transparent text-[13px] text-foreground placeholder:text-muted-soft outline-none"
             autoFocus
           />
@@ -107,7 +108,7 @@ export function TickersBrowser({ tickers, exchangeLabels }: Props) {
               type="button"
               onClick={() => setQuery("")}
               className="text-muted hover:text-foreground"
-              aria-label="清除"
+              aria-label={b.clearAria}
             >
               <X className="h-4 w-4" strokeWidth={1.5} />
             </button>
@@ -115,14 +116,9 @@ export function TickersBrowser({ tickers, exchangeLabels }: Props) {
         </div>
         <p className="mt-1.5 text-[11px] text-muted">
           {query ? (
-            <>
-              匹配 <span className="font-mono font-bold text-accent-strong">{matched}</span> /{" "}
-              {total}
-            </>
+            <>{fmt(b.matchedFmt, { matched, total })}</>
           ) : (
-            <>
-              共 <span className="font-mono font-bold text-foreground-soft">{total}</span> 个标的
-            </>
+            <>{fmt(b.totalFmt, { total })}</>
           )}
         </p>
       </div>
@@ -131,10 +127,10 @@ export function TickersBrowser({ tickers, exchangeLabels }: Props) {
         <div className="card overflow-hidden">
           <div className="border-b border-border bg-surface-muted px-4 py-2 text-[12px] text-muted">
             <Globe2 className="mr-1.5 inline h-3.5 w-3.5 -translate-y-px text-accent-strong" strokeWidth={1.8} />
-            索引内未收录 "<span className="font-mono font-semibold">{query}</span>"
-            {liveLoading ? <span className="ml-2 animate-pulse text-accent-strong">正在实时查询…</span> : null}
+            {fmt(b.unlistedFmt, { query })}
+            {liveLoading ? <span className="ml-2 animate-pulse text-accent-strong">{b.liveSearching}</span> : null}
             {!liveLoading && liveHits.length > 0 ? (
-              <span className="ml-2 text-accent-strong">·已找到 {liveHits.length} 个市场匹配</span>
+              <span className="ml-2 text-accent-strong">{fmt(b.liveFoundFmt, { n: liveHits.length })}</span>
             ) : null}
           </div>
 
@@ -152,10 +148,10 @@ export function TickersBrowser({ tickers, exchangeLabels }: Props) {
                     <span className="flex-1 truncate text-[12px] text-foreground-soft">{h.name}</span>
                     <span className="hidden font-mono text-[10px] text-muted sm:inline">{h.type}</span>
                     {h.inDb ? (
-                      <span className="badge-free">已收录</span>
+                      <span className="badge-free">{b.inDb}</span>
                     ) : (
                       <span className="badge-premium" style={{ background: "transparent", borderStyle: "dashed" }}>
-                        实时
+                        {b.live}
                       </span>
                     )}
                   </Link>
@@ -165,10 +161,10 @@ export function TickersBrowser({ tickers, exchangeLabels }: Props) {
           ) : (
             <p className="px-4 py-6 text-center text-[12px] text-muted">
               {liveLoading
-                ? "查询全球市场中…"
+                ? b.globalSearching
                 : query.trim().length < 2
-                  ? "至少输入 2 个字符以触发全市场查询（含港股名称）"
-                  : `全市场也未找到 "${query}"，可试代码如 0100 / 0700 或英文名`}
+                  ? b.minChars
+                  : fmt(b.notFoundFmt, { query })}
             </p>
           )}
         </div>

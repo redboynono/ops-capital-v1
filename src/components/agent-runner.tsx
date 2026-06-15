@@ -1,27 +1,11 @@
 "use client";
 
-/**
- * AgentRunner — 共享的 Agent 执行 + 流式渲染面板。
- *
- * 用法：
- *   <AgentRunner
- *     agentId="dcf-valuation"
- *     agentName="DCF 估值速算"
- *     emoji="📊"
- *     payload={{ symbol: "NVDA" }}     // 传给 /api/agents/run
- *     onClose={() => ...}
- *   />
- *
- * 自动：
- *   - POST /api/agents/run，解析流式 plain-text 增量
- *   - 实时渲染 Markdown（流式期间用 pre 防止半截 markdown 失效，结束后切到 Markdown 渲染）
- *   - 失败显示原因，提供重试
- */
-
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { AlertCircle, Loader2, RefreshCcw, Sparkles, X } from "lucide-react";
+
+import { useDict } from "@/components/locale-provider";
 
 export type AgentRunPayload = {
   symbol?: string;
@@ -46,16 +30,14 @@ export function AgentRunner({
   onClose?: () => void;
   autoStart?: boolean;
 }) {
+  const a = useDict().agentUi;
   const [output, setOutput] = useState("");
-  const [status, setStatus] = useState<"idle" | "streaming" | "ok" | "failed">(
-    "idle",
-  );
+  const [status, setStatus] = useState<"idle" | "streaming" | "ok" | "failed">("idle");
   const [error, setError] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const startedAtRef = useRef<number>(0);
 
-  // 计时器
   useEffect(() => {
     if (status !== "streaming") return;
     const tick = () => setElapsedMs(Date.now() - startedAtRef.current);
@@ -104,7 +86,7 @@ export function AgentRunner({
         return;
       }
       setStatus("failed");
-      setError(err instanceof Error ? err.message : "请求失败");
+      setError(err instanceof Error ? err.message : a.requestFail);
     } finally {
       abortRef.current = null;
     }
@@ -115,7 +97,6 @@ export function AgentRunner({
     setStatus("idle");
   }
 
-  // autoStart：第一次 mount 自动跑一次
   useEffect(() => {
     if (autoStart) run();
     return () => abortRef.current?.abort();
@@ -151,9 +132,9 @@ export function AgentRunner({
               type="button"
               onClick={abort}
               className="inline-flex h-6 items-center rounded-sm border border-border px-1.5 text-[10px] text-muted hover:text-foreground hover:border-accent"
-              title="中断"
+              title={a.stopTitle}
             >
-              停
+              {a.stop}
             </button>
           ) : null}
           {(status === "ok" || status === "failed") ? (
@@ -161,10 +142,10 @@ export function AgentRunner({
               type="button"
               onClick={run}
               className="inline-flex h-6 items-center gap-1 rounded-sm border border-border px-1.5 text-[10px] text-muted hover:text-accent-strong hover:border-accent"
-              title="重新生成"
+              title={a.rerunTitle}
             >
               <RefreshCcw className="h-3 w-3" />
-              重跑
+              {a.rerun}
             </button>
           ) : null}
           {onClose ? (
@@ -172,7 +153,7 @@ export function AgentRunner({
               type="button"
               onClick={onClose}
               className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted hover:text-foreground hover:bg-surface-muted"
-              title="关闭"
+              title={a.closeTitle}
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -191,13 +172,12 @@ export function AgentRunner({
         {status === "streaming" && !output ? (
           <div className="flex items-center gap-2 text-[12px] text-muted">
             <Sparkles className="h-3.5 w-3.5 animate-pulse text-accent-strong" />
-            <span>Agent 正在调度数据 + 推理…</span>
+            <span>{a.streaming}</span>
           </div>
         ) : null}
 
         {output ? (
           status === "streaming" ? (
-            // 流式期间：用 mono pre 显示，避免半截 markdown 闪烁
             <pre className="whitespace-pre-wrap text-[12px] leading-relaxed text-foreground-soft font-sans">
               {output}
               <span className="ml-0.5 inline-block h-3 w-1.5 translate-y-0.5 animate-pulse bg-accent-strong" />
@@ -216,7 +196,7 @@ export function AgentRunner({
             className="inline-flex h-8 items-center gap-1.5 rounded border border-accent bg-accent/10 px-3 text-[12px] font-bold text-accent-strong hover:bg-accent/20"
           >
             <Sparkles className="h-3.5 w-3.5" />
-            运行 Agent
+            {a.runAgent}
           </button>
         ) : null}
       </div>
