@@ -144,8 +144,8 @@ function buildXCopy(input: SocialCopyInput, xUrl: string): string {
       "🔬 Deep research · OPS Alpha",
       ticker ? `$${ticker} · ${title}` : title,
       thesis ? `Thesis\n${thesis}` : "New institutional-grade research is live.",
-      `What's inside\n${RESEARCH_SECTIONS.map((s) => `· ${s}`).join("\n")}`,
-      "Free summary on site · full report & valuation framework with Research Pro.",
+      `Framework\n${RESEARCH_SECTIONS.map((s) => `· ${s}`).join("\n")}`,
+      "Full English summary on site · valuation model & risk map with Research Pro.",
     ];
     return buildPremiumXCopy({
       lines,

@@ -19,6 +19,8 @@ export type SocialPoolItem = {
   shortCode?: string;
 };
 
+const ANALYSIS_REPOST_COOLDOWN_DAYS = 30;
+
 function alreadyDrafted(
   drafted: Set<string>,
   contentType: string,
@@ -50,6 +52,70 @@ function toPoolItem(
     utmCampaign: copy.utmCampaign,
     shortCode: copy.shortCode,
   };
+}
+
+function postedAnalysisSlugs(
+  records: Awaited<ReturnType<typeof listSocialOpsRecords>>,
+): Set<string> {
+  const cutoff = Date.now() - ANALYSIS_REPOST_COOLDOWN_DAYS * 86_400_000;
+  const slugs = new Set<string>();
+  for (const r of records) {
+    if (r.content_type !== "analysis" || !r.posted_x_at || !r.ref_key) continue;
+    const t = Date.parse(r.posted_x_at.replace(" ", "T"));
+    if (Number.isFinite(t) && t >= cutoff) slugs.add(r.ref_key);
+  }
+  return slugs;
+}
+
+function englishScore(p: { title_en?: string | null; excerpt_en?: string | null }): number {
+  let s = 0;
+  if (p.title_en?.trim()) s += 2;
+  if (p.excerpt_en?.trim()) s += 3;
+  return s;
+}
+
+/** 深度研报英文 X 池：优先有 title_en + excerpt_en 的最新文章 */
+export async function buildAnalysisSocialPool(limit = 10): Promise<SocialPoolItem[]> {
+  const [posts, records] = await Promise.all([
+    listPosts({ kind: "analysis", limit: 40, period: "month" }),
+    listSocialOpsRecords({ limit: 500 }),
+  ]);
+
+  const blocked = postedAnalysisSlugs(records);
+  const sorted = [...posts].sort((a, b) => {
+    const diff = englishScore(b) - englishScore(a);
+    if (diff !== 0) return diff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
+  const items: SocialPoolItem[] = [];
+  for (const p of sorted) {
+    if (blocked.has(p.slug)) continue;
+    const copy = await buildSocialCopyAsync({
+      type: "post",
+      kind: "analysis",
+      title: p.title,
+      title_en: p.title_en,
+      slug: p.slug,
+      excerpt: p.excerpt,
+      excerpt_en: p.excerpt_en,
+      tickers: p.tickers,
+    });
+    const enTitle = p.title_en?.trim() || p.title;
+    items.push(
+      toPoolItem(
+        `analysis:${p.slug}`,
+        "analysis",
+        p.slug,
+        enTitle,
+        p.excerpt_en?.slice(0, 120) || p.excerpt?.slice(0, 100) || "Deep research",
+        90 + englishScore(p),
+        copy,
+      ),
+    );
+    if (items.length >= limit) break;
+  }
+  return items;
 }
 
 export async function buildSocialContentPool(limit = 12): Promise<SocialPoolItem[]> {

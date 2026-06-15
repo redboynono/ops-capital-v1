@@ -29,7 +29,7 @@ if [ -z "${CRON_SECRET:-}" ]; then
 fi
 
 HTTP_CODE=$(curl -sS -o /tmp/ops-alpha-social-x.json -w "%{http_code}" \
-  -X POST "${BASE_URL}/api/cron/social-x" \
+  -X POST "${BASE_URL}/api/cron/social-x?count=5&mode=analysis" \
   -H "Authorization: Bearer ${CRON_SECRET}" \
   -H "Content-Type: application/json")
 

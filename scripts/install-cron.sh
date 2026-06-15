@@ -31,7 +31,7 @@ $CRON_MARKER
 0 */4 * * * /usr/local/bin/ops-alpha-daily-news.sh 2 >> /var/log/ops-alpha-daily-news.log 2>&1
 */15 * * * * /usr/local/bin/ops-alpha-alerts-check.sh >> /var/log/ops-alpha-alerts.log 2>&1
 30 16 * * 1-5 /usr/local/bin/ops-alpha-snapshot-ratings.sh >> /var/log/ops-alpha-snapshot-ratings.log 2>&1
-0 10 * * * /usr/local/bin/ops-alpha-social-x.sh >> /var/log/ops-alpha-social-x.log 2>&1
+0 9 * * * /usr/local/bin/ops-alpha-social-x.sh >> /var/log/ops-alpha-social-x.log 2>&1
 EOF
 
 crontab "$TMP"

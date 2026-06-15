@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { requireAdmin } from "@/lib/admin";
 import { runJobTs } from "@/lib/observability";
-import { runAutoPostX } from "@/lib/social/auto-post-x";
+import { runAutoPostX, runAutoPostXBatch } from "@/lib/social/auto-post-x";
 import { isXPostingEnabled } from "@/lib/social/x-api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 800;
 
 async function authorize(): Promise<{ ok: boolean; reason?: string }> {
   const h = await headers();
@@ -30,14 +31,22 @@ async function handle(req: Request): Promise<NextResponse> {
 
   const url = new URL(req.url);
   const dryRun = url.searchParams.get("dryRun") === "1";
+  const countStr = url.searchParams.get("count");
+  const mode = url.searchParams.get("mode") ?? "analysis";
+  const count = countStr ? Number(countStr) : undefined;
 
   const out = await runJobTs({ jobName: "social-x-auto-post" }, async (ctx) => {
+    const useBatch = mode === "analysis" || (count != null && count > 1);
+    if (useBatch) {
+      const result = await runAutoPostXBatch({ count, dryRun });
+      ctx.itemsTotal = result.target;
+      ctx.itemsOk = result.posted;
+      ctx.itemsFailed = result.failed;
+      ctx.meta = { enabled: isXPostingEnabled(), dryRun, mode: "analysis_batch", ...result };
+      return result;
+    }
     const result = await runAutoPostX({ dryRun });
-    ctx.meta = {
-      enabled: isXPostingEnabled(),
-      dryRun,
-      action: result.ok ? result.action : "error",
-    };
+    ctx.meta = { enabled: isXPostingEnabled(), dryRun, mode: "single", action: result.ok ? result.action : "error" };
     if (result.ok && result.action === "posted") {
       ctx.itemsOk = 1;
       ctx.meta = { ...ctx.meta, tweetId: result.tweetId, refKey: result.item.refKey };
@@ -48,7 +57,7 @@ async function handle(req: Request): Promise<NextResponse> {
     return result;
   });
 
-  if (!out.ok && "error" in out) {
+  if ("error" in out && out.ok === false) {
     return NextResponse.json(out, { status: 502 });
   }
   return NextResponse.json(out);

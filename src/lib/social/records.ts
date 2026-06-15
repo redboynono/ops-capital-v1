@@ -150,3 +150,22 @@ export async function getSocialOpsRecord(id: string): Promise<SocialOpsRecord | 
   );
   return rows[0] ?? null;
 }
+
+export async function countAnalysisPostedToday(): Promise<number> {
+  const rows = await mysqlQuery<{ n: number }[]>(
+    `select count(*) as n from social_ops_posts
+      where content_type = 'analysis'
+        and posted_x_at >= date_sub(current_timestamp, interval 24 hour)`,
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+export async function isAnalysisPostedToday(refKey: string): Promise<boolean> {
+  const rows = await mysqlQuery<{ n: number }[]>(
+    `select count(*) as n from social_ops_posts
+      where content_type = 'analysis' and ref_key = ?
+        and posted_x_at >= date_sub(current_timestamp, interval 24 hour)`,
+    [refKey],
+  );
+  return Number(rows[0]?.n ?? 0) > 0;
+}

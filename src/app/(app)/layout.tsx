@@ -9,6 +9,7 @@ import {
 } from "@/components/terminal-chrome";
 import { getSessionUser } from "@/lib/auth";
 import { getDictionary, getLocale } from "@/lib/i18n";
+import { AnalyticsProvider } from "@/components/analytics-provider";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getLocale();
@@ -51,6 +52,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
         <MobileTabBar />
         <TerminalFunctionBar />
       </div>
+      <AnalyticsProvider />
     </LocaleProvider>
   );
 }

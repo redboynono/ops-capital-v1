@@ -1,6 +1,12 @@
-import { buildSocialContentPool, type SocialPoolItem } from "@/lib/social/pool";
-import { createSocialOpsRecord, listSocialOpsRecords, updateSocialOpsRecord } from "@/lib/social/records";
+import { buildAnalysisSocialPool, type SocialPoolItem } from "@/lib/social/pool";
+import {
+  countAnalysisPostedToday,
+  createSocialOpsRecord,
+  isAnalysisPostedToday,
+  updateSocialOpsRecord,
+} from "@/lib/social/records";
 import { isXPostingEnabled, postTweet } from "@/lib/social/x-api";
+import { mysqlQuery } from "@/lib/mysql";
 
 export type AutoPostXResult =
   | { ok: true; action: "skipped"; reason: string }
@@ -8,67 +14,46 @@ export type AutoPostXResult =
   | { ok: true; action: "posted"; item: SocialPoolItem; tweetId: string; recordId: string }
   | { ok: false; error: string };
 
-const DEFAULT_MIN_INTERVAL_HOURS = 20;
-const REF_COOLDOWN_DAYS = 7;
-const CTA_COOLDOWN_DAYS = 14;
+export type AutoPostXBatchResult = {
+  ok: boolean;
+  action: "skipped" | "dry_run" | "posted" | "partial";
+  reason?: string;
+  target: number;
+  posted: number;
+  failed: number;
+  skipped: number;
+  results: Array<
+    | { ok: true; item: SocialPoolItem; tweetId: string; recordId: string }
+    | { ok: false; item: SocialPoolItem; error: string }
+  >;
+};
 
-function poolKey(item: SocialPoolItem): string {
-  return `${item.contentType}:${item.refKey}`;
+const DEFAULT_DAILY_ANALYSIS_COUNT = 5;
+const DEFAULT_SPACING_MS = 90_000;
+const BATCH_LOCK_NAME = "ops_social_x_batch";
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
-async function recentlyPostedGlobally(withinHours: number): Promise<boolean> {
-  const rows = await listSocialOpsRecords({ limit: 50 });
-  const cutoff = Date.now() - withinHours * 3600_000;
-  return rows.some((r) => {
-    if (!r.posted_x_at) return false;
-    const t = Date.parse(r.posted_x_at.replace(" ", "T"));
-    return Number.isFinite(t) && t >= cutoff;
-  });
+async function acquireBatchLock(): Promise<boolean> {
+  const rows = await mysqlQuery<{ locked: number | null }[]>(
+    `select get_lock(?, 0) as locked`,
+    [BATCH_LOCK_NAME],
+  );
+  return Number(rows[0]?.locked) === 1;
 }
 
-function postedRefKeys(rows: Awaited<ReturnType<typeof listSocialOpsRecords>>): Set<string> {
-  const cutoff = Date.now() - REF_COOLDOWN_DAYS * 86_400_000;
-  const ctaCutoff = Date.now() - CTA_COOLDOWN_DAYS * 86_400_000;
-  const keys = new Set<string>();
-  for (const r of rows) {
-    if (!r.posted_x_at || !r.ref_key) continue;
-    const t = Date.parse(r.posted_x_at.replace(" ", "T"));
-    if (!Number.isFinite(t)) continue;
-    const isCta = r.content_type === "custom" && r.ref_key === "pricing_cta";
-    if (isCta && t < ctaCutoff) continue;
-    if (!isCta && t < cutoff) continue;
-    keys.add(`${r.content_type}:${r.ref_key}`);
-  }
-  return keys;
+async function releaseBatchLock(): Promise<void> {
+  await mysqlQuery(`select release_lock(?)`, [BATCH_LOCK_NAME]).catch(() => null);
 }
 
-function pickNextItem(pool: SocialPoolItem[], blocked: Set<string>): SocialPoolItem | null {
-  for (const item of pool) {
-    if (blocked.has(poolKey(item))) continue;
-    return item;
-  }
-  return null;
-}
-
-export async function runAutoPostX(opts: { dryRun?: boolean } = {}): Promise<AutoPostXResult> {
-  if (!isXPostingEnabled()) {
-    return { ok: true, action: "skipped", reason: "X_AUTO_POST disabled or credentials missing" };
-  }
-
-  const minHours = Number(process.env.X_POST_MIN_INTERVAL_HOURS ?? DEFAULT_MIN_INTERVAL_HOURS);
-  if (await recentlyPostedGlobally(minHours)) {
-    return { ok: true, action: "skipped", reason: `posted within last ${minHours}h` };
-  }
-
-  const [pool, records] = await Promise.all([buildSocialContentPool(20), listSocialOpsRecords({ limit: 200 })]);
-  const blocked = postedRefKeys(records);
-  const item = pickNextItem(pool, blocked);
-  if (!item) {
-    return { ok: true, action: "skipped", reason: "no eligible content in pool" };
-  }
-
-  if (opts.dryRun) {
-    return { ok: true, action: "dry_run", item };
+async function postOne(item: SocialPoolItem): Promise<
+  | { ok: true; item: SocialPoolItem; tweetId: string; recordId: string }
+  | { ok: false; item: SocialPoolItem; error: string }
+> {
+  if (await isAnalysisPostedToday(item.refKey)) {
+    return { ok: false, item, error: "already posted today" };
   }
 
   try {
@@ -87,8 +72,138 @@ export async function runAutoPostX(opts: { dryRun?: boolean } = {}): Promise<Aut
       markPostedX: true,
       notes: `auto_post tweet_id=${tweetId}`,
     });
-    return { ok: true, action: "posted", item, tweetId, recordId: record.id };
+    return { ok: true, item, tweetId, recordId: record.id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "post failed" };
+    return { ok: false, item, error: e instanceof Error ? e.message : "post failed" };
   }
+}
+
+/** 每日批量发深度研报英文长文到 X */
+export async function runAutoPostXBatch(opts: {
+  count?: number;
+  dryRun?: boolean;
+  spacingMs?: number;
+} = {}): Promise<AutoPostXBatchResult> {
+  if (!isXPostingEnabled()) {
+    return {
+      ok: true,
+      action: "skipped",
+      reason: "X credentials missing",
+      target: 0,
+      posted: 0,
+      failed: 0,
+      skipped: 0,
+      results: [],
+    };
+  }
+
+  if (!opts.dryRun && !(await acquireBatchLock())) {
+    return {
+      ok: true,
+      action: "skipped",
+      reason: "another batch job is running",
+      target: 0,
+      posted: 0,
+      failed: 0,
+      skipped: 0,
+      results: [],
+    };
+  }
+
+  try {
+    const target = Math.max(
+      1,
+      Math.min(10, opts.count ?? Number(process.env.X_DAILY_ANALYSIS_COUNT ?? DEFAULT_DAILY_ANALYSIS_COUNT)),
+    );
+    const spacingMs = opts.spacingMs ?? Number(process.env.X_POST_SPACING_MS ?? DEFAULT_SPACING_MS);
+
+    const alreadyToday = await countAnalysisPostedToday();
+    const remaining = Math.max(0, target - alreadyToday);
+    if (remaining === 0) {
+      return {
+        ok: true,
+        action: "skipped",
+        reason: `already posted ${alreadyToday} analysis today (target ${target})`,
+        target,
+        posted: 0,
+        failed: 0,
+        skipped: 0,
+        results: [],
+      };
+    }
+
+    const pool = await buildAnalysisSocialPool(target + 8);
+    const picks = pool.slice(0, remaining);
+    if (picks.length === 0) {
+      return {
+        ok: true,
+        action: "skipped",
+        reason: "no eligible analysis in pool",
+        target: remaining,
+        posted: 0,
+        failed: 0,
+        skipped: 0,
+        results: [],
+      };
+    }
+
+    if (opts.dryRun) {
+      return {
+        ok: true,
+        action: "dry_run",
+        target: remaining,
+        posted: 0,
+        failed: 0,
+        skipped: 0,
+        results: picks.map((item) => ({ ok: true as const, item, tweetId: "dry-run", recordId: "dry-run" })),
+      };
+    }
+
+    const results: AutoPostXBatchResult["results"] = [];
+    let posted = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    for (let i = 0; i < picks.length; i++) {
+      const item = picks[i]!;
+      const out = await postOne(item);
+      results.push(out);
+      if (out.ok) posted++;
+      else if (out.error === "already posted today") skipped++;
+      else failed++;
+      if (posted + skipped >= remaining) break;
+      if (i < picks.length - 1 && spacingMs > 0 && out.ok) await sleep(spacingMs);
+    }
+
+    return {
+      ok: failed === 0,
+      action: failed > 0 && posted > 0 ? "partial" : "posted",
+      target: remaining,
+      posted,
+      failed,
+      skipped,
+      results,
+    };
+  } finally {
+    if (!opts.dryRun) await releaseBatchLock();
+  }
+}
+
+/** 单条发帖（手动 / 兼容旧 cron） */
+export async function runAutoPostX(opts: { dryRun?: boolean } = {}): Promise<AutoPostXResult> {
+  const batch = await runAutoPostXBatch({ count: 1, dryRun: opts.dryRun, spacingMs: 0 });
+  if (batch.action === "skipped") {
+    return { ok: true, action: "skipped", reason: batch.reason ?? "skipped" };
+  }
+  if (batch.action === "dry_run" && batch.results[0]) {
+    const r = batch.results[0];
+    return { ok: true, action: "dry_run", item: r.item };
+  }
+  const first = batch.results.find((r) => r.ok);
+  if (first && first.ok) {
+    return { ok: true, action: "posted", item: first.item, tweetId: first.tweetId, recordId: first.recordId };
+  }
+  const failed = batch.results.find((r) => !r.ok);
+  if (failed && !failed.ok) return { ok: false, error: failed.error };
+  return { ok: true, action: "skipped", reason: batch.reason ?? "no item" };
 }

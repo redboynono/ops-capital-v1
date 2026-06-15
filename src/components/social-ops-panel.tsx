@@ -152,7 +152,7 @@ export function SocialOpsPanel() {
         <header className="border-b border-border px-3 py-2">
           <h2 className="text-[12px] font-bold text-foreground">推荐内容池</h2>
           <p className="mt-0.5 text-[11px] text-muted">
-            X Premium 长文模板 · 评级变动 · 快讯 · 研报 · 价值链 · 试用 CTA
+            X Premium 长文 · 每日 5 篇英文深度研报自动分发 · 评级/快讯手动池
           </p>
         </header>
         {pool.length === 0 ? (
