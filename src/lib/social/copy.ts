@@ -70,9 +70,10 @@ function enRatingLabel(label: string): string {
   return RATING_LABEL_EN[label] ?? label;
 }
 
+/** 页脚只用 # 标签；正文保留唯一 $TICKER（X 限制每条 1 个 cashtag） */
 function xHashtags(tickers: string[] = [], extra: string[] = []): string {
-  const primary = tickers.slice(0, 1).map((t) => `$${t}`);
-  const tags = new Set<string>([...primary]);
+  const tags = new Set<string>();
+  if (tickers[0]) tags.add(`#${tickers[0]}`);
   for (const t of extra) tags.add(t);
   if (tickers.some((t) => CRYPTO_TICKERS.has(t))) tags.add("#Crypto");
   tags.add("#AI");

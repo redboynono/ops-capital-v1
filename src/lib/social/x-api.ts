@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { getValidOAuth2AccessToken, isXOAuth2Configured, postTweetOAuth2 } from "@/lib/social/x-oauth2";
 
 export type XPostResult = {
   tweetId: string;
@@ -43,11 +44,20 @@ function readXConfig(): XApiConfig | null {
 
 export function isXPostingEnabled(): boolean {
   if (process.env.X_AUTO_POST_ENABLED === "0") return false;
+  if (isXOAuth2Configured()) return true;
   return readXConfig() != null;
 }
 
-/** 发布一条 X 推文（OAuth 1.0a User Context） */
+/** 发布一条 X 推文（优先 OAuth 2.0，回退 OAuth 1.0a） */
 export async function postTweet(text: string): Promise<XPostResult> {
+  if (isXOAuth2Configured()) {
+    const token = await getValidOAuth2AccessToken();
+    if (token) return postTweetOAuth2(text);
+  }
+  return postTweetOAuth1(text);
+}
+
+async function postTweetOAuth1(text: string): Promise<XPostResult> {
   const cfg = readXConfig();
   if (!cfg) {
     throw new Error("X API credentials missing (X_API_KEY / X_API_SECRET / X_ACCESS_TOKEN / X_ACCESS_TOKEN_SECRET)");
