@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { NewsPostsList } from "@/components/news-posts-list";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
 import { resolveLayerFilter } from "@/lib/marketing/layer-filter";
 
 export const revalidate = 180;
@@ -25,34 +27,40 @@ export default async function NewsListPage({
 }) {
   const { symbol, layer: layerParam } = await searchParams;
   const { layer, symbols } = resolveLayerFilter(layerParam);
+  const locale = await getLocale();
+  const n = getDictionary(locale).news;
+  const layerName = layer ? (locale === "en" ? layer.nameEn : layer.nameZh) : null;
+
+  let subtitle = n.subtitle;
+  if (layer && layerName) {
+    subtitle += fmt(n.subtitleLayerFmt, { id: layer.id, name: layerName });
+  } else if (symbol) {
+    subtitle += fmt(n.subtitleSymbolFmt, { symbol });
+  }
 
   return (
     <div className="mx-auto w-full max-w-[960px] px-4 py-6 md:px-6">
       <header className="mb-4 flex items-end justify-between border-b border-border pb-3">
         <div>
-          <span className="label-caps">快讯 News</span>
-          <h1 className="mt-1 text-2xl font-bold text-foreground">市场快讯时间流</h1>
-          <p className="mt-1 text-[13px] text-muted">
-            短篇事件 · 全文免费
-            {layer ? ` · 价值链 ${layer.id} · ${layer.nameZh}` : ""}
-            {!layer && symbol ? ` · 按标的筛选：${symbol}` : ""}
-          </p>
+          <span className="label-caps">{n.label}</span>
+          <h1 className="mt-1 text-2xl font-bold text-foreground">{n.title}</h1>
+          <p className="mt-1 text-[13px] text-muted">{subtitle}</p>
         </div>
         {symbol || layer ? (
           <Link href="/news" className="btn-outline px-3 py-1.5 text-[12px]">
-            清除筛选
+            {n.clearFilters}
           </Link>
         ) : null}
       </header>
 
-      {layer ? (
+      {layer && layerName ? (
         <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px]">
-          <span className="label-caps text-muted">价值链</span>
+          <span className="label-caps text-muted">{n.valueChain}</span>
           <span className="rounded border border-accent bg-accent-soft px-2 py-0.5 font-semibold text-accent-strong">
-            {layer.id} · {layer.nameZh}
+            {layer.id} · {layerName}
           </span>
           <Link href="/#value-chain" className="text-muted hover:text-accent">
-            返回官网六层模型 →
+            {n.backToVc}
           </Link>
         </div>
       ) : null}

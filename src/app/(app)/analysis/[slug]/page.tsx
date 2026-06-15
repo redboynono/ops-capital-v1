@@ -15,10 +15,12 @@ import { buildPostMetadata } from "@/lib/post-metadata";
 import { getPostBySlug } from "@/lib/posts";
 import { listTickersForPost } from "@/lib/tickers";
 import { ArticleToc } from "@/components/article-toc";
+import { SentimentStrip } from "@/components/sentiment-strip";
 import { ReaderModeShell, ReaderPrefsProvider, ReaderPrefsToolbar } from "@/components/reader-prefs";
 import { formatDate } from "@/lib/i18n/common";
 import { getDictionary, getLocale } from "@/lib/i18n";
 import { hasEnglishBody, postContent, postExcerpt, postTitle } from "@/lib/i18n/post-locale";
+import { isUsEquityTicker } from "@/lib/polygon";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +69,8 @@ export default async function AnalysisDetailPage({
   const tocItems = extractTocFromMarkdown(body);
   const showToc = readerMode && canViewFull && shouldShowToc(body);
   const showZhBodyNotice = locale === "en" && canViewFull && !hasEnglishBody(post);
+  const primarySymbol = tickers[0]?.symbol;
+  const showSentiment = primarySymbol && isUsEquityTicker(primarySymbol);
 
   return (
     <ReaderPrefsProvider enabled={readerMode}>
@@ -132,6 +136,8 @@ export default async function AnalysisDetailPage({
           />
         </div>
       </header>
+
+      {showSentiment ? <SentimentStrip symbol={primarySymbol} /> : null}
 
       <div className={`flex gap-8 ${readerMode ? "reader-content-flow" : ""} ${showToc ? "xl:pr-0" : ""}`}>
         <article className={`prose prose-sm md:prose-base min-w-0 max-w-none flex-1 py-5 ${readerMode ? "" : "prose-invert"}`}>

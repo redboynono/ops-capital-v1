@@ -13,23 +13,16 @@ import { getSessionUser } from "@/lib/auth";
 import { mysqlQuery } from "@/lib/mysql";
 import { listPosts } from "@/lib/posts";
 import { OptionTradeIdeasPanel } from "@/components/option-trade-ideas-panel";
+import { SentimentStrip } from "@/components/sentiment-strip";
 import { TickerMarketStats } from "@/components/ticker-market-stats";
 import { isUsEquityTicker } from "@/lib/polygon";
 import { thisFridayIso } from "@/lib/options-expiry";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
 import { normalizeInternalSymbol } from "@/lib/symbol-resolve";
 import { getTickerBySymbol, listRelatedTickers } from "@/lib/tickers";
 
 export const dynamic = "force-dynamic";
-
-const exchangeLabels: Record<string, string> = {
-  NASDAQ: "NASDAQ",
-  NYSE: "NYSE",
-  HKEX: "港交所",
-  SSE: "上交所",
-  SZSE: "深交所",
-  CRYPTO: "加密",
-  OTHER: "OTC",
-};
 
 async function isInWatchlist(userId: string, symbol: string) {
   const rows = await mysqlQuery<{ user_id: string }[]>(
@@ -66,6 +59,9 @@ export default async function TickerPage({
 
   const { tab } = await searchParams;
   const active = tab === "news" ? "news" : "analysis";
+  const locale = await getLocale();
+  const tk = getDictionary(locale).ticker;
+  const exchangeLabels = tk.exchanges;
 
   const [analysis, news, related, user] = await Promise.all([
     listPosts({ kind: "analysis", symbol, limit: 50 }),
@@ -87,7 +83,7 @@ export default async function TickerPage({
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 md:px-6">
       <nav className="text-[12px] text-muted">
-        <Link href="/tickers" className="hover:text-accent-strong">标的索引</Link>
+        <Link href="/tickers" className="hover:text-accent-strong">{tk.breadcrumb}</Link>
         <span className="mx-1">/</span>
         <span>{symbol}</span>
       </nav>
@@ -99,12 +95,12 @@ export default async function TickerPage({
             <div className="flex items-baseline gap-3">
               <h1 className="font-mono text-3xl font-bold text-foreground">{ticker.symbol}</h1>
               <span className="text-[13px] text-muted">
-                {exchangeLabels[ticker.exchange] ?? ticker.exchange}
+                {(exchangeLabels as Record<string, string>)[ticker.exchange] ?? ticker.exchange}
               </span>
             </div>
             <p className="mt-1 text-[15px] font-semibold text-foreground-soft">{ticker.name}</p>
             {ticker.sector ? (
-              <p className="mt-0.5 text-[12px] text-muted">行业：{ticker.sector}</p>
+              <p className="mt-0.5 text-[12px] text-muted">{fmt(tk.sectorFmt, { sector: ticker.sector })}</p>
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -113,10 +109,10 @@ export default async function TickerPage({
           </div>
         </div>
         <TickerMarketStats symbol={symbol} />
+        {isUsEquityTicker(symbol) ? <SentimentStrip symbol={symbol} /> : null}
         <div className="mt-3 flex items-center gap-4 text-[12px] text-muted">
           <span>
-            本标的文章：<span className="font-mono font-bold text-foreground">{analysis.length}</span> 分析 ·
-            <span className="ml-1 font-mono font-bold text-foreground">{news.length}</span> 快讯
+            {fmt(tk.articlesFmt, { analysis: analysis.length, news: news.length })}
           </span>
         </div>
       </header>
@@ -126,7 +122,7 @@ export default async function TickerPage({
           <OptionTradeIdeasPanel
             symbol={symbol}
             expirationDate={thisFridayIso()}
-            expiryLabel="本周五"
+            expiryLabel={tk.expiryThisFriday}
           />
         </div>
       ) : null}
@@ -135,20 +131,20 @@ export default async function TickerPage({
         <section>
           <div className="flex items-center border-b border-border">
             <Link href={`/t/${symbol}?tab=analysis`} className={tabClass("analysis")}>
-              分析 · {analysis.length}
+              {tk.tabAnalysis} · {analysis.length}
             </Link>
             <Link href={`/t/${symbol}?tab=news`} className={tabClass("news")}>
-              快讯 · {news.length}
+              {tk.tabNews} · {news.length}
             </Link>
           </div>
 
           <div className="card mt-3 px-4">
             {items.length === 0 ? (
               <p className="py-12 text-center text-[13px] text-muted">
-                该标的暂无{active === "analysis" ? "分析" : "快讯"}。
+                {active === "analysis" ? tk.noPostsAnalysis : tk.noPostsNews}
               </p>
             ) : (
-              items.map((p) => <PostRow key={p.id} post={p} />)
+              items.map((p) => <PostRow key={p.id} post={p} locale={locale} />)
             )}
           </div>
         </section>
@@ -163,15 +159,15 @@ export default async function TickerPage({
               href={`/admin/ratings/${symbol}`}
               className="block rounded-sm border border-accent/40 bg-accent/10 px-3 py-2 text-center text-[11px] font-mono font-bold text-accent-strong hover:bg-accent/20"
             >
-              ⚙ 编辑 / AI 生成 评级
+              {tk.adminEditRating}
             </Link>
           ) : null}
 
           <section className="card p-3">
-            <p className="label-caps">相关标的</p>
+            <p className="label-caps">{tk.relatedTickers}</p>
             <ul className="mt-2 space-y-1">
               {related.length === 0 ? (
-                <li className="text-[12px] text-muted">暂无同行业标的。</li>
+                <li className="text-[12px] text-muted">{tk.noRelated}</li>
               ) : (
                 related.map((t) => (
                   <li key={t.symbol}>
@@ -205,19 +201,8 @@ export default async function TickerPage({
       />
 
       <AskAI
-        context={{
-          kind: "ticker",
-          symbol,
-          suggestions: [
-            `按 Factsheet：${symbol} 当前估值水平如何？`,
-            "OPS 评级各因子强弱项？",
-            "与 Street 一致预期主要分歧？",
-            "下季度财报前最该盯什么？",
-          ],
-        }}
+        context={{ kind: "ticker", symbol }}
         loggedIn={Boolean(user)}
-        title="用数据问 AI"
-        subtitle="仅基于本页 Factsheet · 数字句末带 [来源] 脚注"
       />
     </div>
   );

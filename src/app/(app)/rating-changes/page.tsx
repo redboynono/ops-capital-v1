@@ -2,13 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCachedRatingChanges } from "@/lib/cached-data";
 import { getSessionUser } from "@/lib/auth";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
 
 export const dynamic = "force-dynamic";
-
-export const metadata = {
-  title: "评级变动 · OPS Alpha",
-  description: "OPS Rating / Quant / Factor 近期变动流",
-};
 
 export default async function RatingChangesPage({
   searchParams,
@@ -18,6 +15,8 @@ export default async function RatingChangesPage({
   const user = await getSessionUser();
   if (!user) redirect("/login?redirect=/rating-changes");
 
+  const locale = await getLocale();
+  const r = getDictionary(locale).ratingChangesPage;
   const sp = await searchParams;
   const hours = Number(sp.hours ?? 72);
   const since = Number.isFinite(hours) ? hours : 72;
@@ -26,10 +25,10 @@ export default async function RatingChangesPage({
   return (
     <div className="mx-auto w-full max-w-[900px] px-4 py-6 md:px-6">
       <header className="mb-4 border-b border-border pb-3">
-        <span className="label-caps">Rating Changes</span>
-        <h1 className="mt-1 text-2xl font-bold text-foreground">OPS 评级变动</h1>
+        <span className="label-caps">{r.label}</span>
+        <h1 className="mt-1 text-2xl font-bold text-foreground">{r.title}</h1>
         <p className="mt-1 text-[13px] text-muted">
-          基于历史快照对比 · 近 {Number.isFinite(hours) ? hours : 72} 小时 · 共 {changes.length} 条
+          {fmt(r.subtitleFmt, { hours: since, count: changes.length })}
         </p>
         <div className="mt-2 flex gap-2 text-[12px]">
           <Link href="/rating-changes?hours=24" className="text-muted hover:text-accent-strong">
@@ -46,11 +45,11 @@ export default async function RatingChangesPage({
 
       {changes.length === 0 ? (
         <div className="card p-8 text-center text-[13px] text-muted">
-          近期无显著评级变动。管理员可在{" "}
+          {r.empty}{" "}
           <Link href="/admin/ops" className="text-accent-strong hover:underline">
-            Ops 面板
+            {r.adminOps}
           </Link>{" "}
-          执行「今日评级快照」以积累历史。
+          {r.emptyEnd}
         </div>
       ) : (
         <div className="card divide-y divide-border">
