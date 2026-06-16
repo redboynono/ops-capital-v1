@@ -45,7 +45,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
       <div className="terminal min-h-screen">
         <TerminalTopBar userEmail={user?.email ?? null} locale={locale} />
         <TerminalTickerTape />
-        <div className="flex min-h-[calc(100dvh-55px)] bg-[var(--background)]">
+        <div className="flex min-h-[calc(100dvh-67px)] bg-[var(--background)]">
           <SideNav user={user} dict={dict} />
           <main className="terminal-main flex-1 min-w-0">{children}</main>
         </div>

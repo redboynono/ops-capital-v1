@@ -183,7 +183,7 @@ export function TerminalTopBar({
 
   return (
     <>
-    <div className="term-rail sticky top-0 z-40 flex h-7 items-center justify-between border-b px-3 text-[11px]">
+    <div className="term-rail sticky top-0 z-40 flex h-10 items-center justify-between border-b px-3 text-[12px]">
       <div className="flex items-center gap-2 md:gap-3">
         <MobileMenuButton onOpen={() => setMenuOpen(true)} />
         <span className="mono font-bold" style={{ color: "var(--accent)" }}>OPS&nbsp;ALPHA</span>
