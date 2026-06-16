@@ -438,6 +438,22 @@ Summary: ${excerpt.slice(0, 500)}`;
   return { titleEn, excerptEn };
 }
 
+// 从（中或英）markdown 正文取首个正文段落做摘要，确定性且永远完整
+function excerptFromContent(md) {
+  if (!md) return "";
+  const body = md.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  const firstPara =
+    body.split(/\n\s*\n/).find((p) => {
+      const t = p.trim();
+      return t && !t.startsWith("#");
+    }) ?? "";
+  return firstPara
+    .replace(/[*_`>#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 220);
+}
+
 const CONTENT_CHUNK = 9000;
 
 async function translateContentChunk(chunk, strict) {
@@ -620,8 +636,9 @@ async function main(ctx) {
         console.log(`${tag} translating to English…`);
         const meta = await translateTitleExcerpt(title, excerpt);
         titleEn = meta.titleEn;
-        excerptEn = meta.excerptEn;
         contentEn = await translatePostContent(body);
+        // 英文摘要优先取英文正文首段（确定性、完整），失败再回退模型摘要
+        excerptEn = excerptFromContent(contentEn) || meta.excerptEn;
         console.log(`${tag} ✓ EN ready (${contentEn.length} chars)`);
       } catch (e) {
         console.warn(`${tag} EN translation failed, storing zh only: ${e.message}`);

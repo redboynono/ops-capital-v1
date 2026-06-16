@@ -93,6 +93,22 @@ Summary: ${(excerpt ?? "").slice(0, 500)}`;
   return { titleEn, excerptEn };
 }
 
+// 从（中或英）markdown 正文取首个正文段落做摘要，确定性且永远完整
+function excerptFromContent(md) {
+  if (!md) return "";
+  const body = md.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  const firstPara =
+    body.split(/\n\s*\n/).find((p) => {
+      const t = p.trim();
+      return t && !t.startsWith("#");
+    }) ?? "";
+  return firstPara
+    .replace(/[*_`>#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 220);
+}
+
 const CONTENT_CHUNK = 9000;
 
 async function translateContentChunk(chunk, strict) {
@@ -139,9 +155,10 @@ async function translatePostContent(content) {
 }
 
 async function fixExcerpts(pool) {
-  // 选取：有英文正文但英文摘要被截断（过短）的 analysis，只重译标题+摘要
+  // 选取：有英文正文但英文摘要被截断（过短）的 analysis。
+  // 直接从英文正文首段派生摘要，无需调模型（确定性、完整、零成本）。
   const [rows] = await pool.query(
-    `select id, slug, title, excerpt
+    `select id, slug, content_en
        from posts
       where kind = 'analysis'
         and content_en is not null and content_en <> ''
@@ -150,11 +167,11 @@ async function fixExcerpts(pool) {
       limit ?`,
     [MIN_EXCERPT, LIMIT],
   );
-  console.log(`> fix-excerpt  min=${MIN_EXCERPT} limit=${LIMIT} dryRun=${DRY_RUN}`);
+  console.log(`> fix-excerpt (from content_en)  min=${MIN_EXCERPT} limit=${LIMIT} dryRun=${DRY_RUN}`);
   console.log(`> ${rows.length} post(s) with truncated excerpt_en\n`);
 
   if (DRY_RUN) {
-    for (const r of rows) console.log(`  ${r.slug}`);
+    for (const r of rows) console.log(`  ${r.slug} -> "${excerptFromContent(r.content_en).slice(0, 70)}"`);
     return;
   }
 
@@ -163,20 +180,15 @@ async function fixExcerpts(pool) {
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     const tag = `[${i + 1}/${rows.length}] ${r.slug}`;
-    try {
-      const { titleEn, excerptEn } = await translateTitleExcerpt(r.title, r.excerpt);
-      await pool.execute(`update posts set title_en = ?, excerpt_en = ? where id = ?`, [
-        titleEn,
-        excerptEn,
-        r.id,
-      ]);
-      ok++;
-      console.log(`${tag} ✓ "${excerptEn.slice(0, 60)}…"`);
-    } catch (e) {
+    const excerptEn = excerptFromContent(r.content_en);
+    if (!excerptEn || excerptEn.length < 20) {
       failed++;
-      console.error(`${tag} ✗ ${e.message}`);
+      console.error(`${tag} ✗ derived excerpt too short`);
+      continue;
     }
-    await sleep(500);
+    await pool.execute(`update posts set excerpt_en = ? where id = ?`, [excerptEn, r.id]);
+    ok++;
+    console.log(`${tag} ✓ "${excerptEn.slice(0, 70)}…"`);
   }
   console.log(`\n===== fix-excerpt done =====\nok: ${ok}\nfailed: ${failed}`);
 }
@@ -222,8 +234,10 @@ async function main() {
     const r = rows[i];
     const tag = `[${i + 1}/${rows.length}] ${r.slug}${r.tweeted ? " [X]" : ""}`;
     try {
-      const { titleEn, excerptEn } = await translateTitleExcerpt(r.title, r.excerpt);
+      const { titleEn, excerptEn: modelExcerpt } = await translateTitleExcerpt(r.title, r.excerpt);
       const contentEn = await translatePostContent(r.content);
+      // 英文摘要优先取英文正文首段（确定性、完整），失败再回退模型摘要
+      const excerptEn = excerptFromContent(contentEn) || modelExcerpt;
       await pool.execute(
         `update posts set title_en = ?, excerpt_en = ?, content_en = ? where id = ?`,
         [titleEn, excerptEn, contentEn, r.id],
