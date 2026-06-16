@@ -4,6 +4,44 @@ type SendPasswordResetEmailInput = {
   expiresMinutes?: number;
 };
 
+export function isEmailConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
+}
+
+/** 通用发信（Resend）。未配置时打日志兜底，返回 false。失败抛错。 */
+export async function sendEmail(input: {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+}): Promise<boolean> {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM_EMAIL;
+  if (!resendApiKey || !from) {
+    console.log(`[mail fallback] to=${input.to} subject="${input.subject}"`);
+    return false;
+  }
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from,
+      to: input.to,
+      subject: input.subject,
+      html: input.html,
+      text: input.text ?? input.subject,
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`sendEmail failed: ${response.status} ${body.slice(0, 200)}`);
+  }
+  return true;
+}
+
 function buildResetHtml(resetUrl: string, expiresMinutes: number) {
   return `<div style="font-family:-apple-system,'PingFang SC',Arial,sans-serif;line-height:1.7;color:#111827;max-width:520px;margin:0 auto;padding:24px">
   <div style="border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:16px">

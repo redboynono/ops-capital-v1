@@ -20,6 +20,8 @@ export type GrowthKpi = {
   reads24h: number;
   trialUsers: number;
   paidUsers: number;
+  emailSubs: number;
+  emailSubs7d: number;
 };
 
 /** 活跃主体：登录 user_id 或匿名 visitor_id */
@@ -87,6 +89,22 @@ export async function getGrowthKpi(): Promise<GrowthKpi> {
   const [paid] = await mysqlQuery<{ n: number }[]>(
     `select count(*) as n from users where subscription_status='active' and entitlement_research=1`,
   );
+  // 邮箱订阅（表可能尚未迁移，失败兜底 0）
+  let emailSubs = 0;
+  let emailSubs7d = 0;
+  try {
+    const [es] = await mysqlQuery<{ n: number }[]>(
+      `select count(*) as n from email_subscribers where status='active'`,
+    );
+    const [es7] = await mysqlQuery<{ n: number }[]>(
+      `select count(*) as n from email_subscribers
+        where status='active' and created_at >= date_sub(current_timestamp, interval 7 day)`,
+    );
+    emailSubs = Number(es?.n ?? 0);
+    emailSubs7d = Number(es7?.n ?? 0);
+  } catch {
+    /* table not migrated yet */
+  }
 
   return {
     dau24h: Number(dau?.n ?? 0),
@@ -105,6 +123,8 @@ export async function getGrowthKpi(): Promise<GrowthKpi> {
     reads24h: Number(reads?.n ?? 0),
     trialUsers: Number(trial?.n ?? 0),
     paidUsers: Number(paid?.n ?? 0),
+    emailSubs,
+    emailSubs7d,
   };
 }
 
@@ -204,6 +224,80 @@ export async function getRecentXPosts(limit = 10): Promise<SocialPostRow[]> {
     posted_x_at: r.posted_x_at ? new Date(r.posted_x_at).toISOString() : null,
     utm_campaign: r.utm_campaign,
   }));
+}
+
+export type FunnelStage = {
+  key: string;
+  label: string;
+  count: number;
+  /** 相对上一阶段的转化率（0-1）；首阶段为 1 */
+  stepRate: number;
+  /** 相对首阶段（UV）的整体转化率（0-1） */
+  overallRate: number;
+};
+
+export type ConversionFunnel = {
+  windowDays: number;
+  stages: FunnelStage[];
+};
+
+/**
+ * 转化漏斗：UV → 命中付费墙 → 看定价 → 发起结账 → 试用/付费。
+ * 前四段按 actor（user_id 或 visitor_id）去重；后两段按 user_id 去重。
+ */
+export async function getConversionFunnel(windowDays = 7): Promise<ConversionFunnel> {
+  const actorCount = async (eventType: string): Promise<number> => {
+    const [r] = await mysqlQuery<{ n: number }[]>(
+      `select count(distinct ${ACTIVE_ACTOR_SQL}) as n
+         from events
+        where event_type = ?
+          and ts >= date_sub(current_timestamp, interval ? day)
+          and (${ACTIVE_ACTOR_SQL}) is not null`,
+      [eventType, windowDays],
+    );
+    return Number(r?.n ?? 0);
+  };
+  const userCount = async (eventType: string): Promise<number> => {
+    const [r] = await mysqlQuery<{ n: number }[]>(
+      `select count(distinct user_id) as n
+         from events
+        where event_type = ?
+          and ts >= date_sub(current_timestamp, interval ? day)
+          and user_id is not null`,
+      [eventType, windowDays],
+    );
+    return Number(r?.n ?? 0);
+  };
+
+  const [uv, paywall, pricing, checkout, trial, paid] = await Promise.all([
+    actorCount("page_view"),
+    actorCount("paywall_hit"),
+    actorCount("pricing_view"),
+    actorCount("checkout_start"),
+    userCount("trial_start"),
+    userCount("subscription_paid"),
+  ]);
+
+  const raw = [
+    { key: "uv", label: "访客 UV", count: uv },
+    { key: "paywall_hit", label: "命中付费墙", count: paywall },
+    { key: "pricing_view", label: "看定价页", count: pricing },
+    { key: "checkout_start", label: "发起结账", count: checkout },
+    { key: "trial_start", label: "开始试用", count: trial },
+    { key: "subscription_paid", label: "完成付费", count: paid },
+  ];
+
+  const top = raw[0].count || 0;
+  const stages: FunnelStage[] = raw.map((s, i) => {
+    const prev = i === 0 ? s.count : raw[i - 1].count;
+    return {
+      ...s,
+      stepRate: prev > 0 ? s.count / prev : 0,
+      overallRate: top > 0 ? s.count / top : 0,
+    };
+  });
+
+  return { windowDays, stages };
 }
 
 export type UtmSourceRow = { utm_source: string; views_7d: number };

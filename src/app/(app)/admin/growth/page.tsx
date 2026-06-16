@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import {
+  getConversionFunnel,
   getGrowthKpi,
   getGrowthTrend,
   getRecentXPosts,
@@ -51,6 +52,44 @@ function MiniBar({ value, max }: { value: number; max: number }) {
   );
 }
 
+function pct(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  return `${(n * 100).toFixed(n < 0.01 ? 2 : 1)}%`;
+}
+
+function FunnelView({
+  funnel,
+}: {
+  funnel: { windowDays: number; stages: Array<{ key: string; label: string; count: number; stepRate: number; overallRate: number }> };
+}) {
+  const top = funnel.stages[0]?.count ?? 0;
+  return (
+    <div className="space-y-1.5">
+      {funnel.stages.map((s, i) => {
+        const widthPct = top > 0 ? Math.max(2, Math.round((s.count / top) * 100)) : 0;
+        const isPaid = s.key === "subscription_paid";
+        return (
+          <div key={s.key} className="grid grid-cols-[88px_1fr_auto] items-center gap-2 text-[11px]">
+            <span className="text-muted">{s.label}</span>
+            <div className="h-4 w-full overflow-hidden rounded bg-surface-muted">
+              <div
+                className={`flex h-full items-center justify-end rounded pr-1.5 ${isPaid ? "bg-[color:var(--success)]" : "bg-accent"}`}
+                style={{ width: `${widthPct}%` }}
+              >
+                <span className="mono text-[10px] font-bold text-black/80">{s.count}</span>
+              </div>
+            </div>
+            <span className="mono w-20 text-right text-foreground-soft">
+              {i === 0 ? "100%" : pct(s.stepRate)}
+              <span className="text-muted"> · {pct(s.overallRate)}</span>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default async function GrowthDashboardPage() {
   const auth = await requireAdmin();
   if (!auth.user) redirect("/login?redirect=/admin/growth");
@@ -62,12 +101,14 @@ export default async function GrowthDashboardPage() {
     );
   }
 
-  const [kpi, trend, topPaths, utm, recentX] = await Promise.all([
+  const [kpi, trend, topPaths, utm, recentX, funnel7d, funnel30d] = await Promise.all([
     getGrowthKpi(),
     getGrowthTrend(30),
     getTopPaths(10),
     getUtmBreakdown(),
     getRecentXPosts(8),
+    getConversionFunnel(7),
+    getConversionFunnel(30),
   ]);
 
   const maxDau = Math.max(1, ...trend.map((t) => t.dau));
@@ -133,6 +174,25 @@ export default async function GrowthDashboardPage() {
         <Kpi label="X 短链点击" value={kpi.xClicks7d} hint="累计（utm=x）" />
         <Kpi label="试用活跃" value={kpi.trialUsers} hint="subscription active" />
         <Kpi label="Research Pro" value={kpi.paidUsers} hint="付费研究权限" tone="success" />
+        <Kpi label="邮箱订阅" value={kpi.emailSubs} hint={`+${kpi.emailSubs7d} / 7d`} tone="accent" />
+      </section>
+
+      {/* 转化漏斗 */}
+      <section className="mb-5 card p-4">
+        <h2 className="text-[12px] font-bold text-foreground">转化漏斗</h2>
+        <p className="mt-0.5 text-[11px] text-muted">
+          访客 → 命中付费墙 → 看定价 → 发起结账 → 试用/付费 · 右侧：环比上一步 · 占 UV
+        </p>
+        <div className="mt-3 grid gap-5 md:grid-cols-2">
+          <div>
+            <p className="mb-2 text-[11px] font-bold text-accent-strong">近 7 天</p>
+            <FunnelView funnel={funnel7d} />
+          </div>
+          <div>
+            <p className="mb-2 text-[11px] font-bold text-accent-strong">近 30 天</p>
+            <FunnelView funnel={funnel30d} />
+          </div>
+        </div>
       </section>
 
       <div className="grid gap-5 lg:grid-cols-2">

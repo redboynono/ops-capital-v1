@@ -5,11 +5,14 @@ import { BookmarkButton } from "@/components/bookmark-button";
 import { ShareButton } from "@/components/share/share-button";
 import { StickyPaywall } from "@/components/sticky-paywall";
 import { getSessionUser } from "@/lib/auth";
+import { logEvent } from "@/lib/observability";
 import { isBookmarked, recordRead } from "@/lib/me";
 import { splitForPaywall } from "@/lib/content-preview";
 import { hasResearchAccess } from "@/lib/entitlements";
 import { RedactedMarkdown } from "@/lib/paywall";
 import { FtPaywallGate } from "@/components/ft-paywall-gate";
+import { TrackRecordBar } from "@/components/track-record-bar";
+import { EmailCapture } from "@/components/email-capture";
 import { extractTocFromMarkdown, shouldShowToc } from "@/lib/markdown-toc";
 import { buildPostMetadata } from "@/lib/post-metadata";
 import { getPostBySlug } from "@/lib/posts";
@@ -57,6 +60,12 @@ export default async function AnalysisDetailPage({
   const canViewFull = !post.is_premium || hasResearchAccess(user);
   const bookmarked = user ? await isBookmarked(user.id, post.id) : false;
   if (user) recordRead(user.id, post.id).catch(() => null);
+  if (!canViewFull) {
+    logEvent("paywall_hit", {
+      userId: user?.id ?? null,
+      meta: { slug: post.slug, product: "research", logged_in: Boolean(user) },
+    });
+  }
 
   const toggleHref = readerMode ? `/analysis/${post.slug}?reader=0` : `/analysis/${post.slug}`;
   const title = postTitle(post, locale);
@@ -144,11 +153,16 @@ export default async function AnalysisDetailPage({
               {body}
             </RedactedMarkdown>
           ) : (
-            <FtPaywallGate
-              split={splitForPaywall(body)}
-              loggedIn={Boolean(user)}
-              loginRedirect={`/analysis/${post.slug}`}
-            />
+            <>
+              <TrackRecordBar variant="paywall" />
+              <FtPaywallGate
+                split={splitForPaywall(body)}
+                loggedIn={Boolean(user)}
+                loginRedirect={`/analysis/${post.slug}`}
+                locale={locale}
+              />
+              <EmailCapture locale={locale} source="paywall" />
+            </>
           )}
         </article>
         {showToc ? <ArticleToc items={tocItems} readerMode /> : null}

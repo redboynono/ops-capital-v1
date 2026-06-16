@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { PricingProductGrid } from "@/components/pricing-product-grid";
+import { TrackRecordBar } from "@/components/track-record-bar";
 import { getSessionUser } from "@/lib/auth";
+import { logEvent } from "@/lib/observability";
 import { hasOptionAlphaAccess, hasResearchAccess } from "@/lib/entitlements";
 import { getDictionary, getLocale } from "@/lib/i18n";
 import { isMockMode } from "@/lib/payments/gateways";
@@ -31,6 +33,11 @@ export default async function PricingPage({
     sp.product === "research" || sp.product === "options" || sp.product === "bundle"
       ? sp.product
       : "bundle";
+
+  logEvent("pricing_view", {
+    userId: user?.id ?? null,
+    meta: { product: initialProduct, logged_in: Boolean(user) },
+  });
 
   const active = user
     ? isSubscriptionActive({
@@ -78,6 +85,10 @@ export default async function PricingPage({
           {p.mockNote}
         </p>
       ) : null}
+
+      <div className="mb-4">
+        <TrackRecordBar variant="pricing" />
+      </div>
 
       <PricingProductGrid
         loggedIn={Boolean(user)}

@@ -115,7 +115,14 @@ export type EventType =
   | "screener_apply"
   | "earnings_view"
   | "user_signup"
-  | "user_login";
+  | "user_login"
+  // —— 转化漏斗事件 —— //
+  | "paywall_hit" // 命中付费墙（看到被锁内容）
+  | "pricing_view" // 打开定价页
+  | "checkout_start" // 发起结账
+  | "trial_start" // 开始免费试用
+  | "subscription_paid" // 完成付费（含试用转正/直接付费）
+  | "email_capture"; // 留下邮箱（免费简报）
 
 /**
  * 极轻量打点。永远 fire-and-forget；调用方不需要 await。

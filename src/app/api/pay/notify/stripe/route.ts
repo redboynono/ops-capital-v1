@@ -8,6 +8,7 @@ import {
   verifyStripeWebhook,
 } from "@/lib/payments/stripe";
 import { syncSubscriptionState } from "@/lib/payments/subscriptions";
+import { logEvent } from "@/lib/observability";
 import type Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -59,6 +60,15 @@ export async function POST(req: Request): Promise<Response> {
           const sync = subscriptionToSync(sub);
           if (sync) {
             await syncSubscriptionState(sync);
+            // 转化漏斗：首次订阅成功（试用 / 直接付费）
+            logEvent(sync.trialing ? "trial_start" : "subscription_paid", {
+              userId: sync.userId,
+              meta: {
+                plan_id: sync.planId,
+                status: sub.status,
+                out_trade_no: parsed.outTradeNo,
+              },
+            });
             console.info(
               "[stripe webhook] subscribed:",
               parsed.outTradeNo,

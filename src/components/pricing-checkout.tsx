@@ -4,6 +4,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useRef, useState } from "react";
 import { useDict } from "@/components/locale-provider";
 import { fmt } from "@/lib/i18n/fmt";
+import { trackEvent } from "@/lib/analytics/track";
 import { formatYuan, type Plan } from "@/lib/payments/plans";
 
 const PAY_CHANNEL = "stripe" as const;
@@ -59,6 +60,8 @@ export function PricingCheckout({
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const submit = async (channel: typeof PAY_CHANNEL | "alipay" | "wechat") => {
+    const plan = plans.find((p) => p.id === selectedPlan);
+    trackEvent("checkout_start", { planId: selectedPlan, product: plan?.product });
     if (!loggedIn) {
       window.location.href = `/login?redirect=/pricing`;
       return;

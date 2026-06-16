@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 const VISITOR_COOKIE = "ops_vid";
+const UTM_COOKIE = "ops_utm";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 function readCookie(name: string): string | null {
@@ -18,6 +19,13 @@ function ensureVisitorId(): string {
     document.cookie = `${VISITOR_COOKIE}=${encodeURIComponent(vid)}; path=/; max-age=${COOKIE_MAX_AGE}; samesite=lax`;
   }
   return vid;
+}
+
+// 首触渠道归因：只在第一次带 utm_source 时写入，后续不覆盖
+function captureFirstTouchUtm(utmSource?: string | null): void {
+  if (!utmSource) return;
+  if (readCookie(UTM_COOKIE)) return;
+  document.cookie = `${UTM_COOKIE}=${encodeURIComponent(utmSource)}; path=/; max-age=${COOKIE_MAX_AGE}; samesite=lax`;
 }
 
 /** 轻量 page_view 埋点，支撑 DAU / UV / 路径分析 */
@@ -35,6 +43,7 @@ export function AnalyticsBeacon() {
 
     const vid = ensureVisitorId();
     const utmSource = searchParams?.get("utm_source") ?? undefined;
+    captureFirstTouchUtm(utmSource);
 
     void fetch("/api/analytics/ping", {
       method: "POST",

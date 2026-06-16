@@ -61,6 +61,43 @@ function lastClose(h: PriceHistory | null): number | null {
   return h.points[h.points.length - 1].c;
 }
 
+export type TrackRecordTeaser = {
+  buyCount: number;
+  buyWinRate: number | null;
+  buyAvgExcess: number | null;
+  buyAvgReturn: number | null;
+  top: Array<{ symbol: string; excessPct: number | null; returnPct: number | null }>;
+};
+
+// 进程内缓存：战绩计算涉及多次价格序列拉取，付费墙/定价页频繁渲染需缓存
+let teaserCache: { at: number; data: TrackRecordTeaser } | null = null;
+const TEASER_TTL_MS = 30 * 60 * 1000;
+
+/** 轻量战绩摘要（带 30 分钟进程缓存），用于付费墙/定价页信任条。失败返回 null。 */
+export async function getTrackRecordTeaser(): Promise<TrackRecordTeaser | null> {
+  if (teaserCache && Date.now() - teaserCache.at < TEASER_TTL_MS) {
+    return teaserCache.data;
+  }
+  try {
+    const s = await getTrackRecord();
+    const top = s.rows
+      .filter((r) => (r.verdict === "BUY" || r.verdict === "STRONG_BUY") && r.excessPct != null)
+      .slice(0, 3)
+      .map((r) => ({ symbol: r.symbol, excessPct: r.excessPct, returnPct: r.returnPct }));
+    const data: TrackRecordTeaser = {
+      buyCount: s.buyCount,
+      buyWinRate: s.buyWinRate,
+      buyAvgExcess: s.buyAvgExcess,
+      buyAvgReturn: s.buyAvgReturn,
+      top,
+    };
+    teaserCache = { at: Date.now(), data };
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export async function getTrackRecord(): Promise<TrackRecordSummary> {
   const [rated, hist] = await Promise.all([
     mysqlQuery<RatedRow[]>(
