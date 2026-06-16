@@ -23,6 +23,9 @@ const args = Object.fromEntries(
 const DAYS = Number(args.days ?? 14);
 const LIMIT = Math.max(1, Number(args.limit ?? 50));
 const DRY_RUN = args["dry-run"] === "true";
+// 仅修复被截断的英文摘要/标题（不重译正文，成本低）
+const FIX_EXCERPT = args["fix-excerpt"] === "true";
+const MIN_EXCERPT = Number(args["min-excerpt"] ?? 40);
 
 const MYSQL_URL = process.env.MYSQL_URL;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -84,9 +87,9 @@ Title: ${title}
 Summary: ${(excerpt ?? "").slice(0, 500)}`;
   const raw = await callTranslate(system, user, 1024);
   const tM = raw.match(/^EN_TITLE:\s*(.+)$/im);
-  const eM = raw.match(/^EN_EXCERPT:\s*([\s\S]+)$/im);
+  const eM = raw.match(/EN_EXCERPT:\s*([\s\S]+)$/i);
   const titleEn = (tM?.[1] ?? title).trim();
-  const excerptEn = (eM?.[1] ?? excerpt ?? "").split(/\n{2,}/)[0].replace(/\n/g, " ").trim();
+  const excerptEn = (eM?.[1] ?? excerpt ?? "").replace(/\s+/g, " ").trim().slice(0, 400);
   return { titleEn, excerptEn };
 }
 
@@ -135,8 +138,57 @@ async function translatePostContent(content) {
   return out.join("\n\n").trim();
 }
 
+async function fixExcerpts(pool) {
+  // 选取：有英文正文但英文摘要被截断（过短）的 analysis，只重译标题+摘要
+  const [rows] = await pool.query(
+    `select id, slug, title, excerpt
+       from posts
+      where kind = 'analysis'
+        and content_en is not null and content_en <> ''
+        and (excerpt_en is null or char_length(excerpt_en) < ?)
+      order by created_at desc
+      limit ?`,
+    [MIN_EXCERPT, LIMIT],
+  );
+  console.log(`> fix-excerpt  min=${MIN_EXCERPT} limit=${LIMIT} dryRun=${DRY_RUN}`);
+  console.log(`> ${rows.length} post(s) with truncated excerpt_en\n`);
+
+  if (DRY_RUN) {
+    for (const r of rows) console.log(`  ${r.slug}`);
+    return;
+  }
+
+  let ok = 0;
+  let failed = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const tag = `[${i + 1}/${rows.length}] ${r.slug}`;
+    try {
+      const { titleEn, excerptEn } = await translateTitleExcerpt(r.title, r.excerpt);
+      await pool.execute(`update posts set title_en = ?, excerpt_en = ? where id = ?`, [
+        titleEn,
+        excerptEn,
+        r.id,
+      ]);
+      ok++;
+      console.log(`${tag} ✓ "${excerptEn.slice(0, 60)}…"`);
+    } catch (e) {
+      failed++;
+      console.error(`${tag} ✗ ${e.message}`);
+    }
+    await sleep(500);
+  }
+  console.log(`\n===== fix-excerpt done =====\nok: ${ok}\nfailed: ${failed}`);
+}
+
 async function main() {
   const pool = await mysql.createPool({ uri: MYSQL_URL, connectionLimit: 2 });
+
+  if (FIX_EXCERPT) {
+    await fixExcerpts(pool);
+    await pool.end();
+    return;
+  }
 
   // 选取：缺 content_en 的 analysis，优先被 X 推过的，其次近 DAYS 天，按推过/时间排序
   const [rows] = await pool.query(

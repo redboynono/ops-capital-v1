@@ -432,9 +432,9 @@ Title: ${title}
 Summary: ${excerpt.slice(0, 500)}`;
   const raw = await callTranslate(system, user, 1024);
   const tM = raw.match(/^EN_TITLE:\s*(.+)$/im);
-  const eM = raw.match(/^EN_EXCERPT:\s*([\s\S]+)$/im);
+  const eM = raw.match(/EN_EXCERPT:\s*([\s\S]+)$/i);
   const titleEn = (tM?.[1] ?? title).trim();
-  const excerptEn = (eM?.[1] ?? excerpt).split(/\n{2,}/)[0].replace(/\n/g, " ").trim();
+  const excerptEn = (eM?.[1] ?? excerpt ?? "").replace(/\s+/g, " ").trim().slice(0, 400);
   return { titleEn, excerptEn };
 }
 
