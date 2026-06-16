@@ -380,6 +380,109 @@ ${factsheet}
   return content;
 }
 
+// ============================== english translation ============================== //
+
+function hasCjk(text) {
+  return /[\u4e00-\u9fff\u3400-\u4dbf]/.test(text);
+}
+
+async function callTranslate(system, user, maxTokens = 16000, attempt = 1) {
+  const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      temperature: 0.15,
+      max_tokens: maxTokens,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    if ((res.status === 529 || res.status === 429) && attempt < 3) {
+      await sleep(10000);
+      return callTranslate(system, user, maxTokens, attempt + 1);
+    }
+    throw new Error(`translate HTTP ${res.status}: ${text.slice(0, 160)}`);
+  }
+  const data = await res.json();
+  if (data?.base_resp && data.base_resp.status_code !== 0) {
+    if (data.base_resp.status_code === 2064 && attempt < 3) {
+      await sleep(12000);
+      return callTranslate(system, user, maxTokens, attempt + 1);
+    }
+    throw new Error(`MiniMax translate error ${data.base_resp.status_code}`);
+  }
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content || typeof content !== "string") throw new Error("empty translation");
+  return content.replace(/<think>[\s\S]*?<\/think>\s*/gi, "").trim();
+}
+
+async function translateTitleExcerpt(title, excerpt) {
+  const system =
+    "Financial research editor. Output English only (Latin script); ticker symbols may remain.";
+  const user = `Translate to English. Reply exactly:
+EN_TITLE: <english title>
+EN_EXCERPT: <english summary, 1-3 sentences>
+
+Title: ${title}
+Summary: ${excerpt.slice(0, 500)}`;
+  const raw = await callTranslate(system, user, 1024);
+  const tM = raw.match(/^EN_TITLE:\s*(.+)$/im);
+  const eM = raw.match(/^EN_EXCERPT:\s*([\s\S]+)$/im);
+  const titleEn = (tM?.[1] ?? title).trim();
+  const excerptEn = (eM?.[1] ?? excerpt).split(/\n{2,}/)[0].replace(/\n/g, " ").trim();
+  return { titleEn, excerptEn };
+}
+
+const CONTENT_CHUNK = 9000;
+
+async function translateContentChunk(chunk, strict) {
+  const system = strict
+    ? "Institutional equity research editor. Translate markdown to English only. Preserve headings, lists, tables, numbers, tickers. No Chinese characters."
+    : "Translate financial research markdown to English. Preserve markdown structure, numbers, and ticker symbols.";
+  const user = `${strict ? "No Chinese characters in output.\n\n" : ""}Translate this markdown section to English. Start output with EN_MARKDOWN: then the translated markdown.
+
+${chunk}`;
+  const raw = await callTranslate(system, user, 16000);
+  const cleaned = raw.replace(/^\s*```(?:markdown)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+  const marker = cleaned.match(/^EN_MARKDOWN:\s*\n?([\s\S]+)$/im);
+  const bodyOut = (marker?.[1] ?? cleaned).trim();
+  if (!bodyOut) throw new Error("empty markdown translation");
+  return bodyOut;
+}
+
+async function translatePostContent(content) {
+  if (!content.trim()) return content;
+  const chunks = [];
+  if (content.length <= CONTENT_CHUNK) {
+    chunks.push(content);
+  } else {
+    const parts = content.split(/(?=^## )/m);
+    let buf = "";
+    for (const part of parts) {
+      if ((buf + part).length > CONTENT_CHUNK && buf) {
+        chunks.push(buf);
+        buf = part;
+      } else {
+        buf += part;
+      }
+    }
+    if (buf) chunks.push(buf);
+  }
+  const out = [];
+  for (const chunk of chunks) {
+    let translated = await translateContentChunk(chunk, false);
+    if (hasCjk(translated)) translated = await translateContentChunk(chunk, true);
+    if (hasCjk(translated)) throw new Error("content translation still contains CJK");
+    out.push(translated);
+  }
+  return out.join("\n\n").trim();
+}
+
 // ============================== selection ============================== //
 
 /**
@@ -509,11 +612,26 @@ async function main(ctx) {
         continue;
       }
 
+      // 同步生成英文版（title/excerpt/content）；失败则留 null，落地页回退中文 + 横幅
+      let titleEn = null;
+      let excerptEn = null;
+      let contentEn = null;
+      try {
+        console.log(`${tag} translating to English…`);
+        const meta = await translateTitleExcerpt(title, excerpt);
+        titleEn = meta.titleEn;
+        excerptEn = meta.excerptEn;
+        contentEn = await translatePostContent(body);
+        console.log(`${tag} ✓ EN ready (${contentEn.length} chars)`);
+      } catch (e) {
+        console.warn(`${tag} EN translation failed, storing zh only: ${e.message}`);
+      }
+
       const id = crypto.randomUUID();
       await pool.execute(
-        `insert into posts (id, title, slug, kind, excerpt, content, is_premium, is_published)
-         values (?, ?, ?, 'analysis', ?, ?, ?, 1)`,
-        [id, title, slug, excerpt, body, isPremium ? 1 : 0],
+        `insert into posts (id, title, title_en, slug, kind, excerpt, excerpt_en, content, content_en, is_premium, is_published)
+         values (?, ?, ?, ?, 'analysis', ?, ?, ?, ?, ?, 1)`,
+        [id, title, titleEn, slug, excerpt, excerptEn, body, contentEn, isPremium ? 1 : 0],
       );
       await pool.execute(
         `insert ignore into post_tickers (post_id, symbol) values (?, ?)`,
