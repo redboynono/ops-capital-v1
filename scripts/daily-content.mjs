@@ -44,6 +44,9 @@ const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL ?? "https://api.minimaxi.co
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "MiniMax-M2.7-highspeed";
 const OPENAI_MAX_TOKENS = Number(process.env.OPENAI_MAX_TOKENS ?? 32000);
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY ?? process.env.FINNHUB_TOKEN ?? "";
+// 付费墙「AI 速读」预热：文章发布后主动生成并缓存，避免首个真实访客等待 ~15s
+// 脚本随 `docker exec ops-alpha` 在容器内运行，Next 监听 3000，故默认走容器内回环最稳（免 nginx/TLS/hairpin）
+const SITE_BASE_URL = (process.env.SITE_BASE_URL ?? "http://127.0.0.1:3000").replace(/\/$/, "");
 
 if (!MYSQL_URL) throw new Error("MYSQL_URL not set");
 if (!OPENAI_API_KEY && !DRY_RUN) throw new Error("OPENAI_API_KEY not set (use --dry-run to preview selection only)");
@@ -499,6 +502,25 @@ async function translatePostContent(content) {
   return out.join("\n\n").trim();
 }
 
+// ============================== paywall summary prewarm ============================== //
+
+/**
+ * 预热付费墙「AI 速读」缓存：命中即生成并落库 post_ai_summaries。
+ * 走线上公开端点（与真实访客同一代码路径）；失败不影响发文主流程。
+ */
+async function prewarmPaywallSummary(slug, tag) {
+  for (const lang of ["zh", "en"]) {
+    try {
+      const url = `${SITE_BASE_URL}/api/research/paywall-summary?slug=${encodeURIComponent(slug)}&lang=${lang}`;
+      const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(60000) });
+      const data = await res.json().catch(() => ({}));
+      console.log(`${tag} prewarm ${lang}: HTTP ${res.status} ${data?.summary ? "ok" : "null"}`);
+    } catch (e) {
+      console.warn(`${tag} prewarm ${lang} failed: ${e.message}`);
+    }
+  }
+}
+
 // ============================== selection ============================== //
 
 /**
@@ -656,6 +678,9 @@ async function main(ctx) {
       );
       inserted++;
       console.log(`${tag} ✓ "${title}" (${body.length} chars)  slug=${slug}`);
+
+      // premium 文章才有付费墙，发布后立即预热「AI 速读」缓存
+      if (isPremium) await prewarmPaywallSummary(slug, tag);
     } catch (err) {
       failed++;
       console.error(`${tag} ✗ ${err.message}`);

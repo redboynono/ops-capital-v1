@@ -13,6 +13,7 @@ import { RedactedMarkdown } from "@/lib/paywall";
 import { FtPaywallGate } from "@/components/ft-paywall-gate";
 import { TrackRecordBar } from "@/components/track-record-bar";
 import { EmailCapture } from "@/components/email-capture";
+import { PaywallAiSummary } from "@/components/paywall-ai-summary";
 import { extractTocFromMarkdown, shouldShowToc } from "@/lib/markdown-toc";
 import { buildPostMetadata } from "@/lib/post-metadata";
 import { getPostBySlug } from "@/lib/posts";
@@ -155,6 +156,7 @@ export default async function AnalysisDetailPage({
           ) : (
             <>
               <TrackRecordBar variant="paywall" />
+              <PaywallAiSummary slug={post.slug} locale={locale} />
               <FtPaywallGate
                 split={splitForPaywall(body)}
                 loggedIn={Boolean(user)}
