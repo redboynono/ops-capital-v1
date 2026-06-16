@@ -16,10 +16,11 @@ function randomCode(): string {
   return randomBytes(4).toString("base64url").replace(/[^a-zA-Z0-9]/g, "x").slice(0, 6);
 }
 
-function codeFromRef(refKey: string): string {
+function codeFromRef(refKey: string, lang?: "zh" | "en"): string {
   const cleaned = refKey.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (cleaned.length >= 4) return cleaned.slice(0, 8);
-  return randomCode();
+  const base = cleaned.length >= 4 ? cleaned.slice(0, 7) : randomCode().slice(0, 7);
+  // 中英各一条独立短链，code 末位区分（z/e），避免 target_url 不同但 code 冲突
+  return lang ? `${base}${lang === "zh" ? "z" : "e"}` : base.slice(0, 8);
 }
 
 function isDuplicate(err: unknown): boolean {
@@ -32,8 +33,9 @@ export async function getOrCreateShortLink(opts: {
   source: "x" | "xhs";
   campaign?: string;
   refKey?: string;
+  lang?: "zh" | "en";
 }): Promise<{ code: string; url: string; targetUrl: string }> {
-  const targetUrl = withUtm(opts.path, { source: opts.source, campaign: opts.campaign });
+  const targetUrl = withUtm(opts.path, { source: opts.source, campaign: opts.campaign, lang: opts.lang });
 
   const existing = await mysqlQuery<Pick<ShortLinkRow, "code">[]>(
     "select code from short_links where target_url = ? limit 1",
@@ -44,7 +46,7 @@ export async function getOrCreateShortLink(opts: {
     return { code, url: siteUrl(`/s/${code}`), targetUrl };
   }
 
-  let code = opts.refKey ? codeFromRef(opts.refKey) : randomCode();
+  let code = opts.refKey ? codeFromRef(opts.refKey, opts.lang) : randomCode();
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
       await mysqlQuery(
@@ -61,11 +63,12 @@ export async function getOrCreateShortLink(opts: {
   throw new Error("short link code collision");
 }
 
-/** X 短链落地页强制英文（兼容存量 target_url 无 lang 参数） */
+/** X 短链落地页：尊重 target_url 中显式 lang；仅对无 lang 的存量 X 链接兜底英文 */
 export function ensureEnglishLandingForX(targetUrl: string): string {
   try {
     const u = new URL(targetUrl);
     if (u.searchParams.get("utm_source") !== "x") return targetUrl;
+    if (u.searchParams.get("lang")) return u.toString();
     u.searchParams.set("lang", "en");
     return u.toString();
   } catch {

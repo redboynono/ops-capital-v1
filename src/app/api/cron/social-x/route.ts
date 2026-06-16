@@ -34,11 +34,13 @@ async function handle(req: Request): Promise<NextResponse> {
   const countStr = url.searchParams.get("count");
   const mode = url.searchParams.get("mode") ?? "analysis";
   const count = countStr ? Number(countStr) : undefined;
+  const langParam = url.searchParams.get("lang");
+  const lang = langParam === "en" || langParam === "zh" ? langParam : undefined;
 
   const out = await runJobTs({ jobName: "social-x-auto-post" }, async (ctx) => {
     const useBatch = mode === "analysis" || (count != null && count > 1);
     if (useBatch) {
-      const result = await runAutoPostXBatch({ count, dryRun });
+      const result = await runAutoPostXBatch({ count, dryRun, lang });
       ctx.itemsTotal = result.target;
       ctx.itemsOk = result.posted;
       ctx.itemsFailed = result.failed;

@@ -4,6 +4,7 @@ import type { RatingChange } from "@/lib/rating-changes";
 import { X_CHAR_LIMIT } from "@/lib/social/constants";
 import { getOrCreateShortLink } from "@/lib/social/short-link";
 import { withUtm, slugifyCampaign } from "@/lib/social/utm";
+import type { Locale } from "@/lib/i18n/locale-types";
 
 export { X_CHAR_LIMIT, X_PREMIUM_TARGET } from "@/lib/social/constants";
 
@@ -14,6 +15,13 @@ const RESEARCH_SECTIONS = [
   "Fundamentals & competitive moat",
   "Catalysts & valuation framework",
   "Tail risks & position sizing",
+];
+
+const RESEARCH_SECTIONS_ZH = [
+  "宏观与流动性",
+  "基本面与护城河",
+  "催化剂与估值框架",
+  "尾部风险与仓位管理",
 ];
 
 function xLen(s: string): number {
@@ -29,10 +37,15 @@ function pickEn(zh: string, en?: string | null): string {
   return (en?.trim() || zh).replace(/\s+/g, " ").trim();
 }
 
-/** 长文摘要：英文优先，最多 5 句 / 520 字 */
-export function extractCoreSummary(excerpt?: string, excerptEn?: string | null): string {
-  const useEn = !!excerptEn?.trim();
-  const raw = (excerptEn?.trim() || excerpt || "").replace(/^BLUF:\s*/i, "").trim().replace(/\s+/g, " ");
+/** 长文摘要：默认英文优先（最多 5 句 / 520 字）；locale="zh" 时强制用中文摘要（3 句 / 280 字） */
+export function extractCoreSummary(
+  excerpt?: string,
+  excerptEn?: string | null,
+  locale?: Locale,
+): string {
+  const useEn = locale === "zh" ? false : !!excerptEn?.trim();
+  const rawSource = locale === "zh" ? excerpt : excerptEn?.trim() || excerpt;
+  const raw = (rawSource || "").replace(/^BLUF:\s*/i, "").trim().replace(/\s+/g, " ");
   if (!raw) return "";
   const splitRe = useEn ? /(?<=[.!?])\s+/ : /(?<=[。！？!?])\s*/;
   const sentences = raw.split(splitRe).filter(Boolean);
@@ -119,7 +132,42 @@ function pathForInput(input: SocialCopyInput): { path: string; refKey: string } 
   return { path: input.path, refKey: slugifyCampaign(input.title) };
 }
 
-function buildXCopy(input: SocialCopyInput, xUrl: string): string {
+function buildXCopy(input: SocialCopyInput, xUrl: string, locale: Locale = "en"): string {
+  if (input.type === "post" && locale === "zh") {
+    const ticker = input.tickers?.[0];
+    const titleZh = input.title;
+    const thesisZh = extractCoreSummary(input.excerpt, input.excerpt_en, "zh");
+
+    if (input.kind === "news") {
+      const lines = [
+        "⚡ 市场快讯 · OPS Alpha",
+        ticker ? `$${ticker} · ${titleZh}` : titleZh,
+        thesisZh ? `背景\n${thesisZh}` : undefined,
+        "全文见下方链接。",
+      ].filter((l): l is string => !!l);
+      return buildPremiumXCopy({
+        lines,
+        url: xUrl,
+        tickers: input.tickers,
+        extraTags: ["#快讯"],
+      });
+    }
+
+    const lines = [
+      "🔬 深度研报 · OPS Alpha",
+      ticker ? `$${ticker} · ${titleZh}` : titleZh,
+      thesisZh ? `核心观点\n${thesisZh}` : "最新机构级深度研报已上线。",
+      `框架\n${RESEARCH_SECTIONS_ZH.map((s) => `· ${s}`).join("\n")}`,
+      "完整中文摘要见链接 · 估值模型与风险图需 Research Pro。",
+    ];
+    return buildPremiumXCopy({
+      lines,
+      url: xUrl,
+      tickers: input.tickers,
+      extraTags: ["#深度研报", "#投研"],
+    });
+  }
+
   if (input.type === "post") {
     const ticker = input.tickers?.[0];
     const title = pickEn(input.title, input.title_en);
@@ -315,6 +363,32 @@ export function buildSocialCopy(input: SocialCopyInput): SocialCopyBundle {
     xhsCopy,
     utmCampaign: campaign,
   };
+}
+
+export type LocalizedXPost = { locale: Locale; xCopy: string; xUrl: string };
+
+/**
+ * 深度研报/快讯：生成中英两条 X 文案，分别带 lang=en / lang=zh 的独立短链，
+ * 落地各自指向网站英文版 / 中文版。
+ */
+export async function buildAnalysisXVariants(
+  input: Extract<SocialCopyInput, { type: "post" }>,
+): Promise<LocalizedXPost[]> {
+  const path = `/${input.kind === "analysis" ? "analysis" : "news"}/${input.slug}`;
+  const campaign = slugifyCampaign(`${input.kind}_${input.slug}`);
+  const refKey = input.slug;
+  const variants: LocalizedXPost[] = [];
+  for (const locale of ["en", "zh"] as const) {
+    let url = withUtm(path, { source: "x", campaign, lang: locale });
+    try {
+      const short = await getOrCreateShortLink({ path, source: "x", campaign, refKey, lang: locale });
+      url = short.url;
+    } catch {
+      // 短链失败则回退完整带 lang 的 URL
+    }
+    variants.push({ locale, xCopy: buildXCopy(input, url, locale), xUrl: url });
+  }
+  return variants;
 }
 
 /** 生成文案并解析 X 短链接（池子/API 使用） */

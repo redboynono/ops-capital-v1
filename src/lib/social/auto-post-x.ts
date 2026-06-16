@@ -30,6 +30,8 @@ export type AutoPostXBatchResult = {
 
 const DEFAULT_DAILY_ANALYSIS_COUNT = 5;
 const DEFAULT_SPACING_MS = 90_000;
+// 同一篇内中/英两条之间的间隔
+const INTRA_VARIANT_SPACING_MS = 20_000;
 const BATCH_LOCK_NAME = "ops_social_x_batch";
 
 function sleep(ms: number): Promise<void> {
@@ -48,7 +50,10 @@ async function releaseBatchLock(): Promise<void> {
   await mysqlQuery(`select release_lock(?)`, [BATCH_LOCK_NAME]).catch(() => null);
 }
 
-async function postOne(item: SocialPoolItem): Promise<
+async function postOne(
+  item: SocialPoolItem,
+  lang?: "zh" | "en",
+): Promise<
   | { ok: true; item: SocialPoolItem; tweetId: string; recordId: string }
   | { ok: false; item: SocialPoolItem; error: string }
 > {
@@ -56,26 +61,51 @@ async function postOne(item: SocialPoolItem): Promise<
     return { ok: false, item, error: "already posted today" };
   }
 
-  try {
-    const { tweetId } = await postTweet(item.xCopy);
-    const record = await createSocialOpsRecord({
-      contentType: item.contentType,
-      refKey: item.refKey,
-      title: item.title,
-      canonicalUrl: item.xUrl,
-      xCopy: item.xCopy,
-      xhsCopy: item.xhsCopy,
-      utmCampaign: item.utmCampaign,
-      createdBy: "cron:x",
-    });
-    await updateSocialOpsRecord(record.id, {
-      markPostedX: true,
-      notes: `auto_post tweet_id=${tweetId}`,
-    });
-    return { ok: true, item, tweetId, recordId: record.id };
-  } catch (e) {
-    return { ok: false, item, error: e instanceof Error ? e.message : "post failed" };
+  // 每篇默认发中/英两条；指定 lang 时仅发该语言一条；无变体时回退单条英文文案
+  const fallback = [{ locale: "en" as const, xCopy: item.xCopy, xUrl: item.xUrl }];
+  const allVariants =
+    item.xVariants && item.xVariants.length > 0 ? item.xVariants : fallback;
+  const variants = lang
+    ? allVariants.filter((v) => v.locale === lang)
+    : allVariants;
+  if (variants.length === 0) {
+    return { ok: false, item, error: `no ${lang} variant available` };
   }
+
+  const tweetIds: string[] = [];
+  let lastError: string | null = null;
+  for (let i = 0; i < variants.length; i++) {
+    const v = variants[i]!;
+    try {
+      const { tweetId } = await postTweet(v.xCopy);
+      tweetIds.push(`${v.locale}=${tweetId}`);
+      if (i < variants.length - 1) await sleep(INTRA_VARIANT_SPACING_MS);
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : "post failed";
+    }
+  }
+
+  if (tweetIds.length === 0) {
+    return { ok: false, item, error: lastError ?? "post failed" };
+  }
+
+  // 一篇内容只落 1 条 DB 记录（保持「N 篇/天」计数语义），notes 记录中英两条 tweet id
+  const primary = variants[0]!;
+  const record = await createSocialOpsRecord({
+    contentType: item.contentType,
+    refKey: item.refKey,
+    title: item.title,
+    canonicalUrl: primary.xUrl,
+    xCopy: variants.map((v) => `[${v.locale}]\n${v.xCopy}`).join("\n\n---\n\n"),
+    xhsCopy: item.xhsCopy,
+    utmCampaign: item.utmCampaign,
+    createdBy: "cron:x",
+  });
+  await updateSocialOpsRecord(record.id, {
+    markPostedX: true,
+    notes: `auto_post ${tweetIds.join(" ")}${lastError ? ` (partial: ${lastError})` : ""}`,
+  });
+  return { ok: true, item, tweetId: tweetIds.join(","), recordId: record.id };
 }
 
 /** 每日批量发深度研报英文长文到 X */
@@ -83,6 +113,7 @@ export async function runAutoPostXBatch(opts: {
   count?: number;
   dryRun?: boolean;
   spacingMs?: number;
+  lang?: "zh" | "en";
 } = {}): Promise<AutoPostXBatchResult> {
   if (!isXPostingEnabled()) {
     return {
@@ -166,7 +197,7 @@ export async function runAutoPostXBatch(opts: {
 
     for (let i = 0; i < picks.length; i++) {
       const item = picks[i]!;
-      const out = await postOne(item);
+      const out = await postOne(item, opts.lang);
       results.push(out);
       if (out.ok) posted++;
       else if (out.error === "already posted today") skipped++;
