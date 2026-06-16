@@ -36,11 +36,12 @@ async function handle(req: Request): Promise<NextResponse> {
   const count = countStr ? Number(countStr) : undefined;
   const langParam = url.searchParams.get("lang");
   const lang = langParam === "en" || langParam === "zh" ? langParam : undefined;
+  const force = url.searchParams.get("force") === "1";
 
   const out = await runJobTs({ jobName: "social-x-auto-post" }, async (ctx) => {
     const useBatch = mode === "analysis" || (count != null && count > 1);
     if (useBatch) {
-      const result = await runAutoPostXBatch({ count, dryRun, lang });
+      const result = await runAutoPostXBatch({ count, dryRun, lang, force });
       ctx.itemsTotal = result.target;
       ctx.itemsOk = result.posted;
       ctx.itemsFailed = result.failed;

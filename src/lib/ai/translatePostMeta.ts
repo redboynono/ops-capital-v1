@@ -7,9 +7,9 @@ function hasCjk(text: string): boolean {
 function parseLines(raw: string, title: string, excerpt: string) {
   const cleaned = raw.replace(/^\s*```[\s\S]*?```\s*/gm, "").trim();
   const titleM = cleaned.match(/^EN_TITLE:\s*(.+)$/im);
-  const excerptM = cleaned.match(/^EN_EXCERPT:\s*([\s\S]+)$/im);
+  const excerptM = cleaned.match(/EN_EXCERPT:\s*([\s\S]+)$/i);
   if (!titleM || !excerptM) throw new Error("missing EN_TITLE/EN_EXCERPT lines");
-  const excerptEn = excerptM[1].split(/\n{2,}/)[0].replace(/\n/g, " ").trim();
+  const excerptEn = excerptM[1].replace(/\s+/g, " ").trim().slice(0, 400);
   return {
     titleEn: titleM[1].trim() || title,
     excerptEn: excerptEn || excerpt,

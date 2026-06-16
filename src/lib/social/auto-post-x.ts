@@ -114,6 +114,7 @@ export async function runAutoPostXBatch(opts: {
   dryRun?: boolean;
   spacingMs?: number;
   lang?: "zh" | "en";
+  force?: boolean;
 } = {}): Promise<AutoPostXBatchResult> {
   if (!isXPostingEnabled()) {
     return {
@@ -149,7 +150,7 @@ export async function runAutoPostXBatch(opts: {
     const spacingMs = opts.spacingMs ?? Number(process.env.X_POST_SPACING_MS ?? DEFAULT_SPACING_MS);
 
     const alreadyToday = await countAnalysisPostedToday();
-    const remaining = Math.max(0, target - alreadyToday);
+    const remaining = opts.force ? target : Math.max(0, target - alreadyToday);
     if (remaining === 0) {
       return {
         ok: true,
