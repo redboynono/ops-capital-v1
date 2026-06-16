@@ -1,16 +1,32 @@
 import Link from "next/link";
 
 import { ComparePicker } from "@/components/compare-picker";
+import { FactorRadar } from "@/components/factor-radar";
 import { Sparkline } from "@/components/sparkline";
 import { COMPARE_MAX, loadCompareData, parseCompareSymbols, type CompareColumn } from "@/lib/compare";
-import { getDictionary, getLocale } from "@/lib/i18n";
-import { fmt } from "@/lib/i18n/fmt";
-import type { Dictionary } from "@/lib/i18n/zh";
 import type { FactorKey, Grade, Verdict } from "@/lib/ratings";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Compare · OPS Alpha",
+  description: "多标的并排对比 — 实时报价、估值倍数、OPS Quant 评级、五因子、近期 news。",
+};
+
 const CORE_FACTORS = ["VALUATION", "GROWTH", "PROFITABILITY", "MOMENTUM", "REVISIONS"] as const;
+const CRYPTO_FACTORS = ["CRYPTO_VALUATION", "NETWORK", "TOKENOMICS", "MOMENTUM", "LIQUIDITY", "SECURITY"] as const;
+const FACTOR_LABEL: Record<string, string> = {
+  VALUATION: "估值",
+  GROWTH: "成长",
+  PROFITABILITY: "盈利",
+  MOMENTUM: "动能",
+  REVISIONS: "上调",
+  CRYPTO_VALUATION: "估值",
+  NETWORK: "网络",
+  TOKENOMICS: "代币",
+  LIQUIDITY: "流动",
+  SECURITY: "安全",
+};
 
 const VERDICT_BG: Record<Verdict, string> = {
   STRONG_BUY: "#166534",
@@ -18,6 +34,13 @@ const VERDICT_BG: Record<Verdict, string> = {
   HOLD: "#ca8a04",
   SELL: "#dc2626",
   STRONG_SELL: "#991b1b",
+};
+const VERDICT_LABEL: Record<Verdict, string> = {
+  STRONG_BUY: "强买",
+  BUY: "买入",
+  HOLD: "持有",
+  SELL: "卖出",
+  STRONG_SELL: "强卖",
 };
 
 function gradeColor(g: Grade | null | undefined): string {
@@ -49,14 +72,14 @@ function fmtNum(v: number | null | undefined, d = 2) {
   return Number(v).toFixed(d);
 }
 
-function VerdictBadge({ v, cmp }: { v: Verdict | null | undefined; cmp: Dictionary["compare"] }) {
+function VerdictBadge({ v }: { v: Verdict | null | undefined }) {
   if (!v) return <span className="text-muted">—</span>;
   return (
     <span
       className="inline-flex items-center justify-center rounded-sm px-1.5 py-0.5 mono text-[10px] font-bold tracking-wide text-white"
       style={{ background: VERDICT_BG[v] }}
     >
-      {cmp.verdicts[v]}
+      {VERDICT_LABEL[v]}
     </span>
   );
 }
@@ -76,8 +99,8 @@ function MetricRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-function ColumnCard({ col, cmp }: { col: CompareColumn; cmp: Dictionary["compare"] }) {
-  const { symbol, profile, quote, metric, news, rating, grades, ticker, history } = col;
+function ColumnCard({ col }: { col: CompareColumn }) {
+  const { symbol, profile, quote, metric, news, rating, grades, ticker, history, isCrypto } = col;
   const m = metric?.metric ?? {};
   const change = quote?.dp ?? null;
   const changeClass =
@@ -119,58 +142,60 @@ function ColumnCard({ col, cmp }: { col: CompareColumn; cmp: Dictionary["compare
           <span className={`mono text-[12px] ${changeClass}`}>{fmtPct(change)}</span>
         </div>
         <p className="mt-0.5 text-[10px] mono text-muted">
-          {fmt(cmp.intradayFmt, {
-            low: fmtMoney(quote?.l),
-            high: fmtMoney(quote?.h),
-          })}
-          {quote?.pc ? <> {fmt(cmp.prevCloseFmt, { price: fmtMoney(quote.pc) })}</> : null}
+          日内 {fmtMoney(quote?.l)} – {fmtMoney(quote?.h)}
+          {quote?.pc ? <> · 前收 {fmtMoney(quote.pc)}</> : null}
         </p>
+        {/* 1Y sparkline */}
         <div className="mt-2 flex items-center justify-between">
-          <span className="label-caps text-[9px]">{cmp.trend1y}</span>
+          <span className="label-caps text-[9px]">1Y 走势</span>
         </div>
         {history && history.points.length > 1 ? (
           <Sparkline points={history.points} width={240} height={44} />
         ) : (
           <div className="mt-0.5 flex h-11 items-center justify-center text-[10px] text-muted">
-            {cmp.noPriceHistory}
+            无价格历史
           </div>
         )}
       </section>
 
-      <section className="border-b border-border py-2">
-        <SectionTitle>{cmp.valuation}</SectionTitle>
-        <MetricRow label={cmp.marketCap}>
+      {/* Valuation / financials */}
+      <section className={isCrypto ? "hidden" : "border-b border-border py-2"}>
+        <SectionTitle>估值 / 财务</SectionTitle>
+        <MetricRow label="市值">
           {fmtMcap(profile?.marketCapitalization ?? (m.marketCapitalization ?? null))}
         </MetricRow>
         <MetricRow label="PE TTM">{fmtNum(m.peTTM ?? null)}</MetricRow>
         <MetricRow label="PS TTM">{fmtNum(m.psTTM ?? null)}</MetricRow>
         <MetricRow label="PB">{fmtNum(m.pbAnnual ?? null)}</MetricRow>
         <MetricRow label="EPS TTM">{fmtNum(m.epsTTM ?? null)}</MetricRow>
-        <MetricRow label={cmp.grossMargin}>{fmtNum(m.grossMarginTTM ?? null)}</MetricRow>
-        <MetricRow label={cmp.netMargin}>{fmtNum(m.netProfitMarginTTM ?? null)}</MetricRow>
-        <MetricRow label={cmp.roe}>{fmtNum(m.roeTTM ?? null)}</MetricRow>
+        <MetricRow label="毛利率%">{fmtNum(m.grossMarginTTM ?? null)}</MetricRow>
+        <MetricRow label="净利率%">{fmtNum(m.netProfitMarginTTM ?? null)}</MetricRow>
+        <MetricRow label="ROE TTM%">{fmtNum(m.roeTTM ?? null)}</MetricRow>
         <MetricRow label="Beta">{fmtNum(m.beta ?? null)}</MetricRow>
-        <MetricRow label={cmp.divYield}>{fmtNum(m.dividendYieldIndicatedAnnual ?? null)}</MetricRow>
-        <MetricRow label={cmp.high52}>{fmtNum(m["52WeekHigh"] ?? null)}</MetricRow>
-        <MetricRow label={cmp.low52}>{fmtNum(m["52WeekLow"] ?? null)}</MetricRow>
+        <MetricRow label="股息率%">{fmtNum(m.dividendYieldIndicatedAnnual ?? null)}</MetricRow>
+        <MetricRow label="52W 高">{fmtNum(m["52WeekHigh"] ?? null)}</MetricRow>
+        <MetricRow label="52W 低">{fmtNum(m["52WeekLow"] ?? null)}</MetricRow>
       </section>
 
+      {/* Ratings */}
       <section className="border-b border-border py-2">
-        <SectionTitle>{cmp.ratings}</SectionTitle>
+        <SectionTitle>OPS 评级</SectionTitle>
         <div className="flex items-center justify-between text-[12px]">
           <span className="text-muted">OPS</span>
           <span className="flex items-center gap-1.5">
-            <VerdictBadge v={rating?.ops_verdict} cmp={cmp} />
+            <VerdictBadge v={rating?.ops_verdict} />
             <span className="mono">{rating?.ops_score != null ? rating.ops_score.toFixed(2) : "—"}</span>
           </span>
         </div>
-        <div className="flex items-center justify-between text-[12px]">
-          <span className="text-muted">Street</span>
-          <span className="flex items-center gap-1.5">
-            <VerdictBadge v={rating?.street_verdict} cmp={cmp} />
-            <span className="mono">{rating?.street_score != null ? rating.street_score.toFixed(2) : "—"}</span>
-          </span>
-        </div>
+        {!isCrypto ? (
+          <div className="flex items-center justify-between text-[12px]">
+            <span className="text-muted">Street</span>
+            <span className="flex items-center gap-1.5">
+              <VerdictBadge v={rating?.street_verdict} />
+              <span className="mono">{rating?.street_score != null ? rating.street_score.toFixed(2) : "—"}</span>
+            </span>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between text-[12px]">
           <span className="text-muted">Quant</span>
           <span className="mono font-semibold">
@@ -181,24 +206,35 @@ function ColumnCard({ col, cmp }: { col: CompareColumn; cmp: Dictionary["compare
 
       {/* Factor grades */}
       <section className="border-b border-border py-2">
-        <SectionTitle>{cmp.factors}</SectionTitle>
-        <div className="grid grid-cols-5 gap-1">
-          {CORE_FACTORS.map((f) => {
-            const g = grades[f as FactorKey];
-            return (
-              <div key={f} className="flex flex-col items-center gap-0.5 rounded border border-border bg-surface-muted py-1">
-                <span className={`mono text-[12px] font-bold ${gradeColor(g)}`}>{g ?? "—"}</span>
-                <span className="text-[9px] text-muted">{cmp.factorsShort[f]}</span>
-              </div>
-            );
-          })}
-        </div>
+        <SectionTitle>{isCrypto ? "加密六因子" : "五因子"}</SectionTitle>
+        {isCrypto ? (
+          <FactorRadar
+            uid={`cmp-${symbol}`}
+            axes={CRYPTO_FACTORS.map((f) => ({
+              label: FACTOR_LABEL[f] ?? f,
+              grade: grades[f as FactorKey] ?? null,
+            }))}
+          />
+        ) : (
+          <div className="grid grid-cols-5 gap-1">
+            {CORE_FACTORS.map((f) => {
+              const g = grades[f as FactorKey];
+              return (
+                <div key={f} className="flex flex-col items-center gap-0.5 rounded border border-border bg-surface-muted py-1">
+                  <span className={`mono text-[12px] font-bold ${gradeColor(g)}`}>{g ?? "—"}</span>
+                  <span className="text-[9px] text-muted">{FACTOR_LABEL[f]}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
+      {/* News */}
       <section className="pt-2">
-        <SectionTitle>{cmp.news14d}</SectionTitle>
+        <SectionTitle>近 14 天新闻</SectionTitle>
         {news.length === 0 ? (
-          <p className="text-[11px] text-muted">{cmp.noRecentNews}</p>
+          <p className="text-[11px] text-muted">无近期 news</p>
         ) : (
           <ul className="space-y-1.5">
             {news.slice(0, 3).map((n) => (
@@ -223,12 +259,16 @@ function ColumnCard({ col, cmp }: { col: CompareColumn; cmp: Dictionary["compare
   );
 }
 
-function EmptyState({ cmp }: { cmp: Dictionary["compare"] }) {
+function EmptyState() {
   return (
     <div className="card mt-4 px-4 py-12 text-center text-[13px] text-muted">
-      <p className="mb-1.5 text-[16px] font-semibold text-foreground">{cmp.emptyTitle}</p>
-      <p>{cmp.emptyBody}</p>
-      <p className="mt-3 text-[11px]">{cmp.emptyTip}</p>
+      <p className="mb-1.5 text-[16px] font-semibold text-foreground">还没选标的</p>
+      <p>
+        点击上方「添加」选 2–4 只标的，并排对比 估值 / 评级 / 五因子 / 近期新闻。
+      </p>
+      <p className="mt-3 text-[11px]">
+        小贴士：URL 自带 <code className="rounded bg-surface px-1.5 py-0.5 mono">?symbols=NVDA,AMD,TSM</code> ，方便分享。
+      </p>
     </div>
   );
 }
@@ -241,21 +281,21 @@ export default async function ComparePage({
   const sp = await searchParams;
   const symbols = parseCompareSymbols(sp.symbols);
   const cols = symbols.length > 0 ? await loadCompareData(symbols) : [];
-  const locale = await getLocale();
-  const cmp = getDictionary(locale).compare;
 
   return (
     <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6">
       <header className="mb-4 border-b border-border pb-3">
-        <span className="label-caps">{cmp.label}</span>
-        <h1 className="mt-1 text-2xl font-bold text-foreground">{cmp.title}</h1>
-        <p className="mt-1 text-[13px] text-muted">{fmt(cmp.subtitle, { max: COMPARE_MAX })}</p>
+        <span className="label-caps">Compare</span>
+        <h1 className="mt-1 text-2xl font-bold text-foreground">多标的对比</h1>
+        <p className="mt-1 text-[13px] text-muted">
+          并排对比最多 {COMPARE_MAX} 只标的 · 实时报价 + 估值倍数 + OPS 评级 + 五因子 + 近期新闻
+        </p>
       </header>
 
       <ComparePicker current={symbols} />
 
       {cols.length === 0 ? (
-        <EmptyState cmp={cmp} />
+        <EmptyState />
       ) : (
         <div
           className="grid gap-4"
@@ -264,7 +304,7 @@ export default async function ComparePage({
           }}
         >
           {cols.map((col) => (
-            <ColumnCard key={col.symbol} col={col} cmp={cmp} />
+            <ColumnCard key={col.symbol} col={col} />
           ))}
         </div>
       )}

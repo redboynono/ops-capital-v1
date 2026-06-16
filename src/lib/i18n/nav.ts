@@ -16,6 +16,8 @@ export function buildNavSections(dict: Dictionary, optionsNavLabel: string): Nav
         { href: "/news", label: n.news },
         { href: "/earnings", label: n.earnings },
         { href: "/rating-changes", label: n.ratingChanges },
+        { href: "/track-record", label: n.trackRecord },
+        { href: "/crypto", label: n.crypto },
         { href: "/expiring-options", label: optionsNavLabel },
       ],
     },

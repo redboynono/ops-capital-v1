@@ -25,7 +25,20 @@ export const DIVIDEND_FACTORS = [
   "DIV_YIELD",
   "DIV_CONSISTENCY",
 ] as const;
-export type FactorKey = (typeof CORE_FACTORS)[number] | (typeof DIVIDEND_FACTORS)[number];
+// 加密原生六因子（docs/crypto-factor-model.md）；MOMENTUM 跨资产类别复用
+export const CRYPTO_FACTORS = [
+  "CRYPTO_VALUATION",
+  "NETWORK",
+  "TOKENOMICS",
+  "MOMENTUM",
+  "LIQUIDITY",
+  "SECURITY",
+] as const;
+export type AssetClass = "equity" | "crypto" | "etf";
+export type FactorKey =
+  | (typeof CORE_FACTORS)[number]
+  | (typeof DIVIDEND_FACTORS)[number]
+  | (typeof CRYPTO_FACTORS)[number];
 
 export const FACTOR_LABELS: Record<FactorKey, string> = {
   VALUATION: "估值 Valuation",
@@ -37,6 +50,11 @@ export const FACTOR_LABELS: Record<FactorKey, string> = {
   DIV_GROWTH: "增长 Growth",
   DIV_YIELD: "收益 Yield",
   DIV_CONSISTENCY: "连续性 Consistency",
+  CRYPTO_VALUATION: "估值 Valuation",
+  NETWORK: "网络采用 Network",
+  TOKENOMICS: "代币经济 Tokenomics",
+  LIQUIDITY: "流动性 Liquidity",
+  SECURITY: "安全 Security",
 };
 
 export const VERDICT_LABELS: Record<Verdict, { zh: string; en: string; tone: "buy-strong" | "buy" | "hold" | "sell" | "sell-strong" }> = {
@@ -103,23 +121,36 @@ export function gradeToGpa(g: Grade | null | undefined): number | null {
   return GRADE_TO_NUM[g] ?? null;
 }
 
-/** Compute quant_score (1.00–5.00) from core factor grades (weighted). */
-export function computeQuantScore(grades: Partial<Record<FactorKey, Grade | null>>): number | null {
-  const weights: Record<(typeof CORE_FACTORS)[number], number> = {
-    VALUATION: 0.25,
-    GROWTH: 0.25,
-    PROFITABILITY: 0.20,
-    MOMENTUM: 0.15,
-    REVISIONS: 0.15,
-  };
+const EQUITY_WEIGHTS: Partial<Record<FactorKey, number>> = {
+  VALUATION: 0.25,
+  GROWTH: 0.25,
+  PROFITABILITY: 0.20,
+  MOMENTUM: 0.15,
+  REVISIONS: 0.15,
+};
+
+const CRYPTO_WEIGHTS: Partial<Record<FactorKey, number>> = {
+  CRYPTO_VALUATION: 0.20,
+  NETWORK: 0.25,
+  TOKENOMICS: 0.15,
+  MOMENTUM: 0.20,
+  LIQUIDITY: 0.10,
+  SECURITY: 0.10,
+};
+
+/** Compute quant_score (1.00–5.00) from factor grades, weighted per asset class. */
+export function computeQuantScore(
+  grades: Partial<Record<FactorKey, Grade | null>>,
+  assetClass: AssetClass = "equity",
+): number | null {
+  const weights = assetClass === "crypto" ? CRYPTO_WEIGHTS : EQUITY_WEIGHTS;
   let sum = 0;
   let wUsed = 0;
-  for (const f of CORE_FACTORS) {
-    const g = grades[f];
-    const gpa = gradeToGpa(g ?? null);
+  for (const [f, w] of Object.entries(weights) as [FactorKey, number][]) {
+    const gpa = gradeToGpa(grades[f] ?? null);
     if (gpa == null) continue;
-    sum += gpa * weights[f];
-    wUsed += weights[f];
+    sum += gpa * w;
+    wUsed += w;
   }
   if (wUsed === 0) return null;
   const weightedGpa = sum / wUsed;
@@ -242,12 +273,21 @@ export async function upsertFactorGrades(
   }
 }
 
+/** 查 tickers.asset_class（未知标的默认 equity） */
+export async function getAssetClass(symbol: string): Promise<AssetClass> {
+  const rows = await mysqlQuery<{ asset_class: AssetClass }[]>(
+    "select asset_class from tickers where symbol = ? limit 1",
+    [symbol],
+  );
+  return rows[0]?.asset_class ?? "equity";
+}
+
 /** Re-compute quant_score from factor grades and persist it back. */
 export async function recomputeAndStoreQuantScore(symbol: string) {
-  const map = await getFactorGrades(symbol);
+  const [map, assetClass] = await Promise.all([getFactorGrades(symbol), getAssetClass(symbol)]);
   const grades: Partial<Record<FactorKey, Grade | null>> = {};
   for (const [k, v] of map.entries()) grades[k] = v.grade_now;
-  const score = computeQuantScore(grades);
+  const score = computeQuantScore(grades, assetClass);
   await upsertRating(symbol, { quant_score: score });
   return score;
 }

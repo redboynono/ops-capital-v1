@@ -8,8 +8,6 @@ import {
 import { getQuote } from "@/lib/quotes";
 import { isHkStyleSymbol, normalizeInternalSymbol } from "@/lib/symbol-resolve";
 import { getQuote as getYahooQuote, toYahooSymbol } from "@/lib/yahoo";
-import { getDictionary, getLocale } from "@/lib/i18n";
-import { fmt } from "@/lib/i18n/fmt";
 
 const exchangeShort: Record<string, string> = {
   "NEW YORK STOCK EXCHANGE, INC.": "NYSE",
@@ -32,6 +30,11 @@ function fmtMcap(millions: number | null | undefined): string {
   return `$${millions.toFixed(0)}M`;
 }
 
+/**
+ * Fallback view for symbols that exist on Finnhub but are NOT in our
+ * `tickers` table. Shows live profile + quote + 14-day news so the user
+ * still gets value from the search even before we explicitly cover it.
+ */
 export async function UnlistedTickerView({
   symbol,
   isAdmin,
@@ -39,12 +42,7 @@ export async function UnlistedTickerView({
   symbol: string;
   isAdmin: boolean;
 }) {
-  const locale = await getLocale();
-  const dict = getDictionary(locale);
-  const u = dict.unlistedTicker;
-  const ms = dict.marketStats;
-  const dateLocale = locale === "en" ? "en-US" : "zh-CN";
-
+  // Pull live data in parallel
   const newsFrom = new Date();
   newsFrom.setUTCDate(newsFrom.getUTCDate() - 14);
   const newsTo = new Date();
@@ -73,19 +71,16 @@ export async function UnlistedTickerView({
     }
   }
 
+  // If profile + quote both fail, the symbol is genuinely unknown
   if (!profile && (!displayQuote || displayQuote.c === 0)) {
     return (
       <div className="mx-auto w-full max-w-[800px] px-4 py-12 text-center">
-        <p className="label-caps text-muted">{u.notFoundLabel}</p>
-        <h1 className="mt-2 text-2xl font-bold">{fmt(u.notFoundTitleFmt, { symbol })}</h1>
+        <p className="label-caps text-muted">Ticker not found</p>
+        <h1 className="mt-2 text-2xl font-bold">"{symbol}" 未在任何市场找到</h1>
         <p className="mt-2 text-[13px] text-muted">
-          {u.notFoundBodyPrefix} <span className="font-mono">00700</span>
-          {u.notFoundBodyMid} <span className="font-mono">0700.HK</span>
-          {u.notFoundBodySuffix}{" "}
-          <Link href="/tickers" className="text-accent-strong hover:underline">
-            {u.breadcrumb}
-          </Link>
-          {u.notFoundEnd}
+          港股请用 5 位代码（如 <span className="font-mono">00700</span>）或 Yahoo 格式（如{" "}
+          <span className="font-mono">0700.HK</span>）。请检查代码，或返回{" "}
+          <Link href="/tickers" className="text-accent-strong hover:underline">标的索引</Link>。
         </p>
       </div>
     );
@@ -105,16 +100,19 @@ export async function UnlistedTickerView({
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 md:px-6">
       <nav className="text-[12px] text-muted">
-        <Link href="/tickers" className="hover:text-accent-strong">{u.breadcrumb}</Link>
+        <Link href="/tickers" className="hover:text-accent-strong">标的索引</Link>
         <span className="mx-1">/</span>
         <span>{symbol}</span>
       </nav>
 
+      {/* Live preview banner */}
       <div className="mt-3 flex items-center justify-between gap-3 rounded border border-dashed border-accent/60 bg-accent/5 px-3 py-2 text-[12px]">
         <div className="flex items-center gap-2 text-accent-strong">
           <Globe2 className="h-4 w-4" strokeWidth={1.8} />
           <span className="font-mono font-semibold">UNLISTED</span>
-          <span className="text-foreground-soft">{u.bannerHint}</span>
+          <span className="text-foreground-soft">
+            该标的暂未收录·下方为实时行情预览（无评级·无历史）
+          </span>
         </div>
         {isAdmin ? (
           <AdminAddButton
@@ -122,11 +120,11 @@ export async function UnlistedTickerView({
             name={profile?.name ?? symbol}
             exchange={exShort}
             sector={sector}
-            label={u.adminAdd}
           />
         ) : null}
       </div>
 
+      {/* Header */}
       <header className="mt-4 card p-4">
         <div className="flex flex-wrap items-start gap-3">
           {profile?.logo ? (
@@ -139,7 +137,7 @@ export async function UnlistedTickerView({
                 {isHkStyleSymbol(symbol) ? yahooSym : symbol}
               </h1>
               {isHkStyleSymbol(symbol) && yahooSym !== symbol ? (
-                <span className="font-mono text-[12px] text-muted">{fmt(u.inDbFmt, { symbol })}</span>
+                <span className="font-mono text-[12px] text-muted">库内 {symbol}</span>
               ) : null}
               <span className="text-[13px] text-muted">{exShort}</span>
               {profile?.country ? (
@@ -149,7 +147,7 @@ export async function UnlistedTickerView({
               ) : null}
             </div>
             <p className="mt-1 text-[15px] font-semibold text-foreground-soft">{displayName}</p>
-            {sector ? <p className="mt-0.5 text-[12px] text-muted">{fmt(u.sectorFmt, { sector })}</p> : null}
+            {sector ? <p className="mt-0.5 text-[12px] text-muted">行业：{sector}</p> : null}
             {profile?.weburl ? (
               <a
                 href={profile.weburl}
@@ -164,9 +162,10 @@ export async function UnlistedTickerView({
           </div>
         </div>
 
+        {/* Quote strip */}
         <div className="mt-3 grid grid-cols-2 gap-3 rounded-sm border border-border bg-surface-muted p-3 md:grid-cols-4">
           <div>
-            <p className="label-caps text-[10px]">{ms.price}</p>
+            <p className="label-caps text-[10px]">现价</p>
             <p className="mt-0.5 font-mono text-[17px] font-bold">
               {fmtMoney(displayQuote?.c, profile?.currency ?? (isHkStyleSymbol(symbol) ? "HKD" : "USD"))}
             </p>
@@ -175,16 +174,14 @@ export async function UnlistedTickerView({
             </p>
           </div>
           <div>
-            <p className="label-caps text-[10px]">{ms.intraday}</p>
+            <p className="label-caps text-[10px]">日内</p>
             <p className="mt-0.5 font-mono text-[13px]">
               {fmtMoney(displayQuote?.l)} – {fmtMoney(displayQuote?.h)}
             </p>
-            <p className="font-mono text-[11px] text-muted">
-              {fmt(ms.prevCloseFmt, { price: fmtMoney(displayQuote?.pc) })}
-            </p>
+            <p className="font-mono text-[11px] text-muted">前收 {fmtMoney(displayQuote?.pc)}</p>
           </div>
           <div>
-            <p className="label-caps text-[10px]">{ms.marketCap}</p>
+            <p className="label-caps text-[10px]">市值</p>
             <p className="mt-0.5 font-mono text-[13px]">{fmtMcap(profile?.marketCapitalization)}</p>
             <p className="font-mono text-[11px] text-muted">
               {profile?.shareOutstanding ? `${profile.shareOutstanding.toFixed(0)}M shares` : "—"}
@@ -193,21 +190,20 @@ export async function UnlistedTickerView({
           <div>
             <p className="label-caps text-[10px]">IPO</p>
             <p className="mt-0.5 font-mono text-[13px]">{profile?.ipo || "—"}</p>
-            <p className="font-mono text-[11px] text-muted">
-              {fmt(u.currencyFmt, { currency: profile?.currency ?? "USD" })}
-            </p>
+            <p className="font-mono text-[11px] text-muted">{profile?.currency ?? "USD"} 计价</p>
           </div>
         </div>
       </header>
 
+      {/* News */}
       <section className="mt-5">
         <h2 className="mb-2 text-[13px] font-bold text-foreground-soft">
-          {u.news14d}
+          近 14 天市场新闻
           <span className="ml-2 font-normal text-muted">· {news.length}</span>
         </h2>
         <div className="card divide-y divide-border">
           {news.length === 0 ? (
-            <p className="px-4 py-10 text-center text-[12px] text-muted">{u.noNews}</p>
+            <p className="px-4 py-10 text-center text-[12px] text-muted">该标的近期无市场新闻</p>
           ) : (
             news.map((n) => (
               <a
@@ -232,7 +228,7 @@ export async function UnlistedTickerView({
                   ) : null}
                 </div>
                 <p className="mt-1 font-mono text-[10px] text-muted">
-                  {n.source} · {new Date(n.datetime * 1000).toLocaleString(dateLocale, { hour12: false })}
+                  {n.source} · {new Date(n.datetime * 1000).toLocaleString("zh-CN", { hour12: false })}
                 </p>
               </a>
             ))
@@ -240,8 +236,9 @@ export async function UnlistedTickerView({
         </div>
       </section>
 
+      {/* Footer disclaimer */}
       <p className="mt-6 border-t border-border pt-3 text-[11px] leading-relaxed text-muted-soft">
-        {u.disclaimer}
+        免责声明：本页为 Finnhub 公开市场数据的只读预览，不构成投资建议。该标的尚未进入 Ops Alpha 评级覆盖范围。
       </p>
     </div>
   );
@@ -252,13 +249,11 @@ function AdminAddButton({
   name,
   exchange,
   sector,
-  label,
 }: {
   symbol: string;
   name: string;
   exchange: string;
   sector: string | null;
-  label: string;
 }) {
   return (
     <form action="/api/admin/tickers/add" method="POST" className="flex items-center">
@@ -270,7 +265,7 @@ function AdminAddButton({
         type="submit"
         className="rounded-sm border border-accent bg-accent px-2 py-1 font-mono text-[11px] font-bold text-white hover:bg-accent-strong"
       >
-        {label}
+        + 加入索引
       </button>
     </form>
   );

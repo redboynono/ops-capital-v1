@@ -3,11 +3,14 @@ import { redirect } from "next/navigation";
 
 import { AddPositionForm, PositionRowActions } from "@/components/position-editor";
 import { getSessionUser } from "@/lib/auth";
-import { getDictionary, getLocale } from "@/lib/i18n";
-import { fmt } from "@/lib/i18n/fmt";
 import { getPortfolioSummary, type EnrichedPosition } from "@/lib/portfolio";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = {
+  title: "模拟盘 · OPS Alpha",
+  description: "追踪你的持仓 + 实时 P&L + 当日浮动盈亏",
+};
 
 function fmtMoney(v: number | null, d = 2): string {
   if (v == null || !Number.isFinite(v)) return "—";
@@ -38,71 +41,75 @@ export default async function PortfolioPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const locale = await getLocale();
-  const p = getDictionary(locale).memberPages.portfolio;
   const summary = await getPortfolioSummary(user.id);
   const positions = summary.positions;
 
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 md:px-6">
       <header className="mb-4 border-b border-border pb-3">
-        <span className="label-caps">{p.label}</span>
-        <h1 className="mt-1 text-2xl font-bold text-foreground">{p.title}</h1>
-        <p className="mt-1 text-[13px] text-muted">{p.subtitle}</p>
+        <span className="label-caps">Portfolio</span>
+        <h1 className="mt-1 text-2xl font-bold text-foreground">模拟盘</h1>
+        <p className="mt-1 text-[13px] text-muted">
+          追踪你的持仓 + 实时市值 + 累计/当日 P&L · 仅记录数量与建仓均价（无现金 / 不计交易费）
+        </p>
       </header>
 
       {positions.length === 0 ? (
         <div className="card mb-4 px-4 py-12 text-center text-[13px] text-muted">
-          <p className="mb-2 text-[16px] font-semibold text-foreground">{p.emptyTitle}</p>
-          <p className="mb-4">{p.emptyBody}</p>
+          <p className="mb-2 text-[16px] font-semibold text-foreground">还没有持仓</p>
+          <p className="mb-4">
+            添加你的第一只股票开始追踪。同一 ticker 重复添加会覆盖。
+          </p>
           <div className="inline-block">
             <AddPositionForm />
           </div>
         </div>
       ) : (
         <>
+          {/* 顶部摘要 */}
           <section className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryTile
-              label={p.totalValue}
+              label="总市值"
               value={fmtMoney(summary.total_market_value)}
-              sub={fmt(p.costFmt, { price: fmtMoney(summary.total_cost_basis) })}
+              sub={`成本 ${fmtMoney(summary.total_cost_basis)}`}
             />
             <SummaryTile
-              label={p.totalPnl}
+              label="累计 P&L"
               value={fmtMoney(summary.total_pnl_abs)}
               sub={fmtPct(summary.total_pnl_pct)}
               tone={summary.total_pnl_abs}
             />
             <SummaryTile
-              label={p.dayPnl}
+              label="当日 P&L"
               value={fmtMoney(summary.day_pnl_abs)}
               sub={fmtPct(summary.day_pnl_pct)}
               tone={summary.day_pnl_abs}
             />
             <SummaryTile
-              label={p.positionCount}
+              label="持仓数"
               value={String(positions.length)}
               sub={
                 summary.unpriced_count > 0
-                  ? fmt(p.unpricedFmt, { n: summary.unpriced_count })
-                  : p.allPriced
+                  ? `${summary.unpriced_count} 只无实时报价`
+                  : "全部已实时定价"
               }
             />
           </section>
 
+          {/* 持仓表 */}
           <section className="card overflow-x-auto">
             <table className="w-full min-w-[860px] text-[12px]">
               <thead>
                 <tr className="border-b border-border bg-surface-muted text-left text-[11px] uppercase tracking-wider text-muted">
-                  <th className="px-3 py-2 font-normal">{p.colSymbol}</th>
-                  <th className="px-3 py-2 font-normal text-right">{p.colQty}</th>
-                  <th className="px-3 py-2 font-normal text-right">{p.colAvg}</th>
-                  <th className="px-3 py-2 font-normal text-right">{p.colPrice}</th>
-                  <th className="px-3 py-2 font-normal text-right">{p.colIntraday}</th>
-                  <th className="px-3 py-2 font-normal text-right">{p.colValue}</th>
-                  <th className="px-3 py-2 font-normal text-right">{p.colPnl}</th>
-                  <th className="px-3 py-2 font-normal text-right">{p.colWeight}</th>
-                  <th className="px-3 py-2 font-normal text-right">{p.colActions}</th>
+                  <th className="px-3 py-2 font-normal">代码</th>
+                  <th className="px-3 py-2 font-normal text-right">数量</th>
+                  <th className="px-3 py-2 font-normal text-right">均价</th>
+                  <th className="px-3 py-2 font-normal text-right">现价</th>
+                  <th className="px-3 py-2 font-normal text-right">日内</th>
+                  <th className="px-3 py-2 font-normal text-right">市值</th>
+                  <th className="px-3 py-2 font-normal text-right">P&L</th>
+                  <th className="px-3 py-2 font-normal text-right">权重</th>
+                  <th className="px-3 py-2 font-normal text-right">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -112,10 +119,10 @@ export default async function PortfolioPage() {
                       (b.market_value ?? 0) - (a.market_value ?? 0) ||
                       a.symbol.localeCompare(b.symbol),
                   )
-                  .map((pos) => (
+                  .map((p) => (
                     <PositionRowItem
-                      key={pos.id}
-                      position={pos}
+                      key={p.id}
+                      position={p}
                       totalMV={summary.total_market_value}
                     />
                   ))}
@@ -123,6 +130,7 @@ export default async function PortfolioPage() {
             </table>
           </section>
 
+          {/* 添加新持仓 */}
           <div className="mt-4">
             <AddPositionForm />
           </div>
@@ -130,7 +138,7 @@ export default async function PortfolioPage() {
       )}
 
       <p className="mt-6 border-t border-border pt-3 text-[11px] leading-relaxed text-muted-soft">
-        {p.disclaimer}
+        说明：现价由 Finnhub 实时拉取（缓存 60s）。"日内"基于今日开盘后涨跌计算；"累计 P&L"以你填写的建仓均价为基准。本工具不计交易费、税费、汇兑、分红再投资，仅作思路记录用途，非真实交易系统。
       </p>
     </div>
   );

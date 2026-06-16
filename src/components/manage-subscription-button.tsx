@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useDict } from "@/components/locale-provider";
 
 export function ManageSubscriptionButton() {
-  const s = useDict().subscriptionUi;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,9 +32,11 @@ export function ManageSubscriptionButton() {
         disabled={busy}
         className="btn-outline px-4 py-2 text-[13px] disabled:opacity-50"
       >
-        {busy ? s.opening : s.manage}
+        {busy ? "正在打开..." : "管理订阅 / 取消"}
       </button>
-      <p className="mt-1 text-[11px] text-muted">{s.hint}</p>
+      <p className="mt-1 text-[11px] text-muted">
+        在 Stripe 安全页面更新支付方式、查看发票或取消自动续费。
+      </p>
       {error ? (
         <p className="mt-1 text-[11px] text-[color:var(--danger)]">{error}</p>
       ) : null}

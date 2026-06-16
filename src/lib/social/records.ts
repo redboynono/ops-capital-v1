@@ -151,11 +151,13 @@ export async function getSocialOpsRecord(id: string): Promise<SocialOpsRecord | 
   return rows[0] ?? null;
 }
 
+// 用自然日（DB 时区，生产为 UTC）而非滚动 24h：
+// 否则昨天下午发的帖会落在今早 cron 的前 24h 窗口里，导致整批被误判为「今天已发」而跳过。
 export async function countAnalysisPostedToday(): Promise<number> {
   const rows = await mysqlQuery<{ n: number }[]>(
     `select count(*) as n from social_ops_posts
       where content_type = 'analysis'
-        and posted_x_at >= date_sub(current_timestamp, interval 24 hour)`,
+        and posted_x_at >= curdate()`,
   );
   return Number(rows[0]?.n ?? 0);
 }
@@ -164,7 +166,7 @@ export async function isAnalysisPostedToday(refKey: string): Promise<boolean> {
   const rows = await mysqlQuery<{ n: number }[]>(
     `select count(*) as n from social_ops_posts
       where content_type = 'analysis' and ref_key = ?
-        and posted_x_at >= date_sub(current_timestamp, interval 24 hour)`,
+        and posted_x_at >= curdate()`,
     [refKey],
   );
   return Number(rows[0]?.n ?? 0) > 0;

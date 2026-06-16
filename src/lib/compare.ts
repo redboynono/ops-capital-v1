@@ -10,12 +10,15 @@ import {
 } from "@/lib/finnhub";
 import { getPriceHistory, type PriceHistory } from "@/lib/price-history";
 import { getRating, getFactorGrades, type FactorKey, type Grade, type Verdict } from "@/lib/ratings";
+import { isCryptoSymbol } from "@/lib/symbol-resolve";
+import { getQuote as getYahooQuote, toYahooSymbol } from "@/lib/yahoo";
 import { getTickerBySymbol, type TickerRow } from "@/lib/tickers";
 
 export const COMPARE_MAX = 4;
 
 export type CompareColumn = {
   symbol: string;
+  isCrypto: boolean;
   ticker: TickerRow | null;
   profile: FinnhubCompanyProfile | null;
   quote: FinnhubQuote | null;
@@ -55,15 +58,18 @@ export async function loadCompareData(symbols: string[]): Promise<CompareColumn[
   return Promise.all(
     symbols.map(async (sym) => {
       const safe = <T,>(p: Promise<T>) => p.catch(() => null) as Promise<T | null>;
+      const crypto = isCryptoSymbol(sym);
       const [ticker, profile, quote, metric, news, rating, gradesMap, history] = await Promise.all([
         safe(getTickerBySymbol(sym)),
-        safe(fetchCompanyProfile(sym)),
-        safe(getQuote(sym)),
-        safe(fetchBasicFinancials(sym)),
-        fetchCompanyNews(sym, isoFrom, isoTo, 4).catch(() => [] as FinnhubNewsItem[]),
+        crypto ? Promise.resolve(null) : safe(fetchCompanyProfile(sym)),
+        crypto ? safe(getYahooQuote(toYahooSymbol(sym))) : safe(getQuote(sym)),
+        crypto ? Promise.resolve(null) : safe(fetchBasicFinancials(sym)),
+        crypto
+          ? Promise.resolve([] as FinnhubNewsItem[])
+          : fetchCompanyNews(sym, isoFrom, isoTo, 4).catch(() => [] as FinnhubNewsItem[]),
         safe(getRating(sym)),
         safe(getFactorGrades(sym)),
-        safe(getPriceHistory(sym, "1y")),
+        safe(getPriceHistory(toYahooSymbol(sym), "1y")),
       ]);
 
       const grades: Partial<Record<FactorKey, Grade | null>> = {};
@@ -75,6 +81,7 @@ export async function loadCompareData(symbols: string[]): Promise<CompareColumn[
 
       return {
         symbol: sym,
+        isCrypto: crypto,
         ticker: ticker ?? null,
         profile: profile ?? null,
         quote: quote ?? null,

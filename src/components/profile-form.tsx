@@ -2,13 +2,11 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useDict } from "@/components/locale-provider";
 
 const input =
   "w-full rounded border border-border bg-surface px-3 py-2 text-[13px] outline-none placeholder:text-muted-soft focus:border-accent";
 
 export function ProfileForm({ initialFullName }: { initialFullName: string }) {
-  const p = useDict().profileUi;
   const router = useRouter();
   const [fullName, setFullName] = useState(initialFullName);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -34,11 +32,11 @@ export function ProfileForm({ initialFullName }: { initialFullName: string }) {
         body: JSON.stringify({ fullName }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? p.saveFail);
-      setProfileMsg(p.nameUpdated);
+      if (!res.ok) throw new Error(data?.error ?? "保存失败");
+      setProfileMsg("姓名已更新");
       router.refresh();
     } catch (err) {
-      setProfileErr(err instanceof Error ? err.message : p.saveFail);
+      setProfileErr(err instanceof Error ? err.message : "保存失败");
     } finally {
       setSavingProfile(false);
     }
@@ -48,8 +46,8 @@ export function ProfileForm({ initialFullName }: { initialFullName: string }) {
     e.preventDefault();
     setPwdErr(null);
     setPwdMsg(null);
-    if (newPassword.length < 6) return setPwdErr(p.pwdMin);
-    if (newPassword !== confirmPassword) return setPwdErr(p.pwdMismatch);
+    if (newPassword.length < 6) return setPwdErr("新密码至少 6 位");
+    if (newPassword !== confirmPassword) return setPwdErr("两次输入的新密码不一致");
 
     try {
       setSavingPassword(true);
@@ -59,13 +57,13 @@ export function ProfileForm({ initialFullName }: { initialFullName: string }) {
         body: JSON.stringify({ currentPassword, newPassword }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? p.pwdUpdateFail);
-      setPwdMsg(p.pwdUpdated);
+      if (!res.ok) throw new Error(data?.error ?? "修改失败");
+      setPwdMsg("密码已更新");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err) {
-      setPwdErr(err instanceof Error ? err.message : p.pwdUpdateFail);
+      setPwdErr(err instanceof Error ? err.message : "修改失败");
     } finally {
       setSavingPassword(false);
     }
@@ -74,22 +72,22 @@ export function ProfileForm({ initialFullName }: { initialFullName: string }) {
   return (
     <>
       <form onSubmit={onSaveProfile} className="card mt-4 space-y-3 p-4">
-        <p className="label-caps">{p.basicInfo}</p>
+        <p className="label-caps">基本资料</p>
         <div>
-          <label className="label-caps">{p.name}</label>
+          <label className="label-caps">姓名</label>
           <input value={fullName} onChange={(e) => setFullName(e.target.value)} className={input} />
         </div>
         {profileErr ? <p className="text-[12px] text-[color:var(--danger)]">{profileErr}</p> : null}
         {profileMsg ? <p className="text-[12px] text-[color:var(--success)]">{profileMsg}</p> : null}
         <button type="submit" disabled={savingProfile} className="btn-primary px-3 py-1.5 text-[12px]">
-          {savingProfile ? p.savingName : p.saveName}
+          {savingProfile ? "保存中..." : "保存姓名"}
         </button>
       </form>
 
       <form onSubmit={onChangePassword} className="card mt-4 space-y-3 p-4">
-        <p className="label-caps">{p.security}</p>
+        <p className="label-caps">安全 · 修改密码</p>
         <div>
-          <label className="label-caps">{p.currentPwd}</label>
+          <label className="label-caps">当前密码</label>
           <input
             type="password"
             value={currentPassword}
@@ -99,7 +97,7 @@ export function ProfileForm({ initialFullName }: { initialFullName: string }) {
           />
         </div>
         <div>
-          <label className="label-caps">{p.newPwd}</label>
+          <label className="label-caps">新密码</label>
           <input
             type="password"
             value={newPassword}
@@ -110,7 +108,7 @@ export function ProfileForm({ initialFullName }: { initialFullName: string }) {
           />
         </div>
         <div>
-          <label className="label-caps">{p.confirmPwd}</label>
+          <label className="label-caps">确认新密码</label>
           <input
             type="password"
             value={confirmPassword}
@@ -123,7 +121,7 @@ export function ProfileForm({ initialFullName }: { initialFullName: string }) {
         {pwdErr ? <p className="text-[12px] text-[color:var(--danger)]">{pwdErr}</p> : null}
         {pwdMsg ? <p className="text-[12px] text-[color:var(--success)]">{pwdMsg}</p> : null}
         <button type="submit" disabled={savingPassword} className="btn-primary px-3 py-1.5 text-[12px]">
-          {savingPassword ? p.updatingPwd : p.updatePwd}
+          {savingPassword ? "更新中..." : "更新密码"}
         </button>
       </form>
     </>

@@ -5,15 +5,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Bell, BellOff, Mail, Plus, Search, Trash2, X } from "lucide-react";
 
-import { useDict } from "@/components/locale-provider";
-import { fmt } from "@/lib/i18n/fmt";
 import type { AlertRule, AlertRuleType } from "@/lib/alerts";
 
-const RULE_UNITS: Record<AlertRuleType, string> = {
-  price_above: "$",
-  price_below: "$",
-  move_above: "%",
-  move_below: "%",
+// 注意：本组件为 client，不能从 @/lib/alerts 导入 runtime 符号（含 mysql 依赖）。
+// 仅做类型导入；下面就地复制纯 UI 文案表。
+const RULE_LABELS: Record<AlertRuleType, { zh: string; verb: string; unit: string }> = {
+  price_above: { zh: "现价 ≥", verb: "突破上方", unit: "$" },
+  price_below: { zh: "现价 ≤", verb: "跌破下方", unit: "$" },
+  move_above: { zh: "今日涨幅 ≥", verb: "今日大涨", unit: "%" },
+  move_below: { zh: "今日跌幅 ≥", verb: "今日大跌", unit: "%" },
 };
 
 type Hit = {
@@ -23,22 +23,17 @@ type Hit = {
   inDb: boolean;
 };
 
+const RULE_OPTIONS: { value: AlertRuleType; label: string }[] = [
+  { value: "price_above", label: "现价突破上方" },
+  { value: "price_below", label: "现价跌破下方" },
+  { value: "move_above", label: "今日涨幅 ≥" },
+  { value: "move_below", label: "今日跌幅 ≥" },
+];
+
 export function AlertsManager({ initialAlerts }: { initialAlerts: AlertRule[] }) {
-  const ui = useDict().alertsUi;
   const router = useRouter();
   const [adding, setAdding] = useState(initialAlerts.length === 0);
   const [busy, setBusy] = useState<string | null>(null);
-
-  const ruleOptions: { value: AlertRuleType; label: string }[] = [
-    { value: "price_above", label: ui.ruleTypes.price_above },
-    { value: "price_below", label: ui.ruleTypes.price_below },
-    { value: "move_above", label: ui.ruleTypes.move_above },
-    { value: "move_below", label: ui.ruleTypes.move_below },
-  ];
-
-  function ruleLabel(type: AlertRuleType): string {
-    return ui.ruleMeta[type].label;
-  }
 
   function refresh() {
     router.refresh();
@@ -56,7 +51,7 @@ export function AlertsManager({ initialAlerts }: { initialAlerts: AlertRule[] })
   }
 
   async function remove(id: string, label: string) {
-    if (!confirm(fmt(ui.deleteConfirmFmt, { label }))) return;
+    if (!confirm(`删除提醒：${label}？`)) return;
     setBusy(id);
     await fetch(`/api/me/alerts/${id}`, { method: "DELETE" });
     setBusy(null);
@@ -69,9 +64,9 @@ export function AlertsManager({ initialAlerts }: { initialAlerts: AlertRule[] })
       const res = await fetch(`/api/me/alerts/${id}/test`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        alert(fmt(ui.testFailFmt, { err: data?.error ?? `HTTP ${res.status}` }));
+        alert(`发送失败：${data?.error ?? `HTTP ${res.status}`}`);
       } else {
-        alert(fmt(ui.testOkFmt, { email: data?.sentTo ?? "your email" }));
+        alert(`已发送测试邮件至 ${data?.sentTo ?? "你的注册邮箱"}`);
       }
     } finally {
       setBusy(null);
@@ -82,7 +77,6 @@ export function AlertsManager({ initialAlerts }: { initialAlerts: AlertRule[] })
     <div className="space-y-3">
       {adding ? (
         <CreateAlertForm
-          ruleOptions={ruleOptions}
           onDone={() => {
             setAdding(false);
             refresh();
@@ -96,30 +90,32 @@ export function AlertsManager({ initialAlerts }: { initialAlerts: AlertRule[] })
           className="inline-flex items-center gap-1 rounded border border-dashed border-foreground-soft px-3 py-1.5 mono text-[12px] text-foreground-soft hover:border-accent hover:text-accent-strong"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-          {ui.addBtn}
+          新增提醒
         </button>
       )}
 
       {initialAlerts.length === 0 ? (
-        <div className="card px-4 py-8 text-center text-[13px] text-muted">{ui.empty}</div>
+        <div className="card px-4 py-8 text-center text-[13px] text-muted">
+          还没有提醒规则。新增第一条后，每 15 分钟检查一次（仅美股交易时段）。
+        </div>
       ) : (
         <div className="card overflow-x-auto">
           <table className="w-full min-w-[760px] text-[12px]">
             <thead>
               <tr className="border-b border-border bg-surface-muted text-left text-[11px] uppercase tracking-wider text-muted">
-                <th className="px-3 py-2 font-normal">{ui.colSymbol}</th>
-                <th className="px-3 py-2 font-normal">{ui.colRule}</th>
-                <th className="px-3 py-2 font-normal text-right">{ui.colThreshold}</th>
-                <th className="px-3 py-2 font-normal text-right">{ui.colCooldown}</th>
-                <th className="px-3 py-2 font-normal">{ui.colLastFired}</th>
-                <th className="px-3 py-2 font-normal text-right">{ui.colStatus}</th>
-                <th className="px-3 py-2 font-normal text-right">{ui.colActions}</th>
+                <th className="px-3 py-2 font-normal">代码</th>
+                <th className="px-3 py-2 font-normal">规则</th>
+                <th className="px-3 py-2 font-normal text-right">阈值</th>
+                <th className="px-3 py-2 font-normal text-right">冷却</th>
+                <th className="px-3 py-2 font-normal">最近触发</th>
+                <th className="px-3 py-2 font-normal text-right">状态</th>
+                <th className="px-3 py-2 font-normal text-right">操作</th>
               </tr>
             </thead>
             <tbody>
               {initialAlerts.map((a) => {
-                const unit = RULE_UNITS[a.rule_type];
-                const label = `${a.symbol} ${ruleLabel(a.rule_type)} ${a.threshold}${unit}`;
+                const meta = RULE_LABELS[a.rule_type];
+                const label = `${a.symbol} ${meta.zh} ${a.threshold}${meta.unit}`;
                 const active = a.is_active === 1;
                 return (
                   <tr key={a.id} className="border-b border-border last:border-b-0 hover:bg-surface-muted">
@@ -134,14 +130,14 @@ export function AlertsManager({ initialAlerts }: { initialAlerts: AlertRule[] })
                         <p className="text-[10px] text-muted line-clamp-1">{a.ticker_name}</p>
                       ) : null}
                     </td>
-                    <td className="px-3 py-2 text-foreground-soft">{ruleLabel(a.rule_type)}</td>
+                    <td className="px-3 py-2 text-foreground-soft">{meta.zh}</td>
                     <td className="px-3 py-2 mono text-right">
-                      {unit === "$" ? `$${a.threshold.toFixed(2)}` : `${a.threshold.toFixed(2)}%`}
+                      {meta.unit === "$" ? `$${a.threshold.toFixed(2)}` : `${a.threshold.toFixed(2)}%`}
                     </td>
                     <td className="px-3 py-2 mono text-right text-muted">{a.cooldown_minutes}m</td>
                     <td className="px-3 py-2 mono text-[10px] text-muted">
                       {a.last_triggered_at
-                        ? new Date(a.last_triggered_at).toLocaleString(undefined, { hour12: false })
+                        ? new Date(a.last_triggered_at).toLocaleString("zh-CN", { hour12: false })
                         : "—"}
                     </td>
                     <td className="px-3 py-2 text-right">
@@ -175,8 +171,8 @@ export function AlertsManager({ initialAlerts }: { initialAlerts: AlertRule[] })
                           onClick={() => testSend(a.id)}
                           disabled={busy === a.id}
                           className="text-muted hover:text-accent-strong disabled:opacity-50"
-                          aria-label={ui.testAria}
-                          title={ui.testTitle}
+                          aria-label="测试发送"
+                          title="测试发送一封示例邮件（不进入冷却期）"
                         >
                           <Mail className="h-3.5 w-3.5" strokeWidth={1.8} />
                         </button>
@@ -185,7 +181,7 @@ export function AlertsManager({ initialAlerts }: { initialAlerts: AlertRule[] })
                           onClick={() => remove(a.id, label)}
                           disabled={busy === a.id}
                           className="text-muted hover:text-[color:var(--danger)] disabled:opacity-50"
-                          aria-label={ui.deleteAria}
+                          aria-label="删除"
                         >
                           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
                         </button>
@@ -202,16 +198,7 @@ export function AlertsManager({ initialAlerts }: { initialAlerts: AlertRule[] })
   );
 }
 
-function CreateAlertForm({
-  ruleOptions,
-  onDone,
-  onCancel,
-}: {
-  ruleOptions: { value: AlertRuleType; label: string }[];
-  onDone: () => void;
-  onCancel: () => void;
-}) {
-  const ui = useDict().alertsUi;
+function CreateAlertForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
   const [symbol, setSymbol] = useState("");
   const [ruleType, setRuleType] = useState<AlertRuleType>("price_above");
   const [threshold, setThreshold] = useState("");
@@ -272,26 +259,27 @@ function CreateAlertForm({
       setThreshold("");
       onDone();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : ui.fail);
+      setErr(e instanceof Error ? e.message : "失败");
     } finally {
       setBusy(false);
     }
   }
 
-  const unit = RULE_UNITS[ruleType];
+  const meta = RULE_LABELS[ruleType];
 
   return (
     <form onSubmit={submit} className="card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-[13px] font-bold">{ui.formTitle}</h3>
+        <h3 className="text-[13px] font-bold">新增提醒</h3>
         <button type="button" onClick={onCancel} className="text-muted hover:text-foreground">
           <X className="h-4 w-4" strokeWidth={2} />
         </button>
       </div>
 
       <div className="grid gap-3 md:grid-cols-[2fr_2fr_1fr_1fr]">
+        {/* symbol with autocomplete */}
         <div className="relative">
-          <label className="label-caps mb-1 block text-[10px]">{ui.labelSymbol}</label>
+          <label className="label-caps mb-1 block text-[10px]">代码 *</label>
           <div className="flex h-9 items-center gap-1.5 rounded border border-border bg-surface px-2 focus-within:border-accent">
             <Search className="h-3.5 w-3.5 text-muted" strokeWidth={1.8} />
             <input
@@ -324,13 +312,13 @@ function CreateAlertForm({
         </div>
 
         <div>
-          <label className="label-caps mb-1 block text-[10px]">{ui.labelRule}</label>
+          <label className="label-caps mb-1 block text-[10px]">规则类型 *</label>
           <select
             value={ruleType}
             onChange={(e) => setRuleType(e.target.value as AlertRuleType)}
             className="h-9 w-full rounded border border-border bg-surface px-2 text-[13px] outline-none focus:border-accent"
           >
-            {ruleOptions.map((o) => (
+            {RULE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -339,14 +327,12 @@ function CreateAlertForm({
         </div>
 
         <div>
-          <label className="label-caps mb-1 block text-[10px]">
-            {fmt(ui.labelThresholdFmt, { unit })}
-          </label>
+          <label className="label-caps mb-1 block text-[10px]">阈值 ({meta.unit}) *</label>
           <input
             type="number"
             value={threshold}
             onChange={(e) => setThreshold(e.target.value)}
-            placeholder={unit === "$" ? "500" : "5"}
+            placeholder={meta.unit === "$" ? "500" : "5"}
             step="any"
             required
             className="h-9 w-full rounded border border-border bg-surface px-2 mono text-[13px] outline-none focus:border-accent"
@@ -354,7 +340,7 @@ function CreateAlertForm({
         </div>
 
         <div>
-          <label className="label-caps mb-1 block text-[10px]">{ui.labelCooldown}</label>
+          <label className="label-caps mb-1 block text-[10px]">冷却（分钟）</label>
           <input
             type="number"
             value={cooldown}
@@ -367,13 +353,15 @@ function CreateAlertForm({
         </div>
       </div>
 
-      <p className="mt-2 text-[10px] text-muted">{ui.cooldownHint}</p>
+      <p className="mt-2 text-[10px] text-muted">
+        触发后会发邮件并进入冷却期；冷却结束后再次满足条件才会重发。
+      </p>
 
       {err ? <p className="mt-2 text-[11px] text-[color:var(--danger)]">⚠ {err}</p> : null}
 
       <div className="mt-3 flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="text-[12px] text-muted hover:text-foreground">
-          {ui.cancel}
+          取消
         </button>
         <button
           type="submit"
@@ -381,7 +369,7 @@ function CreateAlertForm({
           className="h-8 rounded-sm px-3 text-[12px] font-bold disabled:opacity-50"
           style={{ background: "var(--accent)", color: "#0a0a0d" }}
         >
-          {busy ? ui.saving : ui.save}
+          {busy ? "保存中…" : "保存"}
         </button>
       </div>
     </form>

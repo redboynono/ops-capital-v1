@@ -3,25 +3,27 @@ import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 
 import { getSessionUser } from "@/lib/auth";
 import { listEarningsCalendar, type EarningsCalendarRow } from "@/lib/earnings";
-import { getDictionary, getLocale } from "@/lib/i18n";
-import { fmt } from "@/lib/i18n/fmt";
-import type { Dictionary } from "@/lib/i18n/zh";
 import { listWatchlist } from "@/lib/tickers";
 
 export const dynamic = "force-dynamic";
 
-function hourLabel(hour: string | null, e: Dictionary["earnings"]): string {
-  if (!hour) return "—";
-  if (hour === "bmo") return e.hourBmo;
-  if (hour === "amc") return e.hourAmc;
-  if (hour === "dmh") return e.hourDmh;
-  return hour.toUpperCase();
-}
+export const metadata = {
+  title: "财报日历 · OPS Alpha",
+  description: "覆盖所有 Ops Alpha 标的的财报发布时间表，已发的自动生成 AI 解读文章。",
+};
 
-function fmtDate(d: string, weekdays: string[]): string {
+const HOUR_LABEL: Record<string, string> = {
+  bmo: "盘前",
+  amc: "盘后",
+  dmh: "盘中",
+};
+
+function fmtDate(d: string): string {
+  // YYYY-MM-DD → MM/DD（周X）
   const date = new Date(d + "T12:00:00Z");
   const md = `${String(date.getUTCMonth() + 1).padStart(2, "0")}/${String(date.getUTCDate()).padStart(2, "0")}`;
-  return `${md} ${weekdays[date.getUTCDay()] ?? ""}`;
+  const week = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][date.getUTCDay()];
+  return `${md} ${week}`;
 }
 
 function fmtRev(n: number | null): string {
@@ -59,15 +61,7 @@ function bucket(rows: EarningsCalendarRow[]) {
   return { released, upcoming, today };
 }
 
-function StatusBadge({
-  row,
-  today,
-  e,
-}: {
-  row: EarningsCalendarRow;
-  today: string;
-  e: Dictionary["earnings"];
-}) {
+function StatusBadge({ row, today }: { row: EarningsCalendarRow; today: string }) {
   if (row.eps_actual != null) {
     const tone = epsSurpriseTone(row.eps_actual, row.eps_estimate);
     if (tone === "beat")
@@ -97,20 +91,12 @@ function StatusBadge({
   }
   return (
     <span className="rounded-sm border border-dashed border-foreground-soft px-1.5 py-0.5 mono text-[10px] text-foreground-soft">
-      {e.pending}
+      待发布
     </span>
   );
 }
 
-function EarningsRowItem({
-  row,
-  today,
-  e,
-}: {
-  row: EarningsCalendarRow;
-  today: string;
-  e: Dictionary["earnings"];
-}) {
+function EarningsRowItem({ row, today }: { row: EarningsCalendarRow; today: string }) {
   const surprise =
     row.eps_actual != null && row.eps_estimate != null
       ? row.eps_actual - row.eps_estimate
@@ -118,16 +104,16 @@ function EarningsRowItem({
   return (
     <li className="row-hover flex flex-wrap items-center gap-3 px-3 py-2.5 text-[12px]">
       {/* date */}
-      <span className="w-[88px] shrink-0 mono text-foreground-soft">{fmtDate(row.report_date, e.weekdays)}</span>
+      <span className="w-[88px] shrink-0 mono text-foreground-soft">{fmtDate(row.report_date)}</span>
 
       {/* hour */}
       <span className="w-[36px] shrink-0 mono text-[10px] text-muted">
-        {hourLabel(row.hour, e)}
+        {row.hour ? HOUR_LABEL[row.hour] ?? row.hour.toUpperCase() : "—"}
       </span>
 
       {/* status */}
       <span className="w-[64px] shrink-0">
-        <StatusBadge row={row} today={today} e={e} />
+        <StatusBadge row={row} today={today} />
       </span>
 
       {/* symbol + name */}
@@ -179,7 +165,7 @@ function EarningsRowItem({
             href={`/${row.post_kind === "news" ? "news" : "analysis"}/${row.post_slug}`}
             className="text-[11px] text-accent-strong hover:underline"
           >
-            {e.readAi}
+            阅读 AI 解读 →
           </Link>
         ) : null}
       </span>
@@ -188,7 +174,7 @@ function EarningsRowItem({
 }
 
 /** 把"周一"作为周首日，根据偏移量返回 [周一 00:00, 周日 23:59) 的 ISO 字符串。 */
-function weekRange(weekOffset: number, e: Dictionary["earnings"]): {
+function weekRange(weekOffset: number): {
   fromISO: string;
   toISO: string;
   label: string;
@@ -209,11 +195,11 @@ function weekRange(weekOffset: number, e: Dictionary["earnings"]): {
   const toISO = end.toISOString().slice(0, 10);
 
   let label: string;
-  if (weekOffset === 0) label = e.weekThis;
-  else if (weekOffset === -1) label = e.weekLast;
-  else if (weekOffset === 1) label = e.weekNext;
-  else if (weekOffset < 0) label = fmt(e.weekAgoFmt, { n: -weekOffset });
-  else label = fmt(e.weekAheadFmt, { n: weekOffset });
+  if (weekOffset === 0) label = "本周";
+  else if (weekOffset === -1) label = "上周";
+  else if (weekOffset === 1) label = "下周";
+  else if (weekOffset < 0) label = `${-weekOffset} 周前`;
+  else label = `${weekOffset} 周后`;
   return { fromISO, toISO, label, anchorMonday: target };
 }
 
@@ -229,10 +215,8 @@ export default async function EarningsCalendarPage({
     return Math.max(-26, Math.min(26, n));
   })();
   const onlyMine = sp.mine === "1";
-  const locale = await getLocale();
-  const e = getDictionary(locale).earnings;
 
-  const { fromISO, toISO, label: weekLabel, anchorMonday } = weekRange(weekOffset, e);
+  const { fromISO, toISO, label: weekLabel, anchorMonday } = weekRange(weekOffset);
   const allRows = await listEarningsCalendar(fromISO, toISO);
 
   // 只看自选时拉 watchlist，再过滤
@@ -262,9 +246,11 @@ export default async function EarningsCalendarPage({
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 md:px-6">
       <header className="mb-4 border-b border-border pb-3">
-        <span className="label-caps">{e.label}</span>
-        <h1 className="mt-1 text-2xl font-bold text-foreground">{e.title}</h1>
-        <p className="mt-1 text-[13px] text-muted">{e.subtitle}</p>
+        <span className="label-caps">Earnings</span>
+        <h1 className="mt-1 text-2xl font-bold text-foreground">财报日历</h1>
+        <p className="mt-1 text-[13px] text-muted">
+          覆盖所有 OPS Alpha 标的 · 周维度浏览 · 已发财报自动生成 AI 解读
+        </p>
       </header>
 
       {/* 周导航 + 筛选 */}
@@ -274,7 +260,7 @@ export default async function EarningsCalendarPage({
           className="inline-flex h-8 items-center gap-1 rounded border border-border bg-surface px-2 text-[12px] hover:border-accent hover:text-accent-strong"
         >
           <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />
-          {e.prevWeek}
+          上一周
         </Link>
         <span className="inline-flex h-8 items-center gap-2 rounded border border-border bg-surface-muted px-3 mono text-[12px]">
           <Calendar className="h-3.5 w-3.5 text-accent-strong" strokeWidth={1.8} />
@@ -287,7 +273,7 @@ export default async function EarningsCalendarPage({
           href={buildHref({ week: weekOffset + 1 })}
           className="inline-flex h-8 items-center gap-1 rounded border border-border bg-surface px-2 text-[12px] hover:border-accent hover:text-accent-strong"
         >
-          {e.nextWeek}
+          下一周
           <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
         </Link>
         {weekOffset !== 0 ? (
@@ -295,7 +281,7 @@ export default async function EarningsCalendarPage({
             href={buildHref({ week: 0 })}
             className="ml-1 text-[11px] text-muted hover:text-accent-strong"
           >
-            {e.backThisWeek}
+            回到本周
           </Link>
         ) : null}
 
@@ -310,21 +296,21 @@ export default async function EarningsCalendarPage({
                 : "border-border bg-surface text-foreground-soft hover:border-accent hover:text-accent-strong"
             }`}
           >
-            {onlyMine ? e.watchlistOnlyActive : e.watchlistOnly}
+            {onlyMine ? "✓ 只看自选" : "只看自选"}
           </Link>
         ) : (
           <Link
             href="/login?redirect=/earnings"
             className="inline-flex h-8 items-center rounded border border-border bg-surface px-3 text-[12px] text-muted hover:text-accent-strong"
-            title={e.loginFilterTitle}
+            title="登录后可按自选股过滤"
           >
-            {e.loginFilterWatchlist}
+            登录后过滤自选
           </Link>
         )}
 
         {onlyMine ? (
           <span className="text-[10px] text-muted">
-            {fmt(e.watchlistMatchFmt, { symbols: watchlistSymbols.size, rows: rows.length })}
+            · 自选 {watchlistSymbols.size} 只 · 匹配 {rows.length} 条
           </span>
         ) : null}
 
@@ -333,41 +319,45 @@ export default async function EarningsCalendarPage({
       </div>
 
       {rows.length === 0 ? (
-        <div className="card py-10 text-center text-[13px] text-muted">{e.emptyWindow}</div>
+        <div className="card py-10 text-center text-[13px] text-muted">
+          当前窗口内没有财报记录
+        </div>
       ) : (
         <>
+          {/* Upcoming */}
           <section className="mb-6">
             <h2 className="mb-2 flex items-baseline gap-2 text-[13px] font-bold text-foreground-soft">
-              {e.upcoming}
+              即将发布
               <span className="font-normal text-muted">· {upcoming.length}</span>
             </h2>
             <div className="card overflow-x-auto">
               {upcoming.length === 0 ? (
-                <p className="px-3 py-6 text-center text-[12px] text-muted">{e.noUpcoming}</p>
+                <p className="px-3 py-6 text-center text-[12px] text-muted">未来 30 天内暂无财报</p>
               ) : (
                 <ul className="divide-y divide-border">
                   {upcoming.map((r) => (
-                    <EarningsRowItem key={r.id} row={r} today={todayISO} e={e} />
+                    <EarningsRowItem key={r.id} row={r} today={todayISO} />
                   ))}
                 </ul>
               )}
             </div>
           </section>
 
+          {/* Released */}
           <section>
             <h2 className="mb-2 flex items-baseline gap-2 text-[13px] font-bold text-foreground-soft">
-              {e.released}
+              近期已发
               <span className="font-normal text-muted">· {released.length}</span>
             </h2>
             <div className="card overflow-x-auto">
               {released.length === 0 ? (
-                <p className="px-3 py-6 text-center text-[12px] text-muted">{e.noReleased}</p>
+                <p className="px-3 py-6 text-center text-[12px] text-muted">过去 14 天内无财报</p>
               ) : (
                 <ul className="divide-y divide-border">
                   {released
                     .sort((a, b) => (a.report_date < b.report_date ? 1 : -1))
                     .map((r) => (
-                      <EarningsRowItem key={r.id} row={r} today={todayISO} e={e} />
+                      <EarningsRowItem key={r.id} row={r} today={todayISO} />
                     ))}
                 </ul>
               )}
@@ -377,7 +367,7 @@ export default async function EarningsCalendarPage({
       )}
 
       <p className="mt-6 border-t border-border pt-3 text-[11px] leading-relaxed text-muted-soft">
-        {e.disclaimer}
+        数据来源：Finnhub earnings calendar，每 4 小时由 cron 同步入库。当前显示一周（周一→周日）；用导航键前后翻周，最多 ±26 周。BEAT/MISS 标签基于 EPS 实绩 vs 一致预期。
       </p>
     </div>
   );

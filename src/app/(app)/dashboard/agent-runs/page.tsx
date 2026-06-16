@@ -4,10 +4,20 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { listUserRuns } from "@/lib/agents/run";
 import { getAgent } from "@/lib/agents/registry";
-import { getDictionary, getLocale } from "@/lib/i18n";
-import { fmt } from "@/lib/i18n/fmt";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = {
+  title: "我的 Agent 运行 · OPS Alpha",
+  description: "你过去派 AI Agent 跑过的所有任务",
+};
+
+const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+  ok: { label: "完成", cls: "bg-[color:var(--success)]/15 text-[color:var(--success)]" },
+  running: { label: "进行中", cls: "bg-accent/15 text-accent-strong" },
+  failed: { label: "失败", cls: "bg-[color:var(--danger)]/15 text-[color:var(--danger)]" },
+  cancelled: { label: "已停", cls: "bg-surface-muted text-muted" },
+};
 
 function fmtIso(iso: string): string {
   return iso.replace("T", " ").slice(0, 16);
@@ -23,43 +33,34 @@ export default async function AgentRunsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login?redirect=/dashboard/agent-runs");
 
-  const locale = await getLocale();
-  const ar = getDictionary(locale).memberPages.agentRuns;
   const runs = await listUserRuns(user.id, { limit: 50 });
-
-  const statusCls: Record<string, string> = {
-    ok: "bg-[color:var(--success)]/15 text-[color:var(--success)]",
-    running: "bg-accent/15 text-accent-strong",
-    failed: "bg-[color:var(--danger)]/15 text-[color:var(--danger)]",
-    cancelled: "bg-surface-muted text-muted",
-  };
 
   return (
     <div className="mx-auto w-full max-w-[960px] px-4 py-6 md:px-6">
       <header className="mb-4 border-b border-border pb-3">
-        <span className="label-caps">{ar.label}</span>
-        <h1 className="mt-1 text-2xl font-bold text-foreground">{ar.title}</h1>
-        <p className="mt-1 text-[13px] text-muted">{ar.subtitle}</p>
+        <span className="label-caps">My Agent Runs</span>
+        <h1 className="mt-1 text-2xl font-bold text-foreground">我的 Agent 运行历史</h1>
+        <p className="mt-1 text-[13px] text-muted">
+          过去派 AI Agent 跑过的全部任务。点击一行可重读完整输出。
+        </p>
       </header>
 
       {runs.length === 0 ? (
         <div className="card p-6 text-center text-[13px] text-muted">
-          <p>{ar.empty}</p>
+          <p>还没有 Agent 运行记录。</p>
           <p className="mt-2">
-            {ar.emptyHint}{" "}
+            去任何一只标的页（比如{" "}
             <Link href="/t/NVDA" className="text-accent-strong hover:underline">
               /t/NVDA
             </Link>
-            {ar.emptyHintEnd}
+            ），选一个 Agent 卡片来运行第一个吧。
           </p>
         </div>
       ) : (
         <div className="card divide-y divide-border">
           {runs.map((r) => {
             const agent = getAgent(r.agent_id);
-            const statusLabel =
-              ar.status[r.status as keyof typeof ar.status] ?? ar.status.ok;
-            const cls = statusCls[r.status] ?? statusCls.ok;
+            const status = STATUS_LABELS[r.status] ?? STATUS_LABELS.ok;
             return (
               <Link
                 key={r.id}
@@ -80,13 +81,13 @@ export default async function AgentRunsPage() {
                   </div>
                   <p className="mt-0.5 text-[11px] text-muted">
                     {fmtIso(r.started_at)} · {fmtDuration(r.duration_ms)}
-                    {r.output_len ? ` · ${fmt(ar.outputFmt, { n: r.output_len })}` : ""}
+                    {r.output_len ? ` · ${r.output_len} chars` : ""}
                   </p>
                 </div>
                 <span
-                  className={`inline-flex items-center rounded-sm px-1.5 py-0.5 mono text-[10px] font-bold ${cls}`}
+                  className={`inline-flex items-center rounded-sm px-1.5 py-0.5 mono text-[10px] font-bold ${status.cls}`}
                 >
-                  {statusLabel}
+                  {status.label}
                 </span>
               </Link>
             );
@@ -94,7 +95,9 @@ export default async function AgentRunsPage() {
         </div>
       )}
 
-      <p className="mt-6 text-center text-[11px] text-muted-soft">{ar.footerNote}</p>
+      <p className="mt-6 text-center text-[11px] text-muted-soft">
+        最多展示最近 50 条；老的记录会保留在数据库中。
+      </p>
     </div>
   );
 }

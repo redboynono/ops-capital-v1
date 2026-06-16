@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { getDictionary, getLocale } from "@/lib/i18n";
-import { fmt } from "@/lib/i18n/fmt";
+import { OPTION_ALPHA } from "@/lib/option-alpha-brand";
 import { buildCopilotDirectSignals, type CopilotDirectRow } from "@/lib/option-copilot-scans";
 
 const TITLE_CLS = "text-[15px] font-bold tracking-tight text-[#0d5c6d]";
 
-const CALL_CLS = "font-bold text-[#16a34a] dark:text-[#4ade80]";
-const PUT_CLS = "font-bold text-[#dc2626] dark:text-[#f87171]";
+const CALL_CLS =
+  "font-bold text-[#16a34a] dark:text-[#4ade80]";
+const PUT_CLS =
+  "font-bold text-[#dc2626] dark:text-[#f87171]";
 
 function fmtVol(n: number): string {
   return n.toLocaleString("en-US");
@@ -17,15 +18,8 @@ function fmtPrice(n: number | null): string {
   return n < 10 ? n.toFixed(2) : n.toFixed(1);
 }
 
-function ContractCell({
-  row,
-  callTag,
-  putTag,
-}: {
-  row: CopilotDirectRow;
-  callTag: string;
-  putTag: string;
-}) {
+/** 合约列：日期+行权价用浅色，C/P 用绿/红区分 */
+function ContractCell({ row }: { row: CopilotDirectRow }) {
   const typeSuffix = row.contractType === "call" ? " C" : " P";
   const base = row.optionLabel.endsWith(typeSuffix)
     ? row.optionLabel.slice(0, -typeSuffix.length)
@@ -44,7 +38,7 @@ function ContractCell({
             : "bg-[color:color-mix(in_srgb,#dc2626_18%,transparent)] text-[#b91c1c] dark:text-[#fca5a5]"
         }`}
       >
-        {row.contractType === "call" ? callTag : putTag}
+        {row.contractType === "call" ? "看涨" : "看跌"}
       </span>
     </span>
   );
@@ -55,13 +49,11 @@ function SignalTable({
   subtitle,
   rows,
   showPct,
-  o,
 }: {
   title: string;
   subtitle: string;
   rows: CopilotDirectRow[];
   showPct: boolean;
-  o: ReturnType<typeof getDictionary>["options"];
 }) {
   return (
     <section className="card overflow-hidden">
@@ -70,19 +62,19 @@ function SignalTable({
         <p className="mt-0.5 text-[11px] text-muted">{subtitle}</p>
       </header>
       {rows.length === 0 ? (
-        <p className="px-4 py-8 text-center text-[12px] text-muted">{o.noContracts}</p>
+        <p className="px-4 py-8 text-center text-[12px] text-muted">暂无符合条件的合约。</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-left text-[12px]">
             <thead>
               <tr className="border-b border-border bg-surface-muted text-[10px] font-semibold uppercase tracking-wide text-muted">
-                <th className="px-3 py-2">{o.tableUnderlying}</th>
-                <th className="px-3 py-2">{o.tableContract}</th>
-                <th className="px-3 py-2 text-right">{o.tableVolume}</th>
-                {showPct ? <th className="px-3 py-2 text-right">{o.tablePctChain}</th> : null}
-                <th className="px-3 py-2 text-right">{o.tableVwap}</th>
-                <th className="px-3 py-2">{o.tableSignal}</th>
-                <th className="min-w-[200px] px-3 py-2">{o.opsRecColumn}</th>
+                <th className="px-3 py-2">标的</th>
+                <th className="px-3 py-2">合约</th>
+                <th className="px-3 py-2 text-right">成交量</th>
+                {showPct ? <th className="px-3 py-2 text-right">占全链%</th> : null}
+                <th className="px-3 py-2 text-right">VWAP</th>
+                <th className="px-3 py-2">信号解读</th>
+                <th className="min-w-[200px] px-3 py-2">{OPTION_ALPHA.opsRecColumn}</th>
               </tr>
             </thead>
             <tbody>
@@ -104,7 +96,7 @@ function SignalTable({
                     </Link>
                   </td>
                   <td className="px-3 py-2.5">
-                    <ContractCell row={r} callTag={o.callTag} putTag={o.putTag} />
+                    <ContractCell row={r} />
                   </td>
                   <td className="px-3 py-2.5 text-right font-mono text-foreground">{fmtVol(r.volume)}</td>
                   {showPct ? (
@@ -147,12 +139,11 @@ export async function ExpiringOptionsDirectSignals({
   expirationDate: string;
   expiryLabel: string;
   symbol?: string;
+  /** 首页等轻量场景可只扫 SPY/QQQ，避免 12 路 Polygon */
   underlyings?: readonly string[];
   compact?: boolean;
   rowLimit?: number;
 }) {
-  const locale = await getLocale();
-  const o = getDictionary(locale).options;
   const rowLimit = rowLimitProp ?? (compact ? 4 : symbol ? 8 : 10);
   const { concentration, buySide } = await buildCopilotDirectSignals({
     expirationDate,
@@ -161,29 +152,32 @@ export async function ExpiringOptionsDirectSignals({
     limit: rowLimit,
   });
 
-  const expiryLine = fmt(o.expiryLineFmt, {
-    date: expirationDate,
-    label: expiryLabel,
-    callNote: o.callNote,
-    putNote: o.putNote,
-    opsNote: o.opsNote,
-  });
-
   return (
     <div className="space-y-4">
-      <p className="text-[12px] text-muted-soft">{expiryLine}</p>
+      <p className="text-[12px] text-muted-soft">
+        到期 <span className="font-mono text-foreground-soft">{expirationDate}</span>（{expiryLabel}
+        ）· <span className={CALL_CLS}>C = 看涨 Call</span>
+        <span className="mx-1 text-muted">·</span>
+        <span className={PUT_CLS}>P = 看跌 Put</span>
+        <span className="mx-1 text-muted">·</span>
+        最右列为 OPS Alpha 推荐操作。
+      </p>
       <SignalTable
-        title={o.concentrationTitle}
-        subtitle={o.concentrationSub}
+        title={OPTION_ALPHA.concentrationTitle}
+        subtitle="单张合约成交量占该标的同到期全链比例偏高 → 资金扎堆"
         rows={concentration}
         showPct
-        o={o}
       />
-      <SignalTable title={o.buySideTitle} subtitle={o.buySideSub} rows={buySide} showPct={false} o={o} />
+      <SignalTable
+        title={OPTION_ALPHA.buySideTitle}
+        subtitle="放量且价格走强（或 Vol/OI 偏高）→ 买盘推升迹象"
+        rows={buySide}
+        showPct={false}
+      />
       {compact ? (
         <p className="text-[12px]">
           <Link href="/expiring-options?week=this" className="font-semibold text-accent-strong hover:underline">
-            {o.openFull}
+            打开 Option Alpha 查看全部 →
           </Link>
         </p>
       ) : null}

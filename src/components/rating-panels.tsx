@@ -1,16 +1,18 @@
 import {
   CORE_FACTORS,
+  CRYPTO_FACTORS,
   DIVIDEND_FACTORS,
+  FACTOR_LABELS,
   VERDICT_LABELS,
   type FactorKey,
   type Grade,
   type RatingRow,
   type Verdict,
+  getAssetClass,
   getFactorGrades,
   getRating,
 } from "@/lib/ratings";
-import { getDictionary, getLocale } from "@/lib/i18n";
-import { fmt } from "@/lib/i18n/fmt";
+import { FactorRadar } from "@/components/factor-radar";
 
 // -------- color palettes --------
 
@@ -63,7 +65,7 @@ function GradeCell({ g, dim = false }: { g: Grade | null; dim?: boolean }) {
   );
 }
 
-function VerdictPill({ v, locale }: { v: Verdict | null; locale: "zh" | "en" }) {
+function VerdictPill({ v }: { v: Verdict | null }) {
   if (!v) {
     return (
       <span className="inline-flex h-7 items-center justify-center rounded-sm px-3 font-mono text-[11px] font-bold"
@@ -77,7 +79,7 @@ function VerdictPill({ v, locale }: { v: Verdict | null; locale: "zh" | "en" }) 
     <span
       className="inline-flex h-7 items-center justify-center rounded-sm px-3 font-mono text-[11px] font-bold tracking-wide"
       style={{ background: VERDICT_BG[v], color: "#fff" }}
-    >{locale === "en" ? meta.en : meta.zh}</span>
+    >{meta.en}</span>
   );
 }
 
@@ -105,14 +107,12 @@ function ScoreBox({ value }: { value: number | null }) {
 // -------- public panels --------
 
 export async function RatingsSummary({ symbol }: { symbol: string }) {
-  const locale = await getLocale();
-  const rdict = getDictionary(locale).ratings;
-  const verdictLang = locale === "en" ? "en" : "zh";
-  const r = await getRating(symbol);
+  const [r, assetClass] = await Promise.all([getRating(symbol), getAssetClass(symbol)]);
+  const isCrypto = assetClass === "crypto";
   return (
     <section className="card p-3">
       <header className="flex items-center justify-between">
-        <p className="label-caps">{rdict.title}</p>
+        <p className="label-caps">OPS Ratings</p>
         <span className="text-[10px] font-mono text-muted">
           {r?.updated_at ? new Date(r.updated_at).toISOString().slice(0, 10) : "—"}
         </span>
@@ -120,23 +120,22 @@ export async function RatingsSummary({ symbol }: { symbol: string }) {
 
       <div className="mt-2 space-y-1.5">
         <RatingRowLine
-          label={rdict.opsDesk}
+          label="OPS Desk"
           verdict={r?.ops_verdict ?? null}
           score={r?.ops_score ? Number(r.ops_score) : null}
-          locale={verdictLang}
         />
+        {!isCrypto ? (
+          <RatingRowLine
+            label="Street"
+            verdict={r?.street_verdict ?? null}
+            score={r?.street_score ? Number(r.street_score) : null}
+          />
+        ) : null}
         <RatingRowLine
-          label={rdict.street}
-          verdict={r?.street_verdict ?? null}
-          score={r?.street_score ? Number(r.street_score) : null}
-          locale={verdictLang}
-        />
-        <RatingRowLine
-          label={rdict.opsQuant}
+          label="OPS Quant"
           verdict={null}
           score={r?.quant_score ? Number(r.quant_score) : null}
           hideVerdict
-          locale={verdictLang}
         />
       </div>
 
@@ -144,19 +143,13 @@ export async function RatingsSummary({ symbol }: { symbol: string }) {
         <div className="mt-3 border-t border-border pt-2 text-[11px] font-mono text-muted">
           {r?.ops_target_price ? (
             <div className="flex justify-between">
-              <span>{rdict.opsTarget}</span>
+              <span>OPS 目标价</span>
               <span className="text-foreground">${Number(r.ops_target_price).toFixed(2)}</span>
             </div>
           ) : null}
           {r?.street_target_price ? (
             <div className="flex justify-between">
-              <span>
-                {fmt(rdict.streetTargetFmt, {
-                  analysts: r.street_analyst_count
-                    ? fmt(rdict.analystsFmt, { n: r.street_analyst_count })
-                    : "",
-                })}
-              </span>
+              <span>Street 共识目标 {r.street_analyst_count ? `(${r.street_analyst_count} 分析师)` : ""}</span>
               <span className="text-foreground">${Number(r.street_target_price).toFixed(2)}</span>
             </div>
           ) : null}
@@ -170,20 +163,20 @@ export async function RatingsSummary({ symbol }: { symbol: string }) {
       ) : null}
 
       {!r ? (
-        <p className="py-6 text-center text-[12px] text-muted">{rdict.noRating}</p>
+        <p className="py-6 text-center text-[12px] text-muted">暂无评级。</p>
       ) : null}
     </section>
   );
 }
 
 function RatingRowLine({
-  label, verdict, score, hideVerdict, locale,
-}: { label: string; verdict: Verdict | null; score: number | null; hideVerdict?: boolean; locale: "zh" | "en" }) {
+  label, verdict, score, hideVerdict,
+}: { label: string; verdict: Verdict | null; score: number | null; hideVerdict?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="text-[12px] text-foreground-soft">{label}</span>
       <div className="flex items-center gap-1.5">
-        {!hideVerdict ? <VerdictPill v={verdict} locale={locale} /> : null}
+        {!hideVerdict ? <VerdictPill v={verdict} /> : null}
         <ScoreBox value={score} />
       </div>
     </div>
@@ -191,29 +184,43 @@ function RatingRowLine({
 }
 
 export async function FactorGrades({ symbol }: { symbol: string }) {
-  const locale = await getLocale();
-  const rdict = getDictionary(locale).ratings;
-  const map = await getFactorGrades(symbol);
-  const rating = await getRating(symbol);
-  const factors = CORE_FACTORS.map((f) => ({ key: f, row: map.get(f) }));
+  const [map, rating, assetClass] = await Promise.all([
+    getFactorGrades(symbol),
+    getRating(symbol),
+    getAssetClass(symbol),
+  ]);
+  const isCrypto = assetClass === "crypto";
+  const factorSet: readonly FactorKey[] = isCrypto ? CRYPTO_FACTORS : CORE_FACTORS;
+  const factors = factorSet.map((f) => ({ key: f, row: map.get(f) }));
   const hasAny = factors.some((f) => f.row?.grade_now);
-  const factorLabel = (key: FactorKey) => rdict.factors[key];
 
   return (
     <section className="card p-3">
-      <p className="label-caps">{rdict.factorGrades}</p>
+      <p className="label-caps">{isCrypto ? "Crypto Factor Grades" : "Factor Grades"}</p>
+
+      {hasAny && isCrypto ? (
+        <div className="mx-auto mt-2 max-w-[260px]">
+          <FactorRadar
+            uid={`tk-${symbol}`}
+            axes={factors.map(({ key, row }) => ({
+              label: FACTOR_LABELS[key].split(" ").pop() ?? key,
+              grade: (row?.grade_now ?? null) as Grade | null,
+            }))}
+          />
+        </div>
+      ) : null}
 
       {hasAny ? (
         <>
           <div className="mt-2 grid grid-cols-[1fr_auto_auto_auto] items-center gap-y-1.5 text-[11px] font-mono text-muted">
             <span></span>
-            <span className="w-10 text-center">{rdict.now}</span>
-            <span className="w-10 text-center">{rdict.months3}</span>
-            <span className="w-10 text-center">{rdict.months6}</span>
+            <span className="w-10 text-center">Now</span>
+            <span className="w-10 text-center">3M</span>
+            <span className="w-10 text-center">6M</span>
           </div>
           {factors.map(({ key, row }) => (
             <div key={key} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-1.5 gap-y-1 py-1 text-[12px]">
-              <span className="text-foreground-soft">{factorLabel(key)}</span>
+              <span className="text-foreground-soft">{FACTOR_LABELS[key]}</span>
               <GradeCell g={row?.grade_now ?? null} />
               <GradeCell g={row?.grade_3m ?? null} dim />
               <GradeCell g={row?.grade_6m ?? null} dim />
@@ -221,37 +228,27 @@ export async function FactorGrades({ symbol }: { symbol: string }) {
           ))}
         </>
       ) : (
-        <p className="py-6 text-center text-[12px] text-muted">{rdict.noFactorGrades}</p>
+        <p className="py-6 text-center text-[12px] text-muted">暂无因子评级。</p>
       )}
 
-      {rating?.has_dividend ? (
-        <DividendInline map={map} rdict={rdict} factorLabel={factorLabel} />
-      ) : null}
+      {!isCrypto && rating?.has_dividend ? <DividendInline symbol={symbol} map={map} /> : null}
     </section>
   );
 }
 
-function DividendInline({
-  map,
-  rdict,
-  factorLabel,
-}: {
-  map: Awaited<ReturnType<typeof getFactorGrades>>;
-  rdict: ReturnType<typeof getDictionary>["ratings"];
-  factorLabel: (key: FactorKey) => string;
-}) {
+function DividendInline({ symbol: _symbol, map }: { symbol: string; map: Awaited<ReturnType<typeof getFactorGrades>> }) {
   const rows = DIVIDEND_FACTORS.map((f) => ({ key: f, row: map.get(f) }));
   const hasAny = rows.some((r) => r.row?.grade_now);
   if (!hasAny) return null;
   return (
     <div className="mt-3 border-t border-border pt-3">
-      <p className="label-caps">{rdict.dividendGrades}</p>
+      <p className="label-caps">Dividend Grades</p>
       <div className="mt-2 grid grid-cols-[1fr_auto_auto_auto] items-center gap-y-1.5 text-[11px] font-mono text-muted">
-        <span></span><span className="w-10 text-center">{rdict.now}</span><span className="w-10 text-center">{rdict.months3}</span><span className="w-10 text-center">{rdict.months6}</span>
+        <span></span><span className="w-10 text-center">Now</span><span className="w-10 text-center">3M</span><span className="w-10 text-center">6M</span>
       </div>
       {rows.map(({ key, row }) => (
         <div key={key} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-1.5 gap-y-1 py-1 text-[12px]">
-          <span className="text-foreground-soft">{factorLabel(key)}</span>
+          <span className="text-foreground-soft">{FACTOR_LABELS[key]}</span>
           <GradeCell g={row?.grade_now ?? null} />
           <GradeCell g={row?.grade_3m ?? null} dim />
           <GradeCell g={row?.grade_6m ?? null} dim />
@@ -262,22 +259,18 @@ function DividendInline({
 }
 
 export async function QuantRanking({ symbol }: { symbol: string }) {
-  const locale = await getLocale();
-  const rdict = getDictionary(locale).ratings;
   const r = await getRating(symbol);
   const rows: { label: string; num: number | null; tot: number | null }[] = [
-    { label: rdict.rankOverall, num: r?.rank_overall ?? null, tot: r?.rank_overall_total ?? null },
-    { label: rdict.rankSector, num: r?.rank_sector ?? null, tot: r?.rank_sector_total ?? null },
-    { label: rdict.rankIndustry, num: r?.rank_industry ?? null, tot: r?.rank_industry_total ?? null },
+    { label: "全市场排名", num: r?.rank_overall ?? null,  tot: r?.rank_overall_total ?? null },
+    { label: "板块排名",   num: r?.rank_sector ?? null,   tot: r?.rank_sector_total ?? null  },
+    { label: "行业排名",   num: r?.rank_industry ?? null, tot: r?.rank_industry_total ?? null },
   ];
   const hasAny = rows.some((x) => x.num != null);
   return (
     <section className="card p-3">
-      <p className="label-caps">{rdict.quantRanking}</p>
+      <p className="label-caps">Quant Ranking</p>
       {r?.industry ? (
-        <p className="mt-1 text-[11px] text-muted">
-          {fmt(rdict.industryFmt, { industry: r.industry })}
-        </p>
+        <p className="mt-1 text-[11px] text-muted">行业：<span className="font-mono text-foreground">{r.industry}</span></p>
       ) : null}
       {hasAny ? (
         <div className="mt-2 space-y-1.5">
@@ -296,7 +289,7 @@ export async function QuantRanking({ symbol }: { symbol: string }) {
           ))}
         </div>
       ) : (
-        <p className="py-4 text-center text-[12px] text-muted">{rdict.noRanking}</p>
+        <p className="py-4 text-center text-[12px] text-muted">暂无排名数据。</p>
       )}
     </section>
   );
