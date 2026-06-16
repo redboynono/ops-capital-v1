@@ -15,4 +15,4 @@ create table if not exists email_subscribers (
   unique key uk_email (email),
   key idx_status (status),
   key idx_created (created_at)
-) engine=InnoDB default charset=utf8mb4;
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;

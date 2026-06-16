@@ -120,6 +120,7 @@ function LoginInner() {
   const [countryCode, setCountryCode] = useState("+86");
   const [phone, setPhone] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [briefingOptIn, setBriefingOptIn] = useState(true);
 
   // 登录字段
   const [identifier, setIdentifier] = useState(""); // 邮箱或用户名
@@ -190,6 +191,7 @@ function LoginInner() {
               username: username.trim() || null,
               firstName: firstName.trim() || null,
               lastName: lastName.trim() || null,
+              briefingOptIn,
               captcha: captchaInput.trim(),
               captchaToken: captcha.token,
             };
@@ -433,6 +435,22 @@ function LoginInner() {
                 </FieldShell>
               </div>
             </div>
+          ) : null}
+
+          {tab === "signup" ? (
+            <label className="flex cursor-pointer items-start gap-2.5 rounded border border-border bg-surface px-3 py-2.5">
+              <input
+                type="checkbox"
+                checked={briefingOptIn}
+                onChange={(e) => setBriefingOptIn(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[color:var(--accent)]"
+              />
+              <span className="text-[12px] leading-relaxed text-muted">
+                {locale === "en"
+                  ? "Email me the daily briefing — a watchlist-based market digest each morning. Unsubscribe anytime."
+                  : "接收每日邮件简报 — 基于自选股的盘后/盘前市场汇总，每个交易日早晨送达，随时可在账户设置中关闭。"}
+              </span>
+            </label>
           ) : null}
 
           {/* 图形验证码 */}

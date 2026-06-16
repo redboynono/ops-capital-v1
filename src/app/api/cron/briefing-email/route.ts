@@ -1,9 +1,26 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { mysqlQuery } from "@/lib/mysql";
-import { listActiveSubscribers } from "@/lib/email-subscribers";
 import { isEmailConfigured, sendEmail } from "@/lib/mail";
 import { logEvent } from "@/lib/observability";
+
+type SubscriberRow = { email: string; locale: string; unsubscribe_token: string };
+
+/**
+ * 收件人 = 活跃订阅列表，但排除「已是注册用户且开了个性化简报(email_briefing_enabled=1)」的人，
+ * 避免与 daily-briefing.mjs 的个性化简报重复发送。
+ */
+async function getDigestRecipients(): Promise<SubscriberRow[]> {
+  return mysqlQuery<SubscriberRow[]>(
+    `select s.email, s.locale, s.unsubscribe_token
+       from email_subscribers s
+      where s.status = 'active'
+        and not exists (
+          select 1 from users u
+           where u.email = s.email and u.email_briefing_enabled = 1
+        )`,
+  );
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -89,7 +106,7 @@ async function handle(): Promise<NextResponse> {
     return NextResponse.json({ ok: true, skipped: "no posts in last 24h", sent: 0 });
   }
 
-  const subs = await listActiveSubscribers();
+  const subs = await getDigestRecipients();
   if (subs.length === 0) {
     return NextResponse.json({ ok: true, skipped: "no subscribers", sent: 0 });
   }

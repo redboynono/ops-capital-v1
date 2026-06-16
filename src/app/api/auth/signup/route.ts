@@ -17,6 +17,7 @@ type Payload = {
   captcha?: string;
   captchaToken?: string;
   fullName?: string;
+  briefingOptIn?: boolean;
 };
 
 type ConflictRow = { id: string; field: string };
@@ -83,17 +84,22 @@ export async function POST(req: Request) {
       [lastName, firstName].filter(Boolean).join(" ") || body.fullName?.trim() || null;
     const passwordHash = await hashPassword(password);
     const userId = randomUUID();
+    // 注册时默认勾选每日简报；用户取消勾选则传 false
+    const briefingEnabled = body.briefingOptIn === false ? 0 : 1;
 
     await mysqlQuery(
       `insert into users (
          id, email, username, first_name, last_name, country_code, phone,
-         password_hash, full_name, subscription_status
-       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive')`,
-      [userId, email, username, firstName, lastName, cc, phone, passwordHash, fullName],
+         password_hash, full_name, subscription_status, email_briefing_enabled
+       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive', ?)`,
+      [userId, email, username, firstName, lastName, cc, phone, passwordHash, fullName, briefingEnabled],
     );
 
     await setUserSession(userId, email);
-    logEvent("user_signup", { userId, meta: { hasUsername: !!username, cc } });
+    logEvent("user_signup", {
+      userId,
+      meta: { hasUsername: !!username, cc, briefingOptIn: briefingEnabled === 1 },
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
