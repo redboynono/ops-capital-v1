@@ -49,17 +49,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 
-  // 订阅模式：复用已有 Stripe customer + 仅首次订阅给试用
+  const trialEligible =
+    channel === "stripe" && plan.product !== "brief"
+      ? await hasUsedTrial(user.id).then((used) => !used).catch(() => false)
+      : false;
   let existingCustomerId: string | null = null;
-  let trialEligible = false;
   if (channel === "stripe") {
     try {
-      [existingCustomerId, trialEligible] = await Promise.all([
-        getStripeCustomerId(user.id),
-        hasUsedTrial(user.id).then((used) => !used),
-      ]);
+      existingCustomerId = await getStripeCustomerId(user.id);
     } catch {
-      /* 读取失败不阻断下单，仅按无试用处理 */
+      /* ignore */
     }
   }
 

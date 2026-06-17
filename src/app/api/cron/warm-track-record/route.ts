@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { requireAdmin } from "@/lib/admin";
+import { getPicksTeaser } from "@/lib/picks";
 import { getTrackRecordTeaser } from "@/lib/track-record";
 
 export const runtime = "nodejs";
@@ -27,12 +28,15 @@ export async function POST() {
     return NextResponse.json({ error: "unauthorized", reason: authz.reason }, { status: 401 });
   }
 
-  const teaser = await getTrackRecordTeaser();
+  const [ratingsTeaser, picksTeaser] = await Promise.all([getTrackRecordTeaser(), getPicksTeaser()]);
   return NextResponse.json({
     ok: true,
-    buyCount: teaser?.buyCount ?? 0,
-    buyWinRate: teaser?.buyWinRate ?? null,
-    buyAvgExcess: teaser?.buyAvgExcess ?? null,
-    top: teaser?.top ?? [],
+    ratings: {
+      buyCount: ratingsTeaser?.buyCount ?? 0,
+      buyWinRate: ratingsTeaser?.buyWinRate ?? null,
+      buyAvgExcess: ratingsTeaser?.buyAvgExcess ?? null,
+      top: ratingsTeaser?.top ?? [],
+    },
+    picks: picksTeaser,
   });
 }

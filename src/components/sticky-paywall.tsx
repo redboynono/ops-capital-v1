@@ -17,9 +17,15 @@ export function StickyPaywall({
   const p = getDictionary(locale).paywall;
   const plans = plansForProduct(product);
   const monthly = plans[0];
-  const yearly = plans[2];
+  const yearly = plans.length > 2 ? plans[2] : null;
   const headline =
-    product === "options" ? p.options : product === "bundle" ? p.bundle : p.research;
+    product === "options"
+      ? p.options
+      : product === "brief"
+        ? p.brief
+        : product === "bundle"
+          ? p.bundle
+          : p.research;
 
   return (
     <div className="paywall-sticky">
@@ -32,9 +38,11 @@ export function StickyPaywall({
           <Link href={`/pricing?product=${product}`} className="pw-price">
             {p.monthly} <strong>${(monthly.amount / 100).toFixed(2)}</strong>
           </Link>
+          {yearly ? (
           <Link href={`/pricing?product=${product}`} className="pw-price primary">
             {p.yearly} <strong>${(yearly.amount / 12 / 100).toFixed(0)}/mo</strong>
           </Link>
+          ) : null}
           {!loggedIn ? (
             <Link href={`/login?redirect=/pricing?product=${product}`} className="pw-price">
               {p.login}

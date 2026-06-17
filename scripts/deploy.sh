@@ -28,6 +28,13 @@ sshpass -p "$PASS" ssh -o ServerAliveInterval=15 "$SERVER" '
   sleep 3
   docker logs --tail 5 ops-alpha
 '
+echo "--> db migrations"
+for mig in 015_entitlement_brief.sql 016_social_content_type_chokepoint.sql; do
+  sshpass -p "$PASS" ssh -o ServerAliveInterval=15 "$SERVER" \
+    'PW=$(grep -m1 "^MYSQL_URL=" /opt/ops-alpha/.env.production | sed -n "s#.*root:\([^@]*\)@.*#\1#p" | sed "s/%21/!/g"); docker exec -i ops-mysql mysql -uroot -p"$PW" ops_alpha' \
+    < "$HERE/mysql/migrations/$mig" 2>/dev/null || echo "  ($mig skipped or already applied)"
+done
+
 echo "--> install cron (chokepoint + track-record X + warm cache)"
 sshpass -p "$PASS" ssh -o ServerAliveInterval=15 "$SERVER" \
   "REPO=/opt/ops-alpha bash /opt/ops-alpha/scripts/install-cron.sh"

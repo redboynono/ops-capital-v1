@@ -12,7 +12,7 @@ import { listSocialOpsRecords } from "@/lib/social/records";
 
 export type SocialPoolItem = {
   key: string;
-  contentType: "analysis" | "news" | "rating_change" | "value_chain" | "custom";
+  contentType: "analysis" | "chokepoint" | "news" | "rating_change" | "value_chain" | "custom";
   refKey: string;
   title: string;
   subtitle: string;
@@ -70,7 +70,8 @@ function postedAnalysisSlugs(
   const cutoff = Date.now() - ANALYSIS_REPOST_COOLDOWN_DAYS * 86_400_000;
   const slugs = new Set<string>();
   for (const r of records) {
-    if (r.content_type !== "analysis" || !r.posted_x_at || !r.ref_key) continue;
+    if (r.content_type !== "analysis" && r.content_type !== "chokepoint") continue;
+    if (!r.posted_x_at || !r.ref_key) continue;
     const t = Date.parse(r.posted_x_at.replace(" ", "T"));
     if (Number.isFinite(t) && t >= cutoff) slugs.add(r.ref_key);
   }
@@ -84,7 +85,15 @@ function englishScore(p: { title_en?: string | null; excerpt_en?: string | null 
   return s;
 }
 
-/** 深度研报英文 X 池：优先有 title_en + excerpt_en 的最新文章 */
+function isChokepointSlug(slug: string): boolean {
+  return slug.startsWith("chokepoint-");
+}
+
+function analysisContentType(slug: string): SocialPoolItem["contentType"] {
+  return isChokepointSlug(slug) ? "chokepoint" : "analysis";
+}
+
+/** 深度研报英文 X 池：卡点优先 + 有 title_en 的最新文章 */
 export async function buildAnalysisSocialPool(limit = 10): Promise<SocialPoolItem[]> {
   const [posts, records] = await Promise.all([
     listPosts({ kind: "analysis", limit: 40, period: "month" }),
@@ -93,6 +102,8 @@ export async function buildAnalysisSocialPool(limit = 10): Promise<SocialPoolIte
 
   const blocked = postedAnalysisSlugs(records);
   const sorted = [...posts].sort((a, b) => {
+    const chokeDiff = Number(isChokepointSlug(b.slug)) - Number(isChokepointSlug(a.slug));
+    if (chokeDiff !== 0) return chokeDiff;
     const diff = englishScore(b) - englishScore(a);
     if (diff !== 0) return diff;
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -112,13 +123,14 @@ export async function buildAnalysisSocialPool(limit = 10): Promise<SocialPoolIte
       tickers: p.tickers,
     });
     const enTitle = p.title_en?.trim() || p.title;
+    const ctype = analysisContentType(p.slug);
     const item = toPoolItem(
-      `analysis:${p.slug}`,
-      "analysis",
+      `${ctype}:${p.slug}`,
+      ctype,
       p.slug,
       enTitle,
       p.excerpt_en?.slice(0, 120) || p.excerpt?.slice(0, 100) || "Deep research",
-      90 + englishScore(p),
+      (ctype === "chokepoint" ? 120 : 90) + englishScore(p),
       copy,
     );
     const variantInput = {
@@ -137,6 +149,12 @@ export async function buildAnalysisSocialPool(limit = 10): Promise<SocialPoolIte
     if (items.length >= limit) break;
   }
   return items;
+}
+
+/** 仅卡点 franchise：未在 X 发过且 slug 以 chokepoint- 开头 */
+export async function buildChokepointSocialPool(limit = 5): Promise<SocialPoolItem[]> {
+  const all = await buildAnalysisSocialPool(limit + 20);
+  return all.filter((i) => i.contentType === "chokepoint").slice(0, limit);
 }
 
 export async function buildSocialContentPool(limit = 12): Promise<SocialPoolItem[]> {

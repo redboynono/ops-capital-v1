@@ -31,7 +31,7 @@ export function PricingProductGrid({
 
   return (
     <div>
-      <div className="grid gap-2 md:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {PRODUCT_LINES.map((line) => {
           const active = line === product;
           const sample = plansForProduct(line)[0];
@@ -58,7 +58,7 @@ export function PricingProductGrid({
         })}
       </div>
 
-      <ul className="mt-4 grid gap-1 text-[12px] text-foreground-soft md:grid-cols-3">
+      <ul className="mt-4 grid gap-1 text-[12px] text-foreground-soft md:grid-cols-2 lg:grid-cols-4">
         {copy.bullets.map((b) => (
           <li key={b} className="flex gap-2">
             <span className="text-accent">✓</span>
@@ -72,7 +72,7 @@ export function PricingProductGrid({
         loggedIn={loggedIn}
         userEmail={userEmail}
         showAltChannels={false}
-        trialEligible={trialEligible}
+        trialEligible={trialEligible && product !== "brief"}
         trialDays={trialDays}
       />
     </div>

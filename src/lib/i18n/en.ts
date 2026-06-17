@@ -165,6 +165,8 @@ export const en: Dictionary = {
     currentEntitlement: "Current entitlements",
     researchOn: "✓ Active",
     researchOff: "— Not active",
+    briefOn: "✓ Active",
+    briefOff: "— Not active",
     optionOn: "✓ Active",
     optionOff: "— Not active",
     expires: "Membership ends:",
@@ -207,6 +209,15 @@ export const en: Dictionary = {
       wechatFailed: "Order failed—please try again",
     },
     products: {
+      brief: {
+        title: "Chokepoint Brief",
+        subtitle: "AI supply-chain chokepoints · entry tier",
+        bullets: [
+          "Full access to all chokepoint-* deep dives",
+          "L0–L5 value-chain framework",
+          "English X threads + CN summaries",
+        ],
+      },
       research: {
         title: "Research Pro",
         subtitle: "Actionable picks + full deep research",
@@ -305,6 +316,14 @@ export const en: Dictionary = {
     periodWeek: "Past week",
     periodMonth: "Past month",
   },
+  compliance: {
+    title: "Research & compliance",
+    body: "OPS Alpha content is AI-assisted research—not investment advice, trade recommendations, or shill posts. We do not manage money or guarantee returns. Do your own work and bear your own risk.",
+    inline: "Not investment advice · DYOR",
+    compact: "Not investment advice. Not a buy/sell recommendation.",
+    termsLink: "Terms of service",
+    trackRecordLink: "Verifiable track record",
+  },
   analysis: {
     label: "Research · Deep reports",
     title: "Institutional-grade research",
@@ -344,6 +363,7 @@ export const en: Dictionary = {
   },
   paywall: {
     research: "Research Pro · unlock picks & full research",
+    brief: "Chokepoint Brief · unlock supply-chain deep dives",
     options: "Option Alpha · unlock actionable option ideas",
     bundle: "Full Bundle · unlock everything",
     note: "Active immediately · renewals stack on expiry",
@@ -351,6 +371,11 @@ export const en: Dictionary = {
     yearly: "Annual",
     login: "Log in",
     products: {
+      brief: {
+        title: "Chokepoint Brief",
+        body: "Unlock all chokepoint-* franchise reports and the L0–L5 framework.",
+        cta: "Subscribe · Chokepoint Brief $2.99/mo",
+      },
       research: {
         title: "Research Pro",
         body: "Unlock targets, stops, full thesis, and complete research articles.",

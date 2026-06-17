@@ -8,7 +8,8 @@ import { getSessionUser } from "@/lib/auth";
 import { logEvent } from "@/lib/observability";
 import { isBookmarked, recordRead } from "@/lib/me";
 import { splitForPaywall } from "@/lib/content-preview";
-import { hasResearchAccess } from "@/lib/entitlements";
+import { canViewAnalysisFull, paywallProductForPost } from "@/lib/posts-access";
+import { LegalDisclaimer } from "@/components/legal-disclaimer";
 import { RedactedMarkdown } from "@/lib/paywall";
 import { FtPaywallGate } from "@/components/ft-paywall-gate";
 import { TrackRecordBar } from "@/components/track-record-bar";
@@ -60,13 +61,14 @@ export default async function AnalysisDetailPage({
     listTickersForPost(post.id),
   ]);
 
-  const canViewFull = !post.is_premium || hasResearchAccess(user);
+  const paywallProduct = paywallProductForPost(post.slug);
+  const canViewFull = canViewAnalysisFull(post, user);
   const bookmarked = user ? await isBookmarked(user.id, post.id) : false;
   if (user) recordRead(user.id, post.id).catch(() => null);
   if (!canViewFull) {
     logEvent("paywall_hit", {
       userId: user?.id ?? null,
-      meta: { slug: post.slug, product: "research", logged_in: Boolean(user) },
+      meta: { slug: post.slug, product: paywallProduct, logged_in: Boolean(user) },
     });
   }
 
@@ -167,6 +169,7 @@ export default async function AnalysisDetailPage({
                 split={splitForPaywall(body)}
                 loggedIn={Boolean(user)}
                 loginRedirect={`/analysis/${post.slug}`}
+                product={paywallProduct}
                 locale={locale}
               />
               <EmailCapture locale={locale} source="paywall" />
@@ -176,15 +179,17 @@ export default async function AnalysisDetailPage({
         {showToc ? <ArticleToc items={tocItems} readerMode /> : null}
       </div>
 
-      {!canViewFull ? <StickyPaywall loggedIn={Boolean(user)} product="research" locale={locale} /> : null}
+      {!canViewFull ? (
+        <StickyPaywall loggedIn={Boolean(user)} product={paywallProduct} locale={locale} />
+      ) : null}
 
       {canViewFull ? (
         <AskAI context={{ kind: "post", slug: post.slug }} loggedIn={Boolean(user)} />
       ) : null}
 
-      <p className={`mt-8 pt-4 text-[11px] leading-relaxed ${readerMode ? "border-t border-[#d8d0c2] text-[#6b5c3f]" : "border-t border-border text-muted-soft"}`}>
-        {t.detailDisclaimer}
-      </p>
+      <div className="mt-8 pt-4">
+        <LegalDisclaimer variant="compact" />
+      </div>
       </ReaderModeShell>
     </div>
     </ReaderPrefsProvider>

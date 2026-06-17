@@ -332,7 +332,7 @@ create table if not exists daily_briefings (
 -- ============================================================
 create table if not exists social_ops_posts (
   id              char(36)     not null primary key,
-  content_type    enum('analysis','news','rating_change','value_chain','custom') not null,
+  content_type    enum('analysis','chokepoint','news','rating_change','value_chain','custom') not null,
   ref_key         varchar(128) null,
   title           varchar(512) not null,
   canonical_url   varchar(1024) not null,

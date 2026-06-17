@@ -28,6 +28,7 @@ export async function reconcileExpiredSubscription(userId: string): Promise<void
   await mysqlQuery(
     `update users
        set subscription_status = 'inactive',
+           entitlement_brief = 0,
            entitlement_research = 0,
            entitlement_options = 0
      where id = ?

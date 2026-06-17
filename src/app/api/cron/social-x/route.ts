@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { requireAdmin } from "@/lib/admin";
 import { runJobTs } from "@/lib/observability";
-import { runAutoPostX, runAutoPostXBatch, runTrackRecordPostX } from "@/lib/social/auto-post-x";
+import { runAutoPostX, runAutoPostXBatch, runChokepointPostXBatch, runTrackRecordPostX } from "@/lib/social/auto-post-x";
 import { isXPostingEnabled } from "@/lib/social/x-api";
 
 export const runtime = "nodejs";
@@ -43,6 +43,18 @@ async function handle(req: Request): Promise<NextResponse> {
       const result = await runTrackRecordPostX({ dryRun, lang });
       ctx.itemsOk = result.action === "posted" ? 1 : 0;
       ctx.meta = { enabled: isXPostingEnabled(), dryRun, mode: "record", ...result };
+      return result;
+    }
+    if (mode === "chokepoint") {
+      const result = await runChokepointPostXBatch({
+        count: count ?? 2,
+        dryRun,
+        lang,
+      });
+      ctx.itemsTotal = result.target;
+      ctx.itemsOk = result.posted;
+      ctx.itemsFailed = result.failed;
+      ctx.meta = { enabled: isXPostingEnabled(), dryRun, mode: "chokepoint", ...result };
       return result;
     }
     const useBatch = mode === "analysis" || (count != null && count > 1);

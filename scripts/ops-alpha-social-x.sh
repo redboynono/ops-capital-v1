@@ -8,13 +8,13 @@ set -euo pipefail
 ENV_FILE="${ENV_FILE:-/opt/ops-alpha/.env.production}"
 LOG="${LOG:-/var/log/ops-alpha-social-x.log}"
 BASE_URL="${BASE_URL:-https://opscapital.com}"
-# 模式：analysis（默认，发当日研报叙事 thread）/ record（战绩应验帖）
+# 模式：analysis（默认）/ chokepoint（卡点 thread）/ record（战绩帖）
 MODE="${1:-analysis}"
-if [ "$MODE" = "record" ]; then
-  QUERY="mode=record"
-else
-  QUERY="count=5&mode=analysis"
-fi
+case "$MODE" in
+  record) QUERY="mode=record" ;;
+  chokepoint) QUERY="mode=chokepoint&count=2" ;;
+  *) QUERY="count=5&mode=analysis" ;;
+esac
 
 ts() { date '+%Y-%m-%dT%H:%M:%S%z'; }
 

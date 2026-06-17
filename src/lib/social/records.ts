@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mysqlQuery } from "@/lib/mysql";
 
-export type SocialContentType = "analysis" | "news" | "rating_change" | "value_chain" | "custom";
+export type SocialContentType = "analysis" | "chokepoint" | "news" | "rating_change" | "value_chain" | "custom";
 export type SocialOpsStatus = "draft" | "posted_x" | "posted_xhs" | "done";
 
 export type SocialOpsRecord = {
@@ -167,6 +167,15 @@ export async function isAnalysisPostedToday(refKey: string): Promise<boolean> {
     `select count(*) as n from social_ops_posts
       where content_type = 'analysis' and ref_key = ?
         and posted_x_at >= curdate()`,
+    [refKey],
+  );
+  return Number(rows[0]?.n ?? 0) > 0;
+}
+
+export async function isRefPostedEver(refKey: string): Promise<boolean> {
+  const rows = await mysqlQuery<{ n: number }[]>(
+    `select count(*) as n from social_ops_posts
+      where ref_key = ? and posted_x_at is not null`,
     [refKey],
   );
   return Number(rows[0]?.n ?? 0) > 0;

@@ -320,3 +320,64 @@ export async function computePortfolio(picks: Pick[]): Promise<PortfolioSummary>
     worstClosed,
   };
 }
+
+export type PicksTeaser = {
+  totalPicks: number;
+  closedCount: number;
+  openCount: number;
+  winRatePct: number | null;
+  avgReturnPct: number | null;
+  avgOpenUnrealizedPct: number | null;
+  bestClosed: { ticker: string; pct: number } | null;
+};
+
+let picksTeaserCache: { at: number; data: PicksTeaser } | null = null;
+const PICKS_TEASER_TTL_MS = 30 * 60 * 1000;
+
+/** 轻量精选战绩摘要（30 分钟缓存），用于 pricing / paywall 信任条 */
+export async function getPicksTeaser(): Promise<PicksTeaser | null> {
+  if (picksTeaserCache && Date.now() - picksTeaserCache.at < PICKS_TEASER_TTL_MS) {
+    return picksTeaserCache.data;
+  }
+  try {
+    const picks = await listPublishedPicks();
+    if (picks.length === 0) return null;
+    const summary = await computePortfolio(picks);
+    const data: PicksTeaser = {
+      totalPicks: summary.totalPicks,
+      closedCount: summary.closedCount,
+      openCount: summary.openCount,
+      winRatePct: summary.winRatePct,
+      avgReturnPct: summary.avgReturnPct,
+      avgOpenUnrealizedPct: summary.avgOpenUnrealizedPct,
+      bestClosed: summary.bestClosed
+        ? { ticker: summary.bestClosed.ticker, pct: summary.bestClosed.pct }
+        : null,
+    };
+    picksTeaserCache = { at: Date.now(), data };
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/** 负战绩或样本不足时不展示信任条 */
+export function isPicksTeaserPresentable(teaser: PicksTeaser): boolean {
+  if (teaser.closedCount >= 2) {
+    const winOk = teaser.winRatePct == null || teaser.winRatePct >= 50;
+    const retOk = teaser.avgReturnPct == null || teaser.avgReturnPct >= 0;
+    return winOk && retOk;
+  }
+  if (teaser.closedCount === 1 && (teaser.avgReturnPct ?? -Infinity) > 0) {
+    return true;
+  }
+  if (
+    teaser.openCount >= 2 &&
+    (teaser.avgOpenUnrealizedPct ?? -Infinity) > 0 &&
+    teaser.bestClosed != null &&
+    teaser.bestClosed.pct > 0
+  ) {
+    return true;
+  }
+  return false;
+}

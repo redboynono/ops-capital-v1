@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { LegalDisclaimer } from "@/components/legal-disclaimer";
 import { PricingProductGrid } from "@/components/pricing-product-grid";
 import { TrackRecordBar } from "@/components/track-record-bar";
 import { getSessionUser } from "@/lib/auth";
 import { logEvent } from "@/lib/observability";
-import { hasOptionAlphaAccess, hasResearchAccess } from "@/lib/entitlements";
+import { hasBriefAccess, hasOptionAlphaAccess, hasResearchAccess } from "@/lib/entitlements";
 import { getDictionary, getLocale } from "@/lib/i18n";
 import { isMockMode } from "@/lib/payments/gateways";
 import { TRIAL_DAYS, type ProductLine } from "@/lib/payments/plans";
@@ -30,7 +31,10 @@ export default async function PricingPage({
   const user = await getSessionUser();
   const mock = isMockMode();
   const initialProduct: ProductLine =
-    sp.product === "research" || sp.product === "options" || sp.product === "bundle"
+    sp.product === "brief" ||
+    sp.product === "research" ||
+    sp.product === "options" ||
+    sp.product === "bundle"
       ? sp.product
       : "bundle";
 
@@ -61,6 +65,9 @@ export default async function PricingPage({
         <div className="card mb-5 border-[color:var(--success)] p-4">
           <p className="label-caps text-[color:var(--success)]">{p.currentEntitlement}</p>
           <ul className="mt-2 space-y-1 text-[13px]">
+            <li>
+              Chokepoint Brief：{hasBriefAccess(user) && !hasResearchAccess(user) ? p.briefOn : hasResearchAccess(user) ? p.researchOn : p.briefOff}
+            </li>
             <li>
               Research Pro：{hasResearchAccess(user) ? p.researchOn : p.researchOff}
             </li>
@@ -100,8 +107,8 @@ export default async function PricingPage({
 
       <section className="card mt-6 p-5">
         <p className="label-caps">{p.compareTitle}</p>
-        <div className="mt-3 grid gap-3 text-[12px] md:grid-cols-3">
-          {(["research", "options", "bundle"] as const).map((key) => (
+        <div className="mt-3 grid gap-3 text-[12px] sm:grid-cols-2 lg:grid-cols-4">
+          {(["brief", "research", "options", "bundle"] as const).map((key) => (
             <div key={key} className="rounded border border-border/80 p-3">
               <p className="font-bold text-foreground">{p.products[key].title}</p>
               <ul className="mt-2 space-y-1 text-muted">
@@ -130,6 +137,10 @@ export default async function PricingPage({
             {p.contactSupport}
           </Link>
         </p>
+      </section>
+
+      <section className="mt-6">
+        <LegalDisclaimer />
       </section>
     </div>
   );

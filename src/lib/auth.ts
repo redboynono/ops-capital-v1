@@ -20,6 +20,7 @@ type DbUser = {
   full_name: string | null;
   subscription_status: string | null;
   subscription_end_date: string | null;
+  entitlement_brief: number | null;
   entitlement_research: number | null;
   entitlement_options: number | null;
   email_briefing_enabled: number | null;
@@ -31,6 +32,7 @@ export type SessionUser = {
   fullName: string | null;
   subscriptionStatus: string;
   subscriptionEndDate: string | null;
+  entitlementBrief: boolean;
   entitlementResearch: boolean;
   entitlementOptions: boolean;
   emailBriefingEnabled: boolean;
@@ -87,6 +89,7 @@ function toSessionUser(u: DbUser): SessionUser {
   const ent = resolveEntitlements({
     subscription_status: u.subscription_status,
     subscription_end_date: u.subscription_end_date,
+    entitlement_brief: u.entitlement_brief,
     entitlement_research: u.entitlement_research,
     entitlement_options: u.entitlement_options,
   });
@@ -97,6 +100,7 @@ function toSessionUser(u: DbUser): SessionUser {
     fullName: u.full_name,
     subscriptionStatus: u.subscription_status ?? "inactive",
     subscriptionEndDate: u.subscription_end_date,
+    entitlementBrief: ent.brief,
     entitlementResearch: ent.research,
     entitlementOptions: ent.options,
     emailBriefingEnabled: Number(u.email_briefing_enabled ?? 0) === 1,
@@ -113,7 +117,7 @@ async function loadSessionUser(): Promise<SessionUser | null> {
 
   const rows = await mysqlQuery<DbUser[]>(
     `select id, email, full_name, subscription_status, subscription_end_date,
-            entitlement_research, entitlement_options, email_briefing_enabled
+            entitlement_brief, entitlement_research, entitlement_options, email_briefing_enabled
        from users where id = ? limit 1`,
     [payload.userId],
   );
@@ -125,7 +129,7 @@ async function loadSessionUser(): Promise<SessionUser | null> {
     await reconcileExpiredSubscription(user.id);
     const refreshed = await mysqlQuery<DbUser[]>(
       `select id, email, full_name, subscription_status, subscription_end_date,
-              entitlement_research, entitlement_options, email_briefing_enabled
+              entitlement_brief, entitlement_research, entitlement_options, email_briefing_enabled
          from users where id = ? limit 1`,
       [user.id],
     );

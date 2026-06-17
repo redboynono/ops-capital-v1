@@ -6,6 +6,7 @@ import {
   getGrowthKpi,
   getGrowthTrend,
   getRecentXPosts,
+  getSocialCtrByContentType,
   getTopPaths,
   getUtmBreakdown,
 } from "@/lib/admin-growth";
@@ -101,7 +102,7 @@ export default async function GrowthDashboardPage() {
     );
   }
 
-  const [kpi, trend, topPaths, utm, recentX, funnel7d, funnel30d] = await Promise.all([
+  const [kpi, trend, topPaths, utm, recentX, funnel7d, funnel30d, socialCtr] = await Promise.all([
     getGrowthKpi(),
     getGrowthTrend(30),
     getTopPaths(10),
@@ -109,6 +110,7 @@ export default async function GrowthDashboardPage() {
     getRecentXPosts(8),
     getConversionFunnel(7),
     getConversionFunnel(30),
+    getSocialCtrByContentType(30),
   ]);
 
   const maxDau = Math.max(1, ...trend.map((t) => t.dau));
@@ -147,7 +149,7 @@ export default async function GrowthDashboardPage() {
           </div>
           <div className="rounded border border-border bg-surface-muted p-3">
             <p className="font-bold text-accent-strong">② 社媒分发</p>
-            <p className="mt-1 text-muted">每日 5 篇 analysis 英文长文 → X（Premium）· UTM + 短链</p>
+            <p className="mt-1 text-muted">卡点 cron + 每日 analysis · 中英 thread · UTM 短链</p>
           </div>
           <div className="rounded border border-border bg-surface-muted p-3">
             <p className="font-bold text-accent-strong">③ 流量承接</p>
@@ -249,6 +251,46 @@ export default async function GrowthDashboardPage() {
                 </div>
               ))
             )}
+          </div>
+        </section>
+
+        {/* X 内容 CTR（30d） */}
+        <section className="card p-4 lg:col-span-2">
+          <h2 className="text-[12px] font-bold text-foreground">X 内容点击（30 天）</h2>
+          <p className="mt-0.5 text-[11px] text-muted">
+            短链 clicks / 发帖数 · 对比 chokepoint vs daily vs 战绩
+          </p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-[12px]">
+              <thead>
+                <tr className="border-b border-border text-[10px] uppercase tracking-wide text-muted">
+                  <th className="py-2 pr-3">类型</th>
+                  <th className="py-2 pr-3">发帖</th>
+                  <th className="py-2 pr-3">点击</th>
+                  <th className="py-2">点击/帖</th>
+                </tr>
+              </thead>
+              <tbody>
+                {socialCtr.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-4 text-muted">
+                      暂无社媒发帖或短链数据
+                    </td>
+                  </tr>
+                ) : (
+                  socialCtr.map((row) => (
+                    <tr key={row.bucket} className="border-b border-border/60">
+                      <td className="py-2 pr-3 font-medium text-foreground">{row.bucket}</td>
+                      <td className="py-2 pr-3 mono">{row.posts}</td>
+                      <td className="py-2 pr-3 mono">{row.clicks}</td>
+                      <td className="py-2 mono text-accent-strong">
+                        {row.clicks_per_post.toFixed(1)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
 

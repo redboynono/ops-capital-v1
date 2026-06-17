@@ -302,6 +302,50 @@ export async function getConversionFunnel(windowDays = 7): Promise<ConversionFun
 
 export type UtmSourceRow = { utm_source: string; views_7d: number };
 
+export type SocialCtrRow = {
+  bucket: string;
+  posts: number;
+  clicks: number;
+  clicks_per_post: number;
+};
+
+/** X 短链 CTR proxy：posts × short_links.clicks，按内容类型分桶（30 天） */
+export async function getSocialCtrByContentType(days = 30): Promise<SocialCtrRow[]> {
+  const rows = await mysqlQuery<
+    Array<{ bucket: string; posts: string | number; clicks: string | number }>
+  >(
+    `select
+       case
+         when p.content_type = 'chokepoint' or p.ref_key like 'chokepoint-%' then 'chokepoint'
+         when p.ref_key like 'daily-%' then 'daily'
+         when p.ref_key like 'track_record_%' then 'track_record'
+         when p.content_type = 'news' then 'news'
+         when p.content_type = 'rating_change' then 'rating_change'
+         when p.content_type = 'value_chain' then 'value_chain'
+         else coalesce(p.content_type, 'other')
+       end as bucket,
+       count(distinct p.ref_key) as posts,
+       coalesce(sum(sl.clicks), 0) as clicks
+     from social_ops_posts p
+     left join short_links sl on sl.ref_key = p.ref_key and sl.utm_source = 'x'
+     where p.posted_x_at >= date_sub(current_timestamp, interval ? day)
+       and p.posted_x_at is not null
+     group by bucket
+     order by clicks desc`,
+    [days],
+  );
+  return rows.map((r) => {
+    const posts = Number(r.posts);
+    const clicks = Number(r.clicks);
+    return {
+      bucket: r.bucket,
+      posts,
+      clicks,
+      clicks_per_post: posts > 0 ? clicks / posts : 0,
+    };
+  });
+}
+
 export async function getUtmBreakdown(): Promise<UtmSourceRow[]> {
   return mysqlQuery<UtmSourceRow[]>(
     `select coalesce(nullif(json_unquote(json_extract(meta_json, '$.utm_source')), 'null'), '(direct)') as utm_source,

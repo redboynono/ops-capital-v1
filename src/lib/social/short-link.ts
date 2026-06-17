@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { mysqlQuery } from "@/lib/mysql";
+import { logEvent } from "@/lib/observability";
 import { siteUrl } from "@/lib/seo";
 import { withUtm } from "@/lib/social/utm";
 
@@ -77,11 +78,29 @@ export function ensureEnglishLandingForX(targetUrl: string): string {
 }
 
 export async function resolveShortLink(code: string): Promise<string | null> {
-  const rows = await mysqlQuery<Pick<ShortLinkRow, "target_url">[]>(
-    "select target_url from short_links where code = ? limit 1",
+  const rows = await mysqlQuery<
+    Pick<ShortLinkRow, "target_url" | "ref_key" | "utm_campaign" | "utm_source">[]
+  >(
+    "select target_url, ref_key, utm_campaign, utm_source from short_links where code = ? limit 1",
     [code],
   );
   if (!rows[0]) return null;
   await mysqlQuery("update short_links set clicks = clicks + 1 where code = ?", [code]);
-  return ensureEnglishLandingForX(rows[0].target_url);
+  const row = rows[0];
+  logEvent("short_link_click", {
+    meta: {
+      code,
+      ref_key: row.ref_key,
+      utm_campaign: row.utm_campaign,
+      utm_source: row.utm_source,
+      content_bucket: row.ref_key?.startsWith("chokepoint-")
+        ? "chokepoint"
+        : row.ref_key?.startsWith("daily-")
+          ? "daily"
+          : row.ref_key?.startsWith("track_record_")
+            ? "track_record"
+            : row.ref_key,
+    },
+  });
+  return ensureEnglishLandingForX(row.target_url);
 }

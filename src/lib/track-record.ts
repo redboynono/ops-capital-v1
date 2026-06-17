@@ -1,7 +1,7 @@
 /**
- * 评级战绩（Track Record）：当前评级自「连续保持起点」以来的收益 vs SPY。
+ * 评级战绩（Track Record）：当前评级自「最近一次进入该 verdict 桶」以来的收益 vs SPY。
  *
- * 起点 = ticker_ratings_history 中当前 ops_verdict 连续 streak 的最早快照时间。
+ * 起点 = 评级变动事件（如 HOLD→BUY；若多次进出 BUY 桶则取最近一次进入 BUY 的时间）。
  * 价格：美股/SPY 走 Massive（Polygon）aggregates；港股/加密走 Yahoo（price-history 1h 缓存）。
  */
 
@@ -30,7 +30,46 @@ export type TrackRecordSummary = {
   buyWinRate: number | null; // BUY 组跑赢 SPY 比例
   buyAvgReturn: number | null;
   buyAvgExcess: number | null;
+  /** 样本 < 20 时聚合指标仅作参考 */
+  accumulating: boolean;
+  topBuys: TrackRecordRow[];
+  sellCount: number;
+  /** SELL 组负收益占比（「正确」看空） */
+  sellCorrectRate: number | null;
 };
+
+const BUY_VERDICTS = new Set<Verdict>(["BUY", "STRONG_BUY"]);
+const SELL_VERDICTS = new Set<Verdict>(["SELL", "STRONG_SELL"]);
+const MIN_BUY_SAMPLE_FOR_HEADLINE = 20;
+
+/** 评级变动事件起点：最近一次进入当前 verdict 桶的时间（如 HOLD→BUY） */
+function eventSinceMs(snaps: HistRow[], current: Verdict): number | null {
+  const inBucket = (v: Verdict | null | undefined) => {
+    if (!v) return false;
+    if (BUY_VERDICTS.has(current)) return BUY_VERDICTS.has(v);
+    if (SELL_VERDICTS.has(current)) return SELL_VERDICTS.has(v);
+    return v === current;
+  };
+
+  let eventMs: number | null = null;
+  for (let i = 0; i < snaps.length; i++) {
+    const v = snaps[i].ops_verdict;
+    if (!inBucket(v)) continue;
+    const prev = i > 0 ? snaps[i - 1].ops_verdict : null;
+    if (!inBucket(prev)) {
+      eventMs = new Date(snaps[i].captured_at).getTime();
+    }
+  }
+  return eventMs;
+}
+
+/** 聚合指标是否适合对外展示（信任条 / X 战绩帖） */
+export function isTrackRecordPresentable(summary: Pick<TrackRecordSummary, "buyCount" | "buyWinRate" | "buyAvgExcess">): boolean {
+  if (summary.buyCount < 5) return false;
+  if (summary.buyWinRate != null && summary.buyWinRate < 50) return false;
+  if (summary.buyAvgExcess != null && summary.buyAvgExcess < 0) return false;
+  return true;
+}
 
 type HistRow = { symbol: string; ops_verdict: Verdict | null; captured_at: string };
 type RatedRow = {
@@ -67,6 +106,7 @@ export type TrackRecordTeaser = {
   buyAvgExcess: number | null;
   buyAvgReturn: number | null;
   top: Array<{ symbol: string; excessPct: number | null; returnPct: number | null }>;
+  accumulating: boolean;
 };
 
 // 进程内缓存：战绩计算涉及多次价格序列拉取，付费墙/定价页频繁渲染需缓存
@@ -90,6 +130,7 @@ export async function getTrackRecordTeaser(): Promise<TrackRecordTeaser | null> 
       buyAvgExcess: s.buyAvgExcess,
       buyAvgReturn: s.buyAvgReturn,
       top,
+      accumulating: s.accumulating,
     };
     teaserCache = { at: Date.now(), data };
     return data;
@@ -126,13 +167,8 @@ export async function getTrackRecord(): Promise<TrackRecordSummary> {
   const candidates: { r: RatedRow; sinceMs: number }[] = [];
   for (const r of rated) {
     const snaps = histBySymbol.get(r.symbol) ?? [];
-    // 从最新往回走，找当前 verdict 连续 streak 的最早快照
-    let sinceMs: number | null = null;
-    for (let i = snaps.length - 1; i >= 0; i--) {
-      if (snaps[i].ops_verdict !== r.ops_verdict) break;
-      sinceMs = new Date(snaps[i].captured_at).getTime();
-    }
-    if (sinceMs == null) continue; // 无历史快照，无法计收益
+    const sinceMs = eventSinceMs(snaps, r.ops_verdict);
+    if (sinceMs == null) continue;
     candidates.push({ r, sinceMs });
   }
 
@@ -184,11 +220,22 @@ export async function getTrackRecord(): Promise<TrackRecordSummary> {
   const wins = buys.filter((x) => (x.excessPct ?? 0) > 0).length;
   const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
+  const sells = rows.filter(
+    (x) => (x.verdict === "SELL" || x.verdict === "STRONG_SELL") && x.returnPct != null,
+  );
+  const sellCorrect = sells.filter((x) => (x.returnPct ?? 0) < 0).length;
+
+  const topBuys = buys.slice(0, 3);
+
   return {
     rows,
     buyCount: buys.length,
     buyWinRate: buys.length ? (wins / buys.length) * 100 : null,
     buyAvgReturn: avg(buys.map((x) => x.returnPct!).filter((v) => v != null)),
     buyAvgExcess: avg(buys.map((x) => x.excessPct!).filter((v) => v != null)),
+    accumulating: buys.length < MIN_BUY_SAMPLE_FOR_HEADLINE,
+    topBuys,
+    sellCount: sells.length,
+    sellCorrectRate: sells.length ? (sellCorrect / sells.length) * 100 : null,
   };
 }

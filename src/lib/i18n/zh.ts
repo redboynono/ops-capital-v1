@@ -162,6 +162,8 @@ export const zh = {
     currentEntitlement: "当前权益",
     researchOn: "✓ 已开通",
     researchOff: "— 未开通",
+    briefOn: "✓ 已开通",
+    briefOff: "— 未开通",
     optionOn: "✓ 已开通",
     optionOff: "— 未开通",
     expires: "会员到期：",
@@ -204,6 +206,15 @@ export const zh = {
       wechatFailed: "订单失败，请重新发起",
     },
     products: {
+      brief: {
+        title: "Chokepoint Brief",
+        subtitle: "AI 供应链卡点深度 · 入门档",
+        bullets: [
+          "全部 chokepoint-* 卡点研报全文",
+          "六层价值链 L0–L5 框架",
+          "英文 X thread 同步摘要",
+        ],
+      },
       research: {
         title: "Research Pro",
         subtitle: "可跟的精选 + 深度研报全文",
@@ -302,6 +313,14 @@ export const zh = {
     periodWeek: "近一周",
     periodMonth: "近一月",
   },
+  compliance: {
+    title: "研究与合规声明",
+    body: "OPS Alpha 内容为 AI 辅助生成的研究材料，不构成投资建议、买卖推荐或喊单。我们不代客理财，不保证收益。请独立判断并自行承担风险。",
+    inline: "非投资建议 · 请独立研究",
+    compact: "非投资建议，不构成买卖推荐。",
+    termsLink: "服务条款",
+    trackRecordLink: "可验证评级战绩",
+  },
   analysis: {
     label: "Research · 深度研报",
     title: "机构级深度研报",
@@ -341,6 +360,7 @@ export const zh = {
   },
   paywall: {
     research: "Research Pro · 解锁可跟单的精选与研报",
+    brief: "Chokepoint Brief · 解锁 AI 供应链卡点深度",
     options: "Option Alpha · 解锁可执行期权 Idea",
     bundle: "全站 Bundle · 解锁全部能力",
     note: "订阅后立即生效 · 时长在到期日上叠加",
@@ -348,6 +368,11 @@ export const zh = {
     yearly: "年付",
     login: "登录",
     products: {
+      brief: {
+        title: "Chokepoint Brief",
+        body: "解锁全部 chokepoint-* 卡点研报全文与价值链框架。",
+        cta: "订阅 Chokepoint Brief · $2.99/月",
+      },
       research: {
         title: "Research Pro",
         body: "解锁目标价、止损、完整投资逻辑与深度研报全文。",

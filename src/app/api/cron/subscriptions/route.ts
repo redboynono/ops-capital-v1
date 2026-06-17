@@ -21,6 +21,7 @@ export async function POST() {
   const result = await mysqlQuery<{ affectedRows?: number }>(
     `update users
        set subscription_status = 'inactive',
+           entitlement_brief = 0,
            entitlement_research = 0,
            entitlement_options = 0
      where subscription_status = 'active'

@@ -3,11 +3,12 @@
  * plan_id 写入订单 metadata，Webhook 到账后开通对应 entitlement。
  */
 
-export type ProductLine = "research" | "options" | "bundle";
+export type ProductLine = "brief" | "research" | "options" | "bundle";
 
 export type DurationKey = "month" | "quarter" | "year";
 
 export type PlanId =
+  | "brief_month"
   | "research_month"
   | "research_quarter"
   | "research_year"
@@ -78,6 +79,10 @@ function plan(
 }
 
 export const PLANS: Record<PlanId, Plan> = {
+  brief_month: plan("brief", "month", 299, "Chokepoint Brief · 月付", {
+    tagline: "仅卡点深度 · 入门档",
+  }),
+
   // 金额单位为美分，须与 Stripe Checkout line_items.unit_amount 一致。
   // 定价梯度：单线 < Bundle < 两条单线之和；季付 ~13% off，年付 ~34% off。
   research_month: plan("research", "month", 999, "Research · 月付"),
@@ -109,7 +114,7 @@ export const PLANS: Record<PlanId, Plan> = {
 
 export const PLAN_IDS = Object.keys(PLANS) as PlanId[];
 
-export const PRODUCT_LINES: ProductLine[] = ["research", "options", "bundle"];
+export const PRODUCT_LINES: ProductLine[] = ["brief", "research", "options", "bundle"];
 
 export function getPlan(planId: string): Plan | null {
   return (PLANS as Record<string, Plan | undefined>)[planId] ?? null;
@@ -124,6 +129,9 @@ export function durationFromPlanId(planId: string): DurationKey {
 }
 
 export function plansForProduct(product: ProductLine): Plan[] {
+  if (product === "brief") {
+    return [PLANS.brief_month];
+  }
   return (["month", "quarter", "year"] as DurationKey[]).map(
     (d) => PLANS[`${product}_${d}` as PlanId],
   );
@@ -138,6 +146,15 @@ export const PRODUCT_COPY: Record<
   ProductLine,
   { title: string; subtitle: string; bullets: string[] }
 > = {
+  brief: {
+    title: "Chokepoint Brief",
+    subtitle: "AI 供应链卡点 · 入门档",
+    bullets: [
+      "全部 chokepoint-* 卡点研报全文",
+      "六层价值链 L0–L5 框架",
+      "升级 Research Pro 解锁全部深度",
+    ],
+  },
   research: {
     title: "Research Pro",
     subtitle: "可跟的精选 + 深度研报全文",

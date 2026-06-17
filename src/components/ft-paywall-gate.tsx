@@ -31,7 +31,9 @@ export function FtPaywallGate({
   const monthlyPrice = monthly ? `$${(monthly.amount / 100).toFixed(2)}` : null;
   const memberName = product === "options"
     ? "Option Alpha"
-    : en ? "Research Pro" : "Research Pro";
+    : product === "brief"
+      ? (en ? "Chokepoint Brief" : "Chokepoint Brief")
+      : en ? "Research Pro" : "Research Pro";
 
   // 被锁的「可执行」字段——让读者看到「就差这一步」，付费买的是可执行性
   const lockedFields = product === "options"

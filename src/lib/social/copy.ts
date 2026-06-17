@@ -428,8 +428,8 @@ function buildAnalysisThread(
       : `🧱 AI 价值链 · ${layer.id} ${layer.nameZh}\n整条 AI 扩张必经的「${layer.roleZh}」。\n\n${tk} ${title}`;
   } else if (isChoke) {
     hook = en
-      ? `🔎 AI supply-chain chokepoint\nThe overlooked upstream node the AI buildout can't bypass.\n\n${tk} ${title}`
-      : `🔎 AI 供应链卡点\n被忽视、却绕不开的上游瓶颈。\n\n${tk} ${title}`;
+      ? `🔎 AI supply-chain chokepoint\nThe structural bottleneck hyperscalers can't route around—before it hits the headline names.\n\n${tk} ${title}`
+      : `🔎 AI 供应链卡点\n大厂算力扩张绕不开的结构性瓶颈——发生在 headline 名字之前。\n\n${tk} ${title}`;
   } else {
     hook = en ? `🔬 OPS deep research\n\n${tk} ${title}` : `🔬 OPS 深度研报\n\n${tk} ${title}`;
   }
@@ -442,9 +442,13 @@ function buildAnalysisThread(
     : "";
 
   // ---- Tweet 3: 框架 + 付费墙钩子 ----
-  const frameworkTweet = en
-    ? `How we frame it:\n${RESEARCH_SECTIONS.map((s) => `· ${s}`).join("\n")}\n\nFull thesis, target price & risk map → Research Pro.`
-    : `我们的拆解框架：\n${RESEARCH_SECTIONS_ZH.map((s) => `· ${s}`).join("\n")}\n\n完整逻辑、目标价与风险图 → Research Pro。`;
+  const frameworkTweet = isChoke
+    ? en
+      ? `Framework we use:\n${RESEARCH_SECTIONS.map((s) => `· ${s}`).join("\n")}\n\nFull chokepoint map → Chokepoint Brief from $2.99/mo, or Research Pro for all deep dives.`
+      : `我们的拆解框架：\n${RESEARCH_SECTIONS_ZH.map((s) => `· ${s}`).join("\n")}\n\n完整卡点逻辑 → Chokepoint Brief $2.99/月起，或 Research Pro 解锁全部深度。`
+    : en
+      ? `How we frame it:\n${RESEARCH_SECTIONS.map((s) => `· ${s}`).join("\n")}\n\nFull thesis, target price & risk map → Research Pro.`
+      : `我们的拆解框架：\n${RESEARCH_SECTIONS_ZH.map((s) => `· ${s}`).join("\n")}\n\n完整逻辑、目标价与风险图 → Research Pro。`;
 
   // ---- Tweet 4: 链接 + 标签 ----
   const tags = xHashtags(input.tickers, isChoke ? ["#SupplyChain", "#Chokepoint"] : ["#ValueChain"]);
@@ -452,7 +456,11 @@ function buildAnalysisThread(
     ? `Read the full breakdown ↓\n${url}\n\n${tags}`
     : `完整研报 ↓\n${url}\n\n${tags}`;
 
-  return [hook, thesisTweet, frameworkTweet, linkTweet].filter(Boolean).map(tweet);
+  const disclaimerTweet = en
+    ? `Not investment advice · not a buy/sell call · DYOR.\nVerifiable OPS ratings track record on site.`
+    : `非投资建议 · 非喊单 · 请独立判断。\n站内可验证 OPS 评级战绩。`;
+
+  return [hook, thesisTweet, frameworkTweet, linkTweet, disclaimerTweet].filter(Boolean).map(tweet);
 }
 
 /**

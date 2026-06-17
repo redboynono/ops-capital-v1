@@ -1,13 +1,14 @@
-import { buildAnalysisSocialPool, type SocialPoolItem } from "@/lib/social/pool";
+import { buildAnalysisSocialPool, buildChokepointSocialPool, type SocialPoolItem } from "@/lib/social/pool";
 import {
   countAnalysisPostedToday,
   createSocialOpsRecord,
   isAnalysisPostedToday,
+  isRefPostedEver,
   updateSocialOpsRecord,
 } from "@/lib/social/records";
 import { isXPostingEnabled, postThread } from "@/lib/social/x-api";
 import { buildTrackRecordThread, type TrackRecordCallLite } from "@/lib/social/copy";
-import { getTrackRecord } from "@/lib/track-record";
+import { getTrackRecord, isTrackRecordPresentable } from "@/lib/track-record";
 import { withUtm } from "@/lib/social/utm";
 import { mysqlQuery } from "@/lib/mysql";
 
@@ -247,6 +248,87 @@ export async function runAutoPostX(opts: { dryRun?: boolean } = {}): Promise<Aut
   return { ok: true, action: "skipped", reason: batch.reason ?? "no item" };
 }
 
+/** 卡点 franchise：中英 thread 二次传播，默认每轮 2 篇 */
+export async function runChokepointPostXBatch(opts: {
+  count?: number;
+  dryRun?: boolean;
+  spacingMs?: number;
+  lang?: "zh" | "en";
+} = {}): Promise<AutoPostXBatchResult> {
+  if (!isXPostingEnabled()) {
+    return {
+      ok: true,
+      action: "skipped",
+      reason: "X credentials missing",
+      target: 0,
+      posted: 0,
+      failed: 0,
+      skipped: 0,
+      results: [],
+    };
+  }
+
+  const target = Math.max(1, Math.min(5, opts.count ?? 2));
+  const spacingMs = opts.spacingMs ?? Number(process.env.X_POST_SPACING_MS ?? DEFAULT_SPACING_MS);
+  const pool = await buildChokepointSocialPool(target + 5);
+  const picks: SocialPoolItem[] = [];
+  for (const item of pool) {
+    if (await isRefPostedEver(item.refKey)) continue;
+    picks.push(item);
+    if (picks.length >= target) break;
+  }
+
+  if (picks.length === 0) {
+    return {
+      ok: true,
+      action: "skipped",
+      reason: "no unposted chokepoint analysis",
+      target,
+      posted: 0,
+      failed: 0,
+      skipped: 0,
+      results: [],
+    };
+  }
+
+  if (opts.dryRun) {
+    return {
+      ok: true,
+      action: "dry_run",
+      target: picks.length,
+      posted: 0,
+      failed: 0,
+      skipped: 0,
+      results: picks.map((item) => ({ ok: true as const, item, tweetId: "dry-run", recordId: "dry-run" })),
+    };
+  }
+
+  const results: AutoPostXBatchResult["results"] = [];
+  let posted = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (let i = 0; i < picks.length; i++) {
+    const item = picks[i]!;
+    const out = await postOne(item, opts.lang);
+    results.push(out);
+    if (out.ok) posted++;
+    else if (out.error === "already posted today") skipped++;
+    else failed++;
+    if (i < picks.length - 1 && spacingMs > 0 && out.ok) await sleep(spacingMs);
+  }
+
+  return {
+    ok: failed === 0,
+    action: failed > 0 && posted > 0 ? "partial" : "posted",
+    target: picks.length,
+    posted,
+    failed,
+    skipped,
+    results,
+  };
+}
+
 export type TrackRecordPostResult = {
   ok: boolean;
   action: "skipped" | "dry_run" | "posted" | "error";
@@ -279,9 +361,15 @@ export async function runTrackRecordPostX(
   }
 
   const tr = await getTrackRecord();
-  const top: TrackRecordCallLite[] = tr.rows
-    .filter((r) => (r.verdict === "BUY" || r.verdict === "STRONG_BUY") && r.excessPct != null)
-    .slice(0, 3)
+  if (!isTrackRecordPresentable(tr)) {
+    return {
+      ok: true,
+      action: "skipped",
+      reason: `metrics not presentable (buyCount=${tr.buyCount}, winRate=${tr.buyWinRate?.toFixed(0) ?? "—"}, avgExcess=${tr.buyAvgExcess?.toFixed(1) ?? "—"})`,
+    };
+  }
+  const top: TrackRecordCallLite[] = tr.topBuys
+    .filter((r) => r.excessPct != null)
     .map((r) => ({
       symbol: r.symbol,
       verdict: r.verdict,
