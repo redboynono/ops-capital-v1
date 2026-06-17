@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { requireAdmin } from "@/lib/admin";
 import { runJobTs } from "@/lib/observability";
-import { runAutoPostX, runAutoPostXBatch } from "@/lib/social/auto-post-x";
+import { runAutoPostX, runAutoPostXBatch, runTrackRecordPostX } from "@/lib/social/auto-post-x";
 import { isXPostingEnabled } from "@/lib/social/x-api";
 
 export const runtime = "nodejs";
@@ -39,6 +39,12 @@ async function handle(req: Request): Promise<NextResponse> {
   const force = url.searchParams.get("force") === "1";
 
   const out = await runJobTs({ jobName: "social-x-auto-post" }, async (ctx) => {
+    if (mode === "record") {
+      const result = await runTrackRecordPostX({ dryRun, lang });
+      ctx.itemsOk = result.action === "posted" ? 1 : 0;
+      ctx.meta = { enabled: isXPostingEnabled(), dryRun, mode: "record", ...result };
+      return result;
+    }
     const useBatch = mode === "analysis" || (count != null && count > 1);
     if (useBatch) {
       const result = await runAutoPostXBatch({ count, dryRun, lang, force });

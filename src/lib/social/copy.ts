@@ -1,5 +1,5 @@
 import { buildShareBundle, type ShareInput } from "@/lib/share/payload";
-import type { ValueChainLayer } from "@/lib/marketing/ai-value-chain";
+import { findLayerForSymbol, type ValueChainLayer } from "@/lib/marketing/ai-value-chain";
 import type { RatingChange } from "@/lib/rating-changes";
 import { X_CHAR_LIMIT } from "@/lib/social/constants";
 import { getOrCreateShortLink } from "@/lib/social/short-link";
@@ -389,6 +389,142 @@ export async function buildAnalysisXVariants(
     variants.push({ locale, xCopy: buildXCopy(input, url, locale), xUrl: url });
   }
   return variants;
+}
+
+// ============================== 叙事 thread（六层框架钩子） ============================== //
+
+export type XThread = { locale: Locale; tweets: string[]; xUrl: string };
+
+/** 单条裁剪到 X 上限 */
+function tweet(s: string): string {
+  return truncateX(s.replace(/\n{3,}/g, "\n\n").trim(), X_CHAR_LIMIT);
+}
+
+/**
+ * 把一篇深度/卡点研报拆成叙事 thread：
+ *  1) 钩子：六层价值链定位 + 标的 + 标题（卡点报告用「supply-chain chokepoint」框架）
+ *  2) 核心论点（thesis 摘要）
+ *  3) OPS 四段研究框架 + 付费墙钩子
+ *  4) 链接 + 标签
+ */
+function buildAnalysisThread(
+  input: Extract<SocialCopyInput, { type: "post" }>,
+  url: string,
+  locale: Locale,
+): string[] {
+  const en = locale !== "zh";
+  const ticker = input.tickers?.[0];
+  const isChoke = input.slug.startsWith("chokepoint-");
+  const layer = ticker ? findLayerForSymbol(ticker) : null;
+  const title = en ? pickEn(input.title, input.title_en) : input.title;
+  const thesis = extractCoreSummary(input.excerpt, input.excerpt_en, locale);
+  const tk = ticker ? `$${ticker}` : "";
+
+  // ---- Tweet 1: 钩子 ----
+  let hook: string;
+  if (layer) {
+    hook = en
+      ? `🧱 AI value chain · ${layer.id} — ${layer.nameEn}\nThe ${layer.roleEn.toLowerCase()} layer the whole buildout flows through.\n\n${tk} ${title}`
+      : `🧱 AI 价值链 · ${layer.id} ${layer.nameZh}\n整条 AI 扩张必经的「${layer.roleZh}」。\n\n${tk} ${title}`;
+  } else if (isChoke) {
+    hook = en
+      ? `🔎 AI supply-chain chokepoint\nThe overlooked upstream node the AI buildout can't bypass.\n\n${tk} ${title}`
+      : `🔎 AI 供应链卡点\n被忽视、却绕不开的上游瓶颈。\n\n${tk} ${title}`;
+  } else {
+    hook = en ? `🔬 OPS deep research\n\n${tk} ${title}` : `🔬 OPS 深度研报\n\n${tk} ${title}`;
+  }
+
+  // ---- Tweet 2: 核心论点 ----
+  const thesisTweet = thesis
+    ? en
+      ? `Thesis 🧵\n${thesis}`
+      : `核心观点 🧵\n${thesis}`
+    : "";
+
+  // ---- Tweet 3: 框架 + 付费墙钩子 ----
+  const frameworkTweet = en
+    ? `How we frame it:\n${RESEARCH_SECTIONS.map((s) => `· ${s}`).join("\n")}\n\nFull thesis, target price & risk map → Research Pro.`
+    : `我们的拆解框架：\n${RESEARCH_SECTIONS_ZH.map((s) => `· ${s}`).join("\n")}\n\n完整逻辑、目标价与风险图 → Research Pro。`;
+
+  // ---- Tweet 4: 链接 + 标签 ----
+  const tags = xHashtags(input.tickers, isChoke ? ["#SupplyChain", "#Chokepoint"] : ["#ValueChain"]);
+  const linkTweet = en
+    ? `Read the full breakdown ↓\n${url}\n\n${tags}`
+    : `完整研报 ↓\n${url}\n\n${tags}`;
+
+  return [hook, thesisTweet, frameworkTweet, linkTweet].filter(Boolean).map(tweet);
+}
+
+/**
+ * 深度/卡点研报：生成中英两条 thread（各自短链落地对应语种）。
+ */
+export async function buildAnalysisThreadVariants(
+  input: Extract<SocialCopyInput, { type: "post" }>,
+): Promise<XThread[]> {
+  const path = `/${input.kind === "analysis" ? "analysis" : "news"}/${input.slug}`;
+  const campaign = slugifyCampaign(`${input.kind}_${input.slug}`);
+  const refKey = input.slug;
+  const out: XThread[] = [];
+  for (const locale of ["en", "zh"] as const) {
+    let url = withUtm(path, { source: "x", campaign, lang: locale });
+    try {
+      const short = await getOrCreateShortLink({ path, source: "x", campaign, refKey, lang: locale });
+      url = short.url;
+    } catch {
+      // 短链失败回退完整 URL
+    }
+    out.push({ locale, tweets: buildAnalysisThread(input, url, locale), xUrl: url });
+  }
+  return out;
+}
+
+// ============================== 战绩应验贴 ============================== //
+
+export type TrackRecordCallLite = {
+  symbol: string;
+  verdict: string;
+  since: string;
+  returnPct: number | null;
+  spyPct: number | null;
+  excessPct: number | null;
+};
+
+function fmtPct(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+}
+
+/**
+ * 「战绩应验」thread：用真实的「评级以来 vs SPY 超额」数据做社会证明。
+ * 不喊单、不晒杠杆，只陈述已验证的历史判断。
+ */
+export function buildTrackRecordThread(opts: {
+  top: TrackRecordCallLite[];
+  buyCount: number;
+  winRate: number | null;
+  avgExcess: number | null;
+  url: string;
+  locale: Locale;
+}): string[] {
+  const en = opts.locale !== "zh";
+  const top = opts.top.slice(0, 3);
+  if (top.length === 0) return [];
+
+  const head = en
+    ? `📒 OPS ratings — receipts, not hype 🧵\n\nAcross ${opts.buyCount} BUY calls: ${fmtPct(opts.winRate)} beat SPY, avg excess ${fmtPct(opts.avgExcess)} since rating.`
+    : `📒 OPS 评级战绩 · 用数据说话 🧵\n\n${opts.buyCount} 个买入评级中：${fmtPct(opts.winRate)} 跑赢 SPY，评级以来平均超额 ${fmtPct(opts.avgExcess)}。`;
+
+  const callTweets = top.map((c) =>
+    en
+      ? `${`$${c.symbol}`} · rated ${c.verdict.replace("_", " ")} since ${c.since}\nReturn ${fmtPct(c.returnPct)} vs SPY ${fmtPct(c.spyPct)} → excess ${fmtPct(c.excessPct)}.`
+      : `${`$${c.symbol}`} · ${c.since} 起评 ${c.verdict.replace("_", " ")}\n收益 ${fmtPct(c.returnPct)}，同期 SPY ${fmtPct(c.spyPct)} → 超额 ${fmtPct(c.excessPct)}。`,
+  );
+
+  const tail = en
+    ? `Track record updates live on the terminal. Not investment advice.\n${opts.url}\n\n#AI #Semiconductors #FinTwit #OPSAlpha`
+    : `战绩在终端实时更新，非投资建议。\n${opts.url}\n\n#AI #半导体 #投研 #OPSAlpha`;
+
+  return [head, ...callTweets, tail].filter(Boolean).map(tweet);
 }
 
 /** 生成文案并解析 X 短链接（池子/API 使用） */

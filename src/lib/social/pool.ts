@@ -1,7 +1,13 @@
 import { listPosts } from "@/lib/posts";
 import { listRecentRatingChanges } from "@/lib/rating-changes";
 import { AI_VALUE_CHAIN_LAYERS } from "@/lib/marketing/ai-value-chain";
-import { buildAnalysisXVariants, buildSocialCopyAsync, type LocalizedXPost } from "@/lib/social/copy";
+import {
+  buildAnalysisThreadVariants,
+  buildAnalysisXVariants,
+  buildSocialCopyAsync,
+  type LocalizedXPost,
+  type XThread,
+} from "@/lib/social/copy";
 import { listSocialOpsRecords } from "@/lib/social/records";
 
 export type SocialPoolItem = {
@@ -19,6 +25,8 @@ export type SocialPoolItem = {
   shortCode?: string;
   /** 多语言变体：每条内容发中/英两条 X，分别落地中文版/英文版 */
   xVariants?: LocalizedXPost[];
+  /** 叙事 thread 变体（六层框架钩子）；优先于 xVariants 发送 */
+  xThreads?: XThread[];
 };
 
 const ANALYSIS_REPOST_COOLDOWN_DAYS = 30;
@@ -113,16 +121,18 @@ export async function buildAnalysisSocialPool(limit = 10): Promise<SocialPoolIte
       90 + englishScore(p),
       copy,
     );
-    item.xVariants = await buildAnalysisXVariants({
-      type: "post",
-      kind: "analysis",
+    const variantInput = {
+      type: "post" as const,
+      kind: "analysis" as const,
       title: p.title,
       title_en: p.title_en,
       slug: p.slug,
       excerpt: p.excerpt,
       excerpt_en: p.excerpt_en,
       tickers: p.tickers,
-    });
+    };
+    item.xVariants = await buildAnalysisXVariants(variantInput);
+    item.xThreads = await buildAnalysisThreadVariants(variantInput);
     items.push(item);
     if (items.length >= limit) break;
   }

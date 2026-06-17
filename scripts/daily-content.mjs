@@ -23,6 +23,7 @@ import mysql from "mysql2/promise";
 import crypto from "node:crypto";
 import { runJob } from "./lib/job-runner.mjs";
 import { fetchYahooQuote, isCryptoSymbol, toYahooSymbol } from "./lib/yahoo-quote.mjs";
+import { shuffledThemes } from "./lib/chokepoint-themes.mjs";
 
 // ============================== args ============================== //
 
@@ -35,6 +36,8 @@ const args = Object.fromEntries(
 const COUNT = Math.min(5, Math.max(1, Number(args.count ?? 3)));
 const DRY_RUN = args["dry-run"] === "true";
 const MANUAL_TICKERS = args.tickers ? args.tickers.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean) : null;
+// 「卡点 / 价值链」franchise 模式：--mode=chokepoint（每跑写 N 篇上游卡点深度，全部 premium）
+const MODE = args.mode === "chokepoint" ? "chokepoint" : "daily";
 
 // ============================== config ============================== //
 
@@ -87,6 +90,49 @@ const SYSTEM_PROMPT = `# Role: 华尔街顶级对冲基金首席投资官 (CIO) 
 4. 公司主营业务以 factsheet 的 industry / weburl / news headlines 为准。如果 factsheet 的 ipo 日期距今不到 18 个月，明确标注 "近期 IPO、公开财务数据有限"。
 5. **factsheet 未列的数字一律写 "未公开披露"**，或在该数字后加 *（推断）* 标注。
 6. 严禁把同名旧标的（如 "CRCL" 在 2024 以前训练语料里可能是其他公司）误配成当前 ticker。以 factsheet 的 name + ipo 为准。`;
+
+// 「卡点 / 价值链」franchise 专用 system prompt：锚定 OPS 自有的 AI 六层价值链 (L0–L5)
+const CHOKEPOINT_SYSTEM_PROMPT = `# Role: 华尔街顶级对冲基金 CIO & AI 供应链「卡点」猎手
+
+## Profile:
+你是一位精通 AI 算力供应链拆解的资深策略师。你的方法论独特：不追显而易见的大票（NVDA / MSFT / META），
+而是沿产业链向上游挖掘「整个 AI 扩张必须流经、却被市场忽视」的结构性瓶颈（chokepoint），
+在机构轮动入场之前埋伏。
+
+## OPS Capital 的 AI 产业六层价值链框架（必须使用此框架定位标的）：
+- L0 晶圆与制造极限：物理命脉层（晶圆代工、光刻、HBM/先进封装、化合物半导体衬底）
+- L1 芯片与硬件设计：绝对定价权层（GPU/ASIC、互联芯片）
+- L2 数据中心基建与算力云：新时代数字地产（电力/电网、散热/液冷、机柜供电）
+- L3 云计算与分发渠道：生态入口与蓄水池（超大规模云厂）
+- L4 大模型研发商：风暴中心（OpenAI/Anthropic 等）
+- L5 终端应用与智能体：未来价值终点（Agent、垂直 SaaS、具身智能/机器人）
+
+## Objective:
+为专业高净值投资者输出一篇「卡点级」机构深度研报。论证为什么该标的是产业链上的结构性瓶颈：
+谁在下游、为什么必须依赖它、集中度（垄断/双寡头）有多高、为何当前仍被错误定价。
+
+## Output Style:
+- Tone: 专业、冷酷、一针见血；可用强类比（如「光子学的霍尔木兹海峡」）但不浮夸、不喊单。
+- Structure: 清晰 Markdown，首行为 # 标题（<=40 字，含公司名/ticker，可点明卡点角色）。
+- BLUF: 第一段一句话给出立场 + 依据 factsheet current_price 的目标价/估值预期。
+- 必须包含这几个小节：
+  ## 价值链定位（L0–L5）：明确该标的处于哪一层、卡住的是哪个上下游依赖。
+  ## 卡点论证：下游依赖方、产能/技术集中度、替代难度与切换成本。
+  ## 催化剂与估值博弈：未来 4 个季度的催化剂、被重估的触发条件。
+  ## 风险与证伪：什么情况下卡点叙事失效（二供出现、技术路线切换、需求证伪、流动性/稀释）。
+- 文章全长 1500-2500 字；给出 3-6 个月 / 12-18 个月时间窗口。
+
+## Guardrails（违反即不合格）：
+- 禁止保证收益、禁止「翻几倍」式喊单、禁止晒杠杆战绩。
+- 必须充分披露风险与不确定性；小盘股需提示流动性与波动风险。
+- 不引用 factsheet 之外的"内幕"或捏造数据。
+
+## 数据使用准则（最高优先级）：
+1. user prompt 里的 **Factsheet** 是唯一可信数据源（实时股价、市值、估值、IPO、近 14 天 news）。
+2. 涉及股价/市值/52W/PE/PS 必须严格用 factsheet 数字，禁止依赖训练记忆。
+3. factsheet 未列的数字写 "未公开披露" 或加 *（推断）* 标注。
+4. 若 ipo 距今不到 18 个月，标注 "近期 IPO、公开财务数据有限"。
+5. 严禁把同名旧标的误配成当前 ticker，以 factsheet 的 name + ipo 为准。`;
 
 // 行业 × 主题矩阵：随机组合生成当日 focus，避免每次都写"长期定价权"
 const SECTOR_THEMES = {
@@ -322,7 +368,8 @@ function parseOutput(raw) {
   return { title, body: cleaned, excerpt };
 }
 
-async function callModel(target, focus, factsheet, attempt = 1) {
+async function callModel(target, focus, factsheet, opts = {}) {
+  const { attempt = 1, systemPrompt = SYSTEM_PROMPT } = opts;
   const userPrompt = `请基于下方 Factsheet 撰写一篇机构级 Markdown 研报。
 
 # 标的
@@ -352,7 +399,7 @@ ${factsheet}
       temperature: 0.4,
       max_tokens: OPENAI_MAX_TOKENS,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
     }),
@@ -363,7 +410,7 @@ ${factsheet}
     if ((res.status === 529 || res.status === 429) && attempt < 3) {
       console.warn(`  [${res.status}] retry ${attempt}/2 in 10s...`);
       await sleep(10000);
-      return callModel(target, focus, factsheet, attempt + 1);
+      return callModel(target, focus, factsheet, { attempt: attempt + 1, systemPrompt });
     }
     throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
   }
@@ -374,7 +421,7 @@ ${factsheet}
     if (data.base_resp.status_code === 2064 && attempt < 3) {
       console.warn(`  [overloaded:2064] retry ${attempt}/2 in 12s...`);
       await sleep(12000);
-      return callModel(target, focus, factsheet, attempt + 1);
+      return callModel(target, focus, factsheet, { attempt: attempt + 1, systemPrompt });
     }
     throw new Error(`MiniMax error ${data.base_resp.status_code}: ${msg}`);
   }
@@ -591,9 +638,114 @@ async function selectManual(pool, symbols) {
   return rows.map((r) => ({ ...r, days: null, ratingBonus: null, score: null }));
 }
 
+// ============================== chokepoint franchise ============================== //
+
+/**
+ * 「卡点 / 价值链」模式：沿六层价值链挑 COUNT 个被忽视的上游瓶颈标的，
+ * 用 CHOKEPOINT_SYSTEM_PROMPT 生成 premium 深度，slug 前缀 chokepoint-。
+ */
+async function runChokepoint(pool, ctx) {
+  const themes = shuffledThemes();
+  const picks = [];
+  for (const theme of themes) {
+    if (picks.length >= COUNT) break;
+    for (const cand of theme.candidates) {
+      const safeSym = cand.symbol.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const slug = `chokepoint-${safeSym}-${todayStamp()}`;
+      const [existing] = await pool.query("select id from posts where slug = ? limit 1", [slug]);
+      if (existing.length === 0 && !picks.some((p) => p.cand.symbol === cand.symbol)) {
+        picks.push({ theme, cand, slug });
+        break;
+      }
+    }
+  }
+
+  console.log(`\n> chokepoint picks (${picks.length}/${COUNT}):`);
+  for (const p of picks) console.log(`  ${p.cand.symbol.padEnd(6)} ${p.theme.layer}  ${p.theme.nameZh}`);
+
+  if (DRY_RUN) {
+    console.log("\n> dry-run: no API call, no DB write.");
+    if (ctx) { ctx.itemsTotal = picks.length; ctx.itemsOk = 0; ctx.meta = { mode: "chokepoint", dryRun: true }; }
+    return;
+  }
+
+  let inserted = 0;
+  let failed = 0;
+  for (let i = 0; i < picks.length; i++) {
+    const { theme, cand, slug } = picks[i];
+    const tag = `[choke ${i + 1}/${picks.length}] ${cand.symbol} (${theme.layer}·${theme.id})`;
+    const target = buildTarget(cand);
+    const focus = `${theme.framingZh}\n该标的在 OPS 六层价值链中的定位：${theme.layer} · ${theme.nameZh}。请据此论证它为何是结构性卡点。`;
+    try {
+      console.log(`${tag} fetching factsheet…`);
+      const factsheet = await buildFactsheet(cand);
+      console.log(`${tag} generating chokepoint report (factsheet ${factsheet.length} chars)…`);
+      const raw = await callModel(target, focus, factsheet, { systemPrompt: CHOKEPOINT_SYSTEM_PROMPT });
+      const { title, body, excerpt } = parseOutput(raw);
+      if (!title || !body || body.length < 400) {
+        console.warn(`${tag} output too short (${body?.length ?? 0} chars), skipping`);
+        failed++;
+        continue;
+      }
+
+      let titleEn = null;
+      let excerptEn = null;
+      let contentEn = null;
+      try {
+        console.log(`${tag} translating to English…`);
+        const meta = await translateTitleExcerpt(title, excerpt);
+        titleEn = meta.titleEn;
+        contentEn = await translatePostContent(body);
+        excerptEn = excerptFromContent(contentEn) || meta.excerptEn;
+        console.log(`${tag} ✓ EN ready (${contentEn.length} chars)`);
+      } catch (e) {
+        console.warn(`${tag} EN translation failed, storing zh only: ${e.message}`);
+      }
+
+      const id = crypto.randomUUID();
+      await pool.execute(
+        `insert into posts (id, title, title_en, slug, kind, excerpt, excerpt_en, content, content_en, is_premium, is_published)
+         values (?, ?, ?, ?, 'analysis', ?, ?, ?, ?, 1, 1)`,
+        [id, title, titleEn, slug, excerpt, excerptEn, body, contentEn],
+      );
+      await pool.execute(
+        `insert ignore into post_tickers (post_id, symbol) values (?, ?)`,
+        [id, cand.symbol],
+      );
+      inserted++;
+      console.log(`${tag} ✓ "${title}" (${body.length} chars)  slug=${slug}`);
+      await prewarmPaywallSummary(slug, tag);
+    } catch (err) {
+      failed++;
+      console.error(`${tag} ✗ ${err.message}`);
+    }
+    await sleep(1200);
+  }
+
+  console.log(`\n===== chokepoint done =====\ninserted: ${inserted}\nfailed:   ${failed}`);
+  if (ctx) {
+    ctx.itemsTotal = picks.length;
+    ctx.itemsOk = inserted;
+    ctx.itemsFailed = failed;
+    ctx.meta = { mode: "chokepoint", count: COUNT };
+  }
+}
+
 // ============================== main ============================== //
 
 async function main(ctx) {
+  if (MODE === "chokepoint") {
+    console.log(`> OPS Alpha chokepoint generator`);
+    console.log(`> date=${todayISO()}  count=${COUNT}  dryRun=${DRY_RUN}  mode=chokepoint`);
+    const pool = mysql.createPool(MYSQL_URL);
+    try {
+      await runChokepoint(pool, ctx);
+    } finally {
+      await pool.end();
+    }
+    return;
+  }
+
   console.log(`> OPS Alpha daily content generator`);
   console.log(`> date=${todayISO()}  count=${COUNT}  dryRun=${DRY_RUN}  manual=${MANUAL_TICKERS ? MANUAL_TICKERS.join(",") : "(auto)"}`);
   const pool = mysql.createPool(MYSQL_URL);

@@ -5,7 +5,10 @@ import {
   isAnalysisPostedToday,
   updateSocialOpsRecord,
 } from "@/lib/social/records";
-import { isXPostingEnabled, postTweet } from "@/lib/social/x-api";
+import { isXPostingEnabled, postThread } from "@/lib/social/x-api";
+import { buildTrackRecordThread, type TrackRecordCallLite } from "@/lib/social/copy";
+import { getTrackRecord } from "@/lib/track-record";
+import { withUtm } from "@/lib/social/utm";
 import { mysqlQuery } from "@/lib/mysql";
 
 export type AutoPostXResult =
@@ -61,25 +64,29 @@ async function postOne(
     return { ok: false, item, error: "already posted today" };
   }
 
-  // 每篇默认发中/英两条；指定 lang 时仅发该语言一条；无变体时回退单条英文文案
-  const fallback = [{ locale: "en" as const, xCopy: item.xCopy, xUrl: item.xUrl }];
-  const allVariants =
-    item.xVariants && item.xVariants.length > 0 ? item.xVariants : fallback;
-  const variants = lang
-    ? allVariants.filter((v) => v.locale === lang)
-    : allVariants;
-  if (variants.length === 0) {
+  // 每个语种要发的「推文序列」：优先叙事 thread，回退单条文案
+  type Send = { locale: "zh" | "en"; tweets: string[]; url: string };
+  let sends: Send[];
+  if (item.xThreads && item.xThreads.length > 0) {
+    sends = item.xThreads.map((t) => ({ locale: t.locale, tweets: t.tweets, url: t.xUrl }));
+  } else {
+    const fallback = [{ locale: "en" as const, xCopy: item.xCopy, xUrl: item.xUrl }];
+    const vs = item.xVariants && item.xVariants.length > 0 ? item.xVariants : fallback;
+    sends = vs.map((v) => ({ locale: v.locale, tweets: [v.xCopy], url: v.xUrl }));
+  }
+  if (lang) sends = sends.filter((s) => s.locale === lang);
+  if (sends.length === 0) {
     return { ok: false, item, error: `no ${lang} variant available` };
   }
 
   const tweetIds: string[] = [];
   let lastError: string | null = null;
-  for (let i = 0; i < variants.length; i++) {
-    const v = variants[i]!;
+  for (let i = 0; i < sends.length; i++) {
+    const s = sends[i]!;
     try {
-      const { tweetId } = await postTweet(v.xCopy);
-      tweetIds.push(`${v.locale}=${tweetId}`);
-      if (i < variants.length - 1) await sleep(INTRA_VARIANT_SPACING_MS);
+      const { tweetIds: ids } = await postThread(s.tweets);
+      tweetIds.push(`${s.locale}=${ids[0]}${ids.length > 1 ? `(+${ids.length - 1})` : ""}`);
+      if (i < sends.length - 1) await sleep(INTRA_VARIANT_SPACING_MS);
     } catch (e) {
       lastError = e instanceof Error ? e.message : "post failed";
     }
@@ -89,14 +96,14 @@ async function postOne(
     return { ok: false, item, error: lastError ?? "post failed" };
   }
 
-  // 一篇内容只落 1 条 DB 记录（保持「N 篇/天」计数语义），notes 记录中英两条 tweet id
-  const primary = variants[0]!;
+  // 一篇内容只落 1 条 DB 记录（保持「N 篇/天」计数语义），notes 记录中英 thread 首条 id
+  const primary = sends[0]!;
   const record = await createSocialOpsRecord({
     contentType: item.contentType,
     refKey: item.refKey,
     title: item.title,
-    canonicalUrl: primary.xUrl,
-    xCopy: variants.map((v) => `[${v.locale}]\n${v.xCopy}`).join("\n\n---\n\n"),
+    canonicalUrl: primary.url,
+    xCopy: sends.map((s) => `[${s.locale}]\n${s.tweets.join("\n— — —\n")}`).join("\n\n===\n\n"),
     xhsCopy: item.xhsCopy,
     utmCampaign: item.utmCampaign,
     createdBy: "cron:x",
@@ -238,4 +245,99 @@ export async function runAutoPostX(opts: { dryRun?: boolean } = {}): Promise<Aut
   const failed = batch.results.find((r) => !r.ok);
   if (failed && !failed.ok) return { ok: false, error: failed.error };
   return { ok: true, action: "skipped", reason: batch.reason ?? "no item" };
+}
+
+export type TrackRecordPostResult = {
+  ok: boolean;
+  action: "skipped" | "dry_run" | "posted" | "error";
+  reason?: string;
+  tweetIds?: string[];
+  preview?: Record<string, string[]>;
+};
+
+/**
+ * 战绩应验帖：用真实「评级以来 vs SPY 超额」数据发一条 thread（中/英）。
+ * 每自然日最多发一次；落地公开的 /pricing（含信任条 + 试用）。不喊单、不晒杠杆。
+ */
+export async function runTrackRecordPostX(
+  opts: { dryRun?: boolean; lang?: "zh" | "en" } = {},
+): Promise<TrackRecordPostResult> {
+  if (!isXPostingEnabled()) {
+    return { ok: true, action: "skipped", reason: "X credentials missing" };
+  }
+
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const refKey = `track_record_${stamp}`;
+  if (!opts.dryRun) {
+    const dup = await mysqlQuery<{ n: number }[]>(
+      `select count(*) as n from social_ops_posts where ref_key = ? and posted_x_at >= curdate()`,
+      [refKey],
+    );
+    if (Number(dup[0]?.n ?? 0) > 0) {
+      return { ok: true, action: "skipped", reason: "already posted today" };
+    }
+  }
+
+  const tr = await getTrackRecord();
+  const top: TrackRecordCallLite[] = tr.rows
+    .filter((r) => (r.verdict === "BUY" || r.verdict === "STRONG_BUY") && r.excessPct != null)
+    .slice(0, 3)
+    .map((r) => ({
+      symbol: r.symbol,
+      verdict: r.verdict,
+      since: r.since,
+      returnPct: r.returnPct,
+      spyPct: r.spyPct,
+      excessPct: r.excessPct,
+    }));
+  if (top.length === 0) {
+    return { ok: true, action: "skipped", reason: "no validated buy calls yet" };
+  }
+
+  const langs: ("en" | "zh")[] = opts.lang ? [opts.lang] : ["en", "zh"];
+  const preview: Record<string, string[]> = {};
+  const tweetIds: string[] = [];
+  let lastError: string | null = null;
+  for (let i = 0; i < langs.length; i++) {
+    const locale = langs[i]!;
+    const url = withUtm("/pricing", { source: "x", campaign: refKey, lang: locale });
+    const tweets = buildTrackRecordThread({
+      top,
+      buyCount: tr.buyCount,
+      winRate: tr.buyWinRate,
+      avgExcess: tr.buyAvgExcess,
+      url,
+      locale,
+    });
+    preview[locale] = tweets;
+    if (opts.dryRun || tweets.length === 0) continue;
+    try {
+      const { tweetIds: ids } = await postThread(tweets);
+      tweetIds.push(`${locale}=${ids[0]}${ids.length > 1 ? `(+${ids.length - 1})` : ""}`);
+      if (i < langs.length - 1) await sleep(INTRA_VARIANT_SPACING_MS);
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : "post failed";
+    }
+  }
+
+  if (opts.dryRun) return { ok: true, action: "dry_run", preview };
+  if (tweetIds.length === 0) return { ok: false, action: "error", reason: lastError ?? "post failed" };
+
+  const record = await createSocialOpsRecord({
+    contentType: "custom",
+    refKey,
+    title: "OPS ratings track record",
+    canonicalUrl: withUtm("/pricing", { source: "x", campaign: refKey }),
+    xCopy: Object.entries(preview)
+      .map(([l, ts]) => `[${l}]\n${ts.join("\n— — —\n")}`)
+      .join("\n\n===\n\n"),
+    xhsCopy: "",
+    utmCampaign: refKey,
+    createdBy: "cron:x-record",
+  });
+  await updateSocialOpsRecord(record.id, {
+    markPostedX: true,
+    notes: `track_record ${tweetIds.join(" ")}${lastError ? ` (partial: ${lastError})` : ""}`,
+  });
+  return { ok: true, action: "posted", tweetIds };
 }

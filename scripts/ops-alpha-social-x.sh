@@ -8,10 +8,17 @@ set -euo pipefail
 ENV_FILE="${ENV_FILE:-/opt/ops-alpha/.env.production}"
 LOG="${LOG:-/var/log/ops-alpha-social-x.log}"
 BASE_URL="${BASE_URL:-https://opscapital.com}"
+# 模式：analysis（默认，发当日研报叙事 thread）/ record（战绩应验帖）
+MODE="${1:-analysis}"
+if [ "$MODE" = "record" ]; then
+  QUERY="mode=record"
+else
+  QUERY="count=5&mode=analysis"
+fi
 
 ts() { date '+%Y-%m-%dT%H:%M:%S%z'; }
 
-echo "[$(ts)] ===== social-x START =====" >> "$LOG"
+echo "[$(ts)] ===== social-x START (mode=${MODE}) =====" >> "$LOG"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "[$(ts)] ERROR: env file not found: $ENV_FILE" >> "$LOG"
@@ -29,7 +36,7 @@ if [ -z "${CRON_SECRET:-}" ]; then
 fi
 
 HTTP_CODE=$(curl -sS -o /tmp/ops-alpha-social-x.json -w "%{http_code}" \
-  -X POST "${BASE_URL}/api/cron/social-x?count=5&mode=analysis" \
+  -X POST "${BASE_URL}/api/cron/social-x?${QUERY}" \
   -H "Authorization: Bearer ${CRON_SECRET}" \
   -H "Content-Type: application/json")
 

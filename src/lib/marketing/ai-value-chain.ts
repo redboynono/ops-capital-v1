@@ -142,6 +142,16 @@ export function getLayerSymbols(layer: ValueChainLayer): string[] {
   ];
 }
 
+/** 某个 ticker 所属的价值链层（用于 X 叙事 thread 的六层框架钩子）；找不到返回 null */
+export function findLayerForSymbol(symbol: string): ValueChainLayer | null {
+  const s = symbol.toUpperCase();
+  return (
+    AI_VALUE_CHAIN_LAYERS.find((l) =>
+      l.representatives.some((r) => r.symbol?.toUpperCase() === s),
+    ) ?? null
+  );
+}
+
 export function getAllValueChainSymbols(): string[] {
   return [
     ...new Set(AI_VALUE_CHAIN_LAYERS.flatMap((l) => getLayerSymbols(l))),

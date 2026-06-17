@@ -129,7 +129,10 @@ export async function getValidOAuth2AccessToken(): Promise<string | null> {
   return refreshAccessToken(stored.refreshToken);
 }
 
-export async function postTweetOAuth2(text: string): Promise<{ tweetId: string; text: string }> {
+export async function postTweetOAuth2(
+  text: string,
+  replyToId?: string,
+): Promise<{ tweetId: string; text: string }> {
   const token = await getValidOAuth2AccessToken();
   if (!token) throw new Error("X OAuth2 not authorized — visit /api/admin/x-oauth/start");
 
@@ -139,7 +142,9 @@ export async function postTweetOAuth2(text: string): Promise<{ tweetId: string; 
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify(
+      replyToId ? { text, reply: { in_reply_to_tweet_id: replyToId } } : { text },
+    ),
   });
   const json = (await res.json().catch(() => ({}))) as {
     data?: { id?: string; text?: string };
