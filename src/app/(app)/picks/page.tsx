@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { ShareButton } from "@/components/share/share-button";
 import { computeManyPerformance, computePortfolio, listPublishedPicks, type Pick, type PickPerformance } from "@/lib/picks";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
+import type { Dictionary } from "@/lib/i18n/zh";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "OPS 精选 · 月度精选荐股" };
 
 function fmtPct(n: number | null | undefined): string {
   if (n == null || !isFinite(n)) return "—";
@@ -23,11 +25,11 @@ function fmtDate(s: string | null | undefined): string {
   return new Date(s).toISOString().slice(0, 10);
 }
 
-function convictionBadge(c: Pick["conviction"]) {
+function convictionBadge(c: Pick["conviction"], p: Dictionary["picks"]) {
   const map = {
-    high: { label: "高信念", cls: "text-[color:var(--success)] border-[color:var(--success)]" },
-    medium: { label: "中等", cls: "text-foreground-soft border-border" },
-    low: { label: "低信念", cls: "text-muted border-border" },
+    high: { label: p.conviction.high, cls: "text-[color:var(--success)] border-[color:var(--success)]" },
+    medium: { label: p.conviction.medium, cls: "text-foreground-soft border-border" },
+    low: { label: p.conviction.low, cls: "text-muted border-border" },
   };
   const m = map[c] ?? map.medium;
   return (
@@ -44,7 +46,7 @@ function returnClass(pct: number | null | undefined): string {
   return "text-foreground-soft";
 }
 
-function OpenCard({ pick, perf }: { pick: Pick; perf: PickPerformance }) {
+function OpenCard({ pick, perf, p }: { pick: Pick; perf: PickPerformance; p: Dictionary["picks"] }) {
   const href = `/picks/${pick.slug}`;
   return (
     <div className="card relative block p-4 transition hover:border-accent hover:-translate-y-0.5">
@@ -79,7 +81,7 @@ function OpenCard({ pick, perf }: { pick: Pick; perf: PickPerformance }) {
         <div>
           <div className="flex items-center gap-2">
             <span className="font-mono text-[16px] font-bold text-accent-strong">{pick.ticker_symbol}</span>
-            {convictionBadge(pick.conviction)}
+            {convictionBadge(pick.conviction, p)}
             {pick.is_premium ? <span className="badge-premium">PRO</span> : null}
           </div>
           <h3 className="mt-1 text-[15px] font-bold leading-tight text-foreground">{pick.title}</h3>
@@ -94,17 +96,17 @@ function OpenCard({ pick, perf }: { pick: Pick; perf: PickPerformance }) {
 
       <div className="relative mt-3 grid grid-cols-4 gap-2 border-t border-border pt-3 text-[11px]">
         <div>
-          <p className="label-caps text-[9px]">入场</p>
+          <p className="label-caps text-[9px]">{p.entry}</p>
           <p className="mt-0.5 font-mono font-semibold">{fmtPrice(pick.entry_price)}</p>
           <p className="font-mono text-[9px] text-muted">{fmtDate(pick.entry_date)}</p>
         </div>
         <div>
-          <p className="label-caps text-[9px]">现价</p>
+          <p className="label-caps text-[9px]">{p.current}</p>
           <p className="mt-0.5 font-mono font-semibold">{fmtPrice(perf.currentPrice)}</p>
-          <p className="font-mono text-[9px] text-muted">持有 {perf.daysHeld}D</p>
+          <p className="font-mono text-[9px] text-muted">{fmt(p.heldFmt, { n: perf.daysHeld })}</p>
         </div>
         <div>
-          <p className="label-caps text-[9px]">目标</p>
+          <p className="label-caps text-[9px]">{p.target}</p>
           <p className="mt-0.5 font-mono font-semibold">{fmtPrice(pick.target_price)}</p>
           {pick.target_price && perf.currentPrice ? (
             <p className="font-mono text-[9px] text-muted">
@@ -113,7 +115,7 @@ function OpenCard({ pick, perf }: { pick: Pick; perf: PickPerformance }) {
           ) : null}
         </div>
         <div>
-          <p className="label-caps text-[9px]">止损</p>
+          <p className="label-caps text-[9px]">{p.stop}</p>
           <p className="mt-0.5 font-mono font-semibold text-[color:var(--danger)]">
             {fmtPrice(pick.stop_price)}
           </p>
@@ -124,7 +126,7 @@ function OpenCard({ pick, perf }: { pick: Pick; perf: PickPerformance }) {
   );
 }
 
-function ClosedRow({ pick, perf }: { pick: Pick; perf: PickPerformance }) {
+function ClosedRow({ pick, perf, p }: { pick: Pick; perf: PickPerformance; p: Dictionary["picks"] }) {
   return (
     <Link
       href={`/picks/${pick.slug}`}
@@ -143,6 +145,8 @@ function ClosedRow({ pick, perf }: { pick: Pick; perf: PickPerformance }) {
 }
 
 export default async function PicksPage() {
+  const locale = await getLocale();
+  const p = getDictionary(locale).picks;
   const all = await listPublishedPicks();
   const perfMap = await computeManyPerformance(all);
   const summary = await computePortfolio(all);
@@ -155,50 +159,46 @@ export default async function PicksPage() {
       {/* Hero header */}
       <header className="mb-5 border-b border-border pb-4">
         <div className="flex items-center gap-2">
-          <span className="label-caps">OPS Picks</span>
+          <span className="label-caps">{p.label}</span>
           <span className="badge-premium">PRO</span>
         </div>
-        <h1 className="mt-1 text-3xl font-bold text-foreground">OPS 精选</h1>
-        <p className="mt-1 max-w-2xl text-[13px] text-muted">
-          OPS 编辑团队基于 OPS Quant Score + 因子评级 + 基本面复核，每月挑选 2-3 个高信念仓位，
-          给出入场价、目标价、止损、催化剂、风险与退出纪律。对标 Seeking Alpha Alpha Picks。
-        </p>
+        <h1 className="mt-1 text-3xl font-bold text-foreground">{p.title}</h1>
+        <p className="mt-1 max-w-2xl text-[13px] text-muted">{p.subtitle}</p>
       </header>
 
-      {/* Performance banner */}
       <section className="card mb-6 overflow-hidden">
         <div className="border-b border-border px-4 py-2">
-          <span className="label-caps">组合绩效</span>
+          <span className="label-caps">{p.performance}</span>
         </div>
         <div className="grid grid-cols-2 divide-x divide-y divide-border sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
           <div className="px-4 py-3">
-            <p className="label-caps text-[10px]">总仓位</p>
+            <p className="label-caps text-[10px]">{p.totalPositions}</p>
             <p className="mt-0.5 font-mono text-[20px] font-bold">{summary.totalPicks}</p>
             <p className="mt-0.5 font-mono text-[10px] text-muted">
-              开 {summary.openCount} · 平 {summary.closedCount}
+              {fmt(p.openClosedFmt, { open: summary.openCount, closed: summary.closedCount })}
             </p>
           </div>
           <div className="px-4 py-3">
-            <p className="label-caps text-[10px]">已平均实现收益</p>
+            <p className="label-caps text-[10px]">{p.avgRealized}</p>
             <p className={`mt-0.5 font-mono text-[20px] font-bold ${returnClass(summary.avgReturnPct)}`}>
               {fmtPct(summary.avgReturnPct)}
             </p>
             <p className="mt-0.5 font-mono text-[10px] text-muted">equal-weight</p>
           </div>
           <div className="px-4 py-3">
-            <p className="label-caps text-[10px]">开仓浮动收益</p>
+            <p className="label-caps text-[10px]">{p.openUnrealized}</p>
             <p className={`mt-0.5 font-mono text-[20px] font-bold ${returnClass(summary.avgOpenUnrealizedPct)}`}>
               {fmtPct(summary.avgOpenUnrealizedPct)}
             </p>
-            <p className="mt-0.5 font-mono text-[10px] text-muted">实时估算</p>
+            <p className="mt-0.5 font-mono text-[10px] text-muted">{p.liveEstimate}</p>
           </div>
           <div className="px-4 py-3">
-            <p className="label-caps text-[10px]">胜率</p>
+            <p className="label-caps text-[10px]">{p.winRate}</p>
             <p className="mt-0.5 font-mono text-[20px] font-bold">{fmtPct(summary.winRatePct)}</p>
             <p className="mt-0.5 font-mono text-[10px] text-muted">closed positions</p>
           </div>
           <div className="px-4 py-3">
-            <p className="label-caps text-[10px]">最佳平仓</p>
+            <p className="label-caps text-[10px]">{p.bestClose}</p>
             {summary.bestClosed ? (
               <>
                 <p className={`mt-0.5 font-mono text-[18px] font-bold ${returnClass(summary.bestClosed.pct)}`}>
@@ -211,7 +211,7 @@ export default async function PicksPage() {
             )}
           </div>
           <div className="px-4 py-3">
-            <p className="label-caps text-[10px]">最差平仓</p>
+            <p className="label-caps text-[10px]">{p.worstClose}</p>
             {summary.worstClosed ? (
               <>
                 <p className={`mt-0.5 font-mono text-[18px] font-bold ${returnClass(summary.worstClosed.pct)}`}>
@@ -229,54 +229,47 @@ export default async function PicksPage() {
       {/* Open positions */}
       <section className="mb-8">
         <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-lg font-bold">开仓中 · {open.length}</h2>
-          <p className="text-[11px] text-muted">实时价来自 Yahoo Finance · 60s 缓存</p>
+          <h2 className="text-lg font-bold">{fmt(p.openTitleFmt, { n: open.length })}</h2>
+          <p className="text-[11px] text-muted">{p.priceSource}</p>
         </div>
         {open.length === 0 ? (
-          <p className="rounded border border-border px-4 py-8 text-center text-[13px] text-muted">
-            暂无开仓标的。编辑团队将在下个月度窗口发布新标的。
-          </p>
+          <p className="rounded border border-border px-4 py-8 text-center text-[13px] text-muted">{p.noOpen}</p>
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
-            {open.map((p) => (
-              <OpenCard key={p.id} pick={p} perf={perfMap.get(p.id)!} />
+            {open.map((pick) => (
+              <OpenCard key={pick.id} pick={pick} perf={perfMap.get(pick.id)!} p={p} />
             ))}
           </div>
         )}
       </section>
 
-      {/* Closed positions */}
       <section>
         <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-lg font-bold">已平仓 · {closed.length}</h2>
+          <h2 className="text-lg font-bold">{fmt(p.closedTitleFmt, { n: closed.length })}</h2>
         </div>
         {closed.length === 0 ? (
-          <p className="rounded border border-border px-4 py-8 text-center text-[13px] text-muted">
-            尚无已平仓记录。
-          </p>
+          <p className="rounded border border-border px-4 py-8 text-center text-[13px] text-muted">{p.noClosed}</p>
         ) : (
           <div className="card overflow-hidden">
             <div className="grid grid-cols-[80px_1fr_90px_90px_90px_90px] gap-3 border-b border-border bg-surface-muted px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
-              <span>代码</span>
-              <span>标题</span>
-              <span className="text-right">入场</span>
-              <span className="text-right">平仓</span>
-              <span className="text-right">持有</span>
-              <span className="text-right">收益</span>
+              <span>{p.colSymbol}</span>
+              <span>{p.colTitle}</span>
+              <span className="text-right">{p.colEntry}</span>
+              <span className="text-right">{p.colClose}</span>
+              <span className="text-right">{p.colHeld}</span>
+              <span className="text-right">{p.colReturn}</span>
             </div>
             <div className="divide-y divide-border">
-              {closed.map((p) => (
-                <ClosedRow key={p.id} pick={p} perf={perfMap.get(p.id)!} />
+              {closed.map((pick) => (
+                <ClosedRow key={pick.id} pick={pick} perf={perfMap.get(pick.id)!} p={p} />
               ))}
             </div>
           </div>
         )}
       </section>
 
-      {/* Disclaimer */}
       <p className="mt-8 border-t border-border pt-4 text-[11px] leading-relaxed text-muted-soft">
-        免责声明：OPS 精选 为基于公开信息与量化模型的研究观点，不构成任何证券、加密资产或衍生品的买卖建议。
-        入场 / 目标 / 止损价为发布时刻的判断，实际成交可能存在滑点与流动性差异。投资有风险，决策需谨慎。
+        {p.disclaimer}
       </p>
     </div>
   );

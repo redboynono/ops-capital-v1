@@ -132,7 +132,7 @@ export default async function TrackRecordPage() {
       )}
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted-soft">
-        方法说明：起点为该标的当前评级在每日快照中连续保持的最早时间；起始价取起点后第一个收盘价（Yahoo），
+        方法说明：起点为该标的当前评级在每日快照中连续保持的最早时间；起始价取起点后第一个收盘价（美股 Massive / 港股加密 Yahoo），
         加密标的以 -USD 计价。SELL/STRONG SELL 的「正确」表现为负收益。历史快照自评级体系上线起积累，样本随时间增长。
         本页数据仅供研究参考，不构成投资建议。
       </p>

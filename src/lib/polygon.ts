@@ -68,11 +68,49 @@ type StockSnapshotTicker = {
   updated?: number;
 };
 
+type SnapshotQuote = {
+  c: number;
+  d: number | null;
+  dp: number | null;
+  h: number;
+  l: number;
+  o: number;
+  pc: number;
+};
+
+function parseSnapshotRow(row: StockSnapshotTicker): SnapshotQuote | null {
+  const c = Number(row.lastTrade?.p ?? row.day?.c ?? 0);
+  const pc = Number(row.prevDay?.c ?? row.day?.o ?? 0);
+  if (!c) return null;
+  const d = row.todaysChange ?? (pc ? c - pc : null);
+  const dp = row.todaysChangePerc ?? (pc ? ((c - pc) / pc) * 100 : null);
+  return {
+    c,
+    d: d != null && Number.isFinite(d) ? d : null,
+    dp: dp != null && Number.isFinite(dp) ? dp : null,
+    h: Number(row.day?.h ?? c),
+    l: Number(row.day?.l ?? c),
+    o: Number(row.day?.o ?? c),
+    pc: pc || c,
+  };
+}
+
+/** Yahoo-style index symbol → Massive/Polygon index ticker (I:SPX …). */
+export const POLYGON_INDEX_TICKERS: Record<string, string> = {
+  "^GSPC": "I:SPX",
+  "^IXIC": "I:NDX",
+  "^DJI": "I:DJI",
+};
+
+export function isPolygonIndexSymbol(symbol: string): boolean {
+  return symbol.trim() in POLYGON_INDEX_TICKERS;
+}
+
 export async function getPolygonStockSnapshots(
   symbols: string[],
-): Promise<Record<string, { c: number; d: number | null; dp: number | null; h: number; l: number; o: number; pc: number } | null>> {
+): Promise<Record<string, SnapshotQuote | null>> {
   const us = symbols.filter(isUsEquityTicker);
-  const out: Record<string, { c: number; d: number | null; dp: number | null; h: number; l: number; o: number; pc: number } | null> = {};
+  const out: Record<string, SnapshotQuote | null> = {};
   for (const s of symbols) out[s] = null;
   if (us.length === 0) return out;
 
@@ -84,20 +122,38 @@ export async function getPolygonStockSnapshots(
   for (const row of data.tickers ?? []) {
     const sym = row.ticker?.toUpperCase();
     if (!sym) continue;
-    const c = Number(row.lastTrade?.p ?? row.day?.c ?? 0);
-    const pc = Number(row.prevDay?.c ?? row.day?.o ?? 0);
-    if (!c) continue;
-    const d = row.todaysChange ?? (pc ? c - pc : null);
-    const dp = row.todaysChangePerc ?? (pc ? ((c - pc) / pc) * 100 : null);
-    out[sym] = {
-      c,
-      d: d != null && Number.isFinite(d) ? d : null,
-      dp: dp != null && Number.isFinite(dp) ? dp : null,
-      h: Number(row.day?.h ?? c),
-      l: Number(row.day?.l ?? c),
-      o: Number(row.day?.o ?? c),
-      pc: pc || c,
-    };
+    const q = parseSnapshotRow(row);
+    if (q) out[sym] = q;
+  }
+  return out;
+}
+
+/** US index snapshots keyed by Yahoo-style symbol (^GSPC …). */
+export async function getPolygonIndexSnapshots(
+  yahooIndexSymbols: string[],
+): Promise<Record<string, SnapshotQuote | null>> {
+  const out: Record<string, SnapshotQuote | null> = {};
+  const pairs = yahooIndexSymbols
+    .map((y) => ({ yahoo: y, poly: POLYGON_INDEX_TICKERS[y.trim()] }))
+    .filter((p): p is { yahoo: string; poly: string } => Boolean(p.poly));
+  for (const s of yahooIndexSymbols) out[s] = null;
+  if (pairs.length === 0) return out;
+
+  const tickers = pairs.map((p) => p.poly).join(",");
+  const url = `${BASE}/v2/snapshot/locale/us/markets/indices/tickers?tickers=${encodeURIComponent(tickers)}&apiKey=${apiKey()}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) return out;
+  const data = (await res.json()) as { tickers?: StockSnapshotTicker[] };
+  const byPoly = new Map<string, SnapshotQuote>();
+  for (const row of data.tickers ?? []) {
+    const sym = row.ticker?.toUpperCase();
+    if (!sym) continue;
+    const q = parseSnapshotRow(row);
+    if (q) byPoly.set(sym, q);
+  }
+  for (const { yahoo, poly } of pairs) {
+    const q = byPoly.get(poly.toUpperCase());
+    if (q) out[yahoo] = q;
   }
   return out;
 }
@@ -175,6 +231,56 @@ export async function fetchOptionsSnapshotForUnderlying(
       } satisfies PolygonOptionSnapshot;
     })
     .filter((x): x is PolygonOptionSnapshot => x != null);
+}
+
+export type PolygonHistoryRange = "1mo" | "3mo" | "6mo" | "1y" | "5y";
+
+type AggBar = { t?: number; c?: number };
+
+function polygonHistoryWindow(range: PolygonHistoryRange): {
+  daysBack: number;
+  timespan: "day" | "week" | "month";
+  multiplier: number;
+} {
+  switch (range) {
+    case "1mo":
+      return { daysBack: 40, timespan: "day", multiplier: 1 };
+    case "3mo":
+      return { daysBack: 100, timespan: "day", multiplier: 1 };
+    case "6mo":
+      return { daysBack: 200, timespan: "day", multiplier: 1 };
+    case "1y":
+      return { daysBack: 380, timespan: "week", multiplier: 1 };
+    case "5y":
+      return { daysBack: 365 * 5 + 30, timespan: "month", multiplier: 1 };
+  }
+}
+
+/** Daily/weekly/monthly OHLCV aggregates for US equities (Massive/Polygon Stocks plan). */
+export async function fetchPolygonPriceBars(
+  ticker: string,
+  range: PolygonHistoryRange,
+): Promise<{ t: number; c: number }[] | null> {
+  if (!process.env.POLYGON_API_KEY || !isUsEquityTicker(ticker)) return null;
+
+  const { daysBack, timespan, multiplier } = polygonHistoryWindow(range);
+  const to = new Date();
+  const from = new Date(to.getTime() - daysBack * 86_400_000);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const sym = ticker.toUpperCase();
+
+  try {
+    const rows = await polygonGet<AggBar>(
+      `/v2/aggs/ticker/${encodeURIComponent(sym)}/range/${multiplier}/${timespan}/${fmt(from)}/${fmt(to)}`,
+      { adjusted: "true", sort: "asc", limit: "50000" },
+    );
+    const points = rows
+      .filter((r) => r.t != null && r.c != null && Number.isFinite(r.c))
+      .map((r) => ({ t: Math.floor(r.t! / 1000), c: r.c! }));
+    return points.length >= 2 ? points : null;
+  } catch {
+    return null;
+  }
 }
 
 export function todayIsoDate(): string {

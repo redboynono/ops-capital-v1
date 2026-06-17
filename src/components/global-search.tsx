@@ -4,12 +4,16 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Search } from "lucide-react";
 
+import { useDict } from "@/components/locale-provider";
+import type { Dictionary } from "@/lib/i18n";
+
 type SearchResults = {
   tickers: { symbol: string; name: string; exchange: string }[];
   posts: { id: string; title: string; slug: string; kind: string; excerpt: string }[];
 };
 
 export function GlobalSearch() {
+  const s = useDict().searchUi;
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
@@ -64,7 +68,7 @@ export function GlobalSearch() {
         type="button"
         onClick={() => setOpen(true)}
         className="mono hidden items-center gap-1.5 rounded border border-border px-2 py-0.5 text-[10px] text-muted hover:border-accent hover:text-accent md:flex"
-        aria-label="搜索"
+        aria-label={s.ariaLabel}
       >
         <Search size={12} />
         <span>SEARCH</span>
@@ -73,6 +77,7 @@ export function GlobalSearch() {
 
       {open ? (
         <SearchDialog
+          s={s}
           onClose={() => setOpen(false)}
           q={q}
           setQ={setQ}
@@ -86,6 +91,7 @@ export function GlobalSearch() {
 }
 
 function SearchDialog({
+  s,
   onClose,
   q,
   setQ,
@@ -93,6 +99,7 @@ function SearchDialog({
   data,
   inputRef,
 }: {
+  s: Dictionary["searchUi"];
   onClose: () => void;
   q: string;
   setQ: (v: string) => void;
@@ -117,7 +124,7 @@ function SearchDialog({
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="标的代码 / 公司名 / 文章标题…"
+            placeholder={s.placeholder}
             className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted-soft"
           />
           {loading ? <span className="text-[10px] text-muted">…</span> : null}
@@ -128,14 +135,14 @@ function SearchDialog({
 
         <div className="max-h-[50vh] overflow-y-auto px-2 py-2 text-[13px]">
           {!q.trim() ? (
-            <p className="px-2 py-6 text-center text-muted">输入 NVDA、腾讯 或文章关键词</p>
+            <p className="px-2 py-6 text-center text-muted">{s.hint}</p>
           ) : data && data.tickers.length === 0 && data.posts.length === 0 && !loading ? (
-            <p className="px-2 py-6 text-center text-muted">无匹配结果</p>
+            <p className="px-2 py-6 text-center text-muted">{s.noResults}</p>
           ) : null}
 
           {data && data.tickers.length > 0 ? (
             <section className="mb-3">
-              <p className="label-caps mb-1 px-2 text-[10px]">标的</p>
+              <p className="label-caps mb-1 px-2 text-[10px]">{s.tickers}</p>
               <ul>
                 {data.tickers.map((t) => (
                   <li key={t.symbol}>
@@ -155,7 +162,7 @@ function SearchDialog({
 
           {data && data.posts.length > 0 ? (
             <section>
-              <p className="label-caps mb-1 px-2 text-[10px]">文章</p>
+              <p className="label-caps mb-1 px-2 text-[10px]">{s.posts}</p>
               <ul>
                 {data.posts.map((p) => (
                   <li key={p.id}>

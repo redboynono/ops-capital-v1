@@ -15,6 +15,7 @@ install -m 755 "$REPO/scripts/ops-alpha-alerts-check.sh" /usr/local/bin/
 install -m 755 "$REPO/scripts/ops-alpha-snapshot-ratings.sh" /usr/local/bin/
 install -m 755 "$REPO/scripts/ops-alpha-social-x.sh" /usr/local/bin/
 install -m 755 "$REPO/scripts/ops-alpha-chokepoint.sh" /usr/local/bin/
+install -m 755 "$REPO/scripts/ops-alpha-warm-track-record.sh" /usr/local/bin/
 
 if [ -f "$REPO/scripts/ops-alpha-earnings-cron.sh" ]; then
   install -m 755 "$REPO/scripts/ops-alpha-earnings-cron.sh" /usr/local/bin/
@@ -35,6 +36,7 @@ $CRON_MARKER
 0 9 * * * /usr/local/bin/ops-alpha-social-x.sh >> /var/log/ops-alpha-social-x.log 2>&1
 0 7 * * 1,3,5 /usr/local/bin/ops-alpha-chokepoint.sh 2 >> /var/log/ops-alpha-chokepoint.log 2>&1
 0 13 * * 1 /usr/local/bin/ops-alpha-social-x.sh record >> /var/log/ops-alpha-social-x.log 2>&1
+35 16 * * 1-5 /usr/local/bin/ops-alpha-warm-track-record.sh >> /var/log/ops-alpha-warm-track-record.log 2>&1
 EOF
 
 crontab "$TMP"

@@ -7,44 +7,43 @@ import { LangSwitch } from "@/components/lang-switch";
 import { MobileMenuButton, MobileNavDrawer } from "@/components/mobile-nav";
 import type { Locale } from "@/lib/i18n/locale-types";
 
-// Symbols to poll via Yahoo Finance (/api/quotes). No key needed; works for
-// US stocks, HK, A-shares, indices, crypto.
-// `display` is what the tape shows; `yahoo` is the Yahoo symbol format.
-const TAPE_SYMBOLS: { display: string; yahoo: string }[] = [
-  // Indices
-  { display: "S&P",   yahoo: "^GSPC" },
-  { display: "NDX",   yahoo: "^IXIC" },
-  { display: "DJIA",  yahoo: "^DJI" },
-  { display: "HSI",   yahoo: "^HSI" },
-  { display: "SSE",   yahoo: "000001.SS" },
+// Ticker tape polls /api/quotes (Massive for US stocks/indices; Yahoo for HK/crypto/forex).
+// `display` = tape label; `quote` = symbol passed to /api/quotes.
+const TAPE_SYMBOLS: { display: string; quote: string }[] = [
+  // Indices (US → Massive I:SPX / I:NDX / I:DJI)
+  { display: "S&P",   quote: "^GSPC" },
+  { display: "NDX",   quote: "^IXIC" },
+  { display: "DJIA",  quote: "^DJI" },
+  { display: "HSI",   quote: "^HSI" },
+  { display: "SSE",   quote: "000001.SS" },
   // US mega-caps
-  { display: "NVDA",  yahoo: "NVDA" },
-  { display: "TSLA",  yahoo: "TSLA" },
-  { display: "AAPL",  yahoo: "AAPL" },
-  { display: "MSFT",  yahoo: "MSFT" },
-  { display: "GOOGL", yahoo: "GOOGL" },
-  { display: "META",  yahoo: "META" },
-  { display: "AMZN",  yahoo: "AMZN" },
-  { display: "AMD",   yahoo: "AMD" },
-  { display: "AVGO",  yahoo: "AVGO" },
+  { display: "NVDA",  quote: "NVDA" },
+  { display: "TSLA",  quote: "TSLA" },
+  { display: "AAPL",  quote: "AAPL" },
+  { display: "MSFT",  quote: "MSFT" },
+  { display: "GOOGL", quote: "GOOGL" },
+  { display: "META",  quote: "META" },
+  { display: "AMZN",  quote: "AMZN" },
+  { display: "AMD",   quote: "AMD" },
+  { display: "AVGO",  quote: "AVGO" },
   // CN ADR
-  { display: "BABA",  yahoo: "BABA" },
-  { display: "PDD",   yahoo: "PDD" },
-  { display: "NIO",   yahoo: "NIO" },
+  { display: "BABA",  quote: "BABA" },
+  { display: "PDD",   quote: "PDD" },
+  { display: "NIO",   quote: "NIO" },
   // HK
-  { display: "0700",  yahoo: "0700.HK" },
-  { display: "9988",  yahoo: "9988.HK" },
-  { display: "3690",  yahoo: "3690.HK" },
+  { display: "0700",  quote: "0700.HK" },
+  { display: "9988",  quote: "9988.HK" },
+  { display: "3690",  quote: "3690.HK" },
   // Crypto
-  { display: "BTC",   yahoo: "BTC-USD" },
-  { display: "ETH",   yahoo: "ETH-USD" },
-  { display: "SOL",   yahoo: "SOL-USD" },
+  { display: "BTC",   quote: "BTC-USD" },
+  { display: "ETH",   quote: "ETH-USD" },
+  { display: "SOL",   quote: "SOL-USD" },
   // Forex
-  { display: "USDCNY", yahoo: "CNY=X" },
-  { display: "USDJPY", yahoo: "JPY=X" },
+  { display: "USDCNY", quote: "CNY=X" },
+  { display: "USDJPY", quote: "JPY=X" },
 ];
 
-type TapeItem = { display: string; yahoo: string; price: number | null; chg: number | null };
+type TapeItem = { display: string; quote: string; price: number | null; chg: number | null };
 
 function formatChg(n: number) {
   const s = n >= 0 ? "+" : "";
@@ -66,7 +65,7 @@ function useLiveTape(): TapeItem[] {
     let cancelled = false;
     const load = async () => {
       try {
-        const symbols = TAPE_SYMBOLS.map((t) => t.yahoo).join(",");
+        const symbols = TAPE_SYMBOLS.map((t) => t.quote).join(",");
         const res = await fetch(`/api/quotes?symbols=${encodeURIComponent(symbols)}`);
         if (!res.ok) return;
         const data = (await res.json()) as {
@@ -75,7 +74,7 @@ function useLiveTape(): TapeItem[] {
         if (cancelled) return;
         setItems(
           TAPE_SYMBOLS.map((t) => {
-            const q = data.quotes?.[t.yahoo];
+            const q = data.quotes?.[t.quote];
             return {
               ...t,
               price: q?.c ?? null,

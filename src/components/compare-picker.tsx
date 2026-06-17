@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 
+import { useDict } from "@/components/locale-provider";
+import { fmt } from "@/lib/i18n/fmt";
+
 const MAX = 4;
 
 type Hit = {
@@ -15,6 +18,7 @@ type Hit = {
 };
 
 export function ComparePicker({ current }: { current: string[] }) {
+  const cp = useDict().comparePicker;
   const router = useRouter();
   const sp = useSearchParams();
   const [adding, setAdding] = useState(false);
@@ -23,7 +27,6 @@ export function ComparePicker({ current }: { current: string[] }) {
   const [loading, setLoading] = useState(false);
   const ctrlRef = useRef<AbortController | null>(null);
 
-  // 实时搜索（复用 /api/tickers/lookup，与 TickersBrowser 一致）
   useEffect(() => {
     if (!adding) return;
     const q = query.trim();
@@ -84,7 +87,7 @@ export function ComparePicker({ current }: { current: string[] }) {
   return (
     <div className="card mb-4 p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="label-caps mr-1 text-[11px]">对比</span>
+        <span className="label-caps mr-1 text-[11px]">{cp.label}</span>
 
         {current.map((s) => (
           <span
@@ -97,7 +100,7 @@ export function ComparePicker({ current }: { current: string[] }) {
             <button
               type="button"
               onClick={() => remove(s)}
-              aria-label={`移除 ${s}`}
+              aria-label={fmt(cp.removeFmt, { symbol: s })}
               className="text-muted hover:text-foreground"
             >
               <X className="h-3 w-3" strokeWidth={2} />
@@ -122,7 +125,7 @@ export function ComparePicker({ current }: { current: string[] }) {
                       setQuery("");
                     }
                   }}
-                  placeholder="代码或名称…"
+                  placeholder={cp.placeholder}
                   className="w-32 bg-transparent text-[12px] text-foreground placeholder:text-muted-soft outline-none"
                 />
                 <button
@@ -147,14 +150,14 @@ export function ComparePicker({ current }: { current: string[] }) {
                       >
                         <span className="mono font-bold text-accent-strong">{h.displaySymbol}</span>
                         <span className="flex-1 truncate text-foreground-soft">{h.name}</span>
-                        {h.inDb ? <span className="text-[10px] text-muted">已收录</span> : null}
+                        {h.inDb ? <span className="text-[10px] text-muted">{cp.inDb}</span> : null}
                       </button>
                     </li>
                   ))}
                 </ul>
               ) : null}
               {loading && hits.length === 0 ? (
-                <p className="absolute left-0 top-9 mt-1 text-[10px] text-muted">查询中…</p>
+                <p className="absolute left-0 top-9 mt-1 text-[10px] text-muted">{cp.searching}</p>
               ) : null}
             </div>
           ) : (
@@ -164,11 +167,11 @@ export function ComparePicker({ current }: { current: string[] }) {
               className="inline-flex items-center gap-1 rounded border border-dashed border-foreground-soft px-2 py-1 mono text-[11px] text-foreground-soft hover:border-accent hover:text-accent-strong"
             >
               <Plus className="h-3 w-3" strokeWidth={2} />
-              添加（{current.length}/{MAX}）
+              {fmt(cp.addFmt, { n: current.length, max: MAX })}
             </button>
           )
         ) : (
-          <span className="text-[10px] text-muted">已达上限 {MAX}</span>
+          <span className="text-[10px] text-muted">{fmt(cp.maxFmt, { max: MAX })}</span>
         )}
 
         {current.length > 0 ? (
@@ -177,7 +180,7 @@ export function ComparePicker({ current }: { current: string[] }) {
             onClick={() => router.push("/compare")}
             className="ml-auto text-[11px] text-muted hover:text-foreground"
           >
-            清空
+            {cp.clear}
           </button>
         ) : null}
       </div>

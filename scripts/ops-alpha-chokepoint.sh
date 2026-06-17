@@ -20,6 +20,8 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
   exit 1
 fi
 
+[ -f "$SCRIPT" ] || SCRIPT="/opt/ops-alpha/scripts/daily-content.mjs"
+
 if [ ! -f "$SCRIPT" ]; then
   echo "[$(ts)] ERROR: script not found: $SCRIPT" >> "$LOG"
   exit 1

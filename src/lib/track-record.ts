@@ -2,7 +2,7 @@
  * 评级战绩（Track Record）：当前评级自「连续保持起点」以来的收益 vs SPY。
  *
  * 起点 = ticker_ratings_history 中当前 ops_verdict 连续 streak 的最早快照时间。
- * 价格用 Yahoo chart（price-history 1h 缓存），加密走 -USD 映射。
+ * 价格：美股/SPY 走 Massive（Polygon）aggregates；港股/加密走 Yahoo（price-history 1h 缓存）。
  */
 
 import { mysqlQuery } from "@/lib/mysql";

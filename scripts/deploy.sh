@@ -28,6 +28,10 @@ sshpass -p "$PASS" ssh -o ServerAliveInterval=15 "$SERVER" '
   sleep 3
   docker logs --tail 5 ops-alpha
 '
+echo "--> install cron (chokepoint + track-record X + warm cache)"
+sshpass -p "$PASS" ssh -o ServerAliveInterval=15 "$SERVER" \
+  "REPO=/opt/ops-alpha bash /opt/ops-alpha/scripts/install-cron.sh"
+
 echo "--> smoke"
 for p in / /alpha /login; do
   code=$(sshpass -p "$PASS" ssh -o ServerAliveInterval=15 "$SERVER" \

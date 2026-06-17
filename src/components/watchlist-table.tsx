@@ -3,16 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toYahooSymbol } from "@/lib/yahoo";
+import { useDict } from "@/components/locale-provider";
 
 type Verdict = "STRONG_BUY" | "BUY" | "HOLD" | "SELL" | "STRONG_SELL";
-
-const VERDICT_ZH: Record<Verdict, string> = {
-  STRONG_BUY: "强买",
-  BUY: "买入",
-  HOLD: "持有",
-  SELL: "卖出",
-  STRONG_SELL: "强卖",
-};
 
 export type WatchlistRow = {
   symbol: string;
@@ -26,6 +19,8 @@ export type WatchlistRow = {
 type Quote = { c: number; dp: number | null };
 
 export function WatchlistTable({ rows }: { rows: WatchlistRow[] }) {
+  const { watchlistUi: w, screener } = useDict();
+  const verdicts = screener.verdicts as Record<Verdict, string>;
   const [quotes, setQuotes] = useState<Record<string, Quote | null>>({});
 
   useEffect(() => {
@@ -64,19 +59,19 @@ export function WatchlistTable({ rows }: { rows: WatchlistRow[] }) {
   return (
     <div className="card overflow-hidden">
       <div className="grid grid-cols-[72px_1fr_72px_64px_56px_48px] gap-2 border-b border-border bg-surface-muted px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
-        <span>代码</span>
-        <span>名称</span>
-        <span className="text-right">现价</span>
-        <span className="text-right">涨跌</span>
-        <span className="text-right">Quant</span>
-        <span className="text-right">评级</span>
+        <span>{w.colSymbol}</span>
+        <span>{w.colName}</span>
+        <span className="text-right">{w.colPrice}</span>
+        <span className="text-right">{w.colChange}</span>
+        <span className="text-right">{w.colQuant}</span>
+        <span className="text-right">{w.colRating}</span>
       </div>
       <ul className="divide-y divide-border">
         {rows.map((r) => {
           const q = quotes[r.symbol];
           const dp = q?.dp;
           const cls = dp == null ? "flat" : dp > 0 ? "up" : dp < 0 ? "down" : "flat";
-          const verdictZh = r.ops_verdict ? VERDICT_ZH[r.ops_verdict] : null;
+          const verdictLabel = r.ops_verdict ? verdicts[r.ops_verdict] : null;
           return (
             <li
               key={r.symbol}
@@ -94,7 +89,7 @@ export function WatchlistTable({ rows }: { rows: WatchlistRow[] }) {
                 {r.quant_score ? Number(r.quant_score).toFixed(2) : "—"}
               </span>
               <span className="text-right text-[10px] font-semibold">
-                {verdictZh ? verdictZh.slice(0, 2) : "—"}
+                {verdictLabel ? verdictLabel.slice(0, 2) : "—"}
               </span>
             </li>
           );

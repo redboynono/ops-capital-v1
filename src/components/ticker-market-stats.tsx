@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { fmtMarketCap, fmtMoney, fmtPct, fmtRatio } from "@/lib/format-market";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
 import { fetchTickerMarketSnapshot } from "@/lib/ticker-market-snapshot";
 import { isUsEquityTicker } from "@/lib/polygon";
 
@@ -24,6 +26,9 @@ function StatCell({
 }
 
 export async function TickerMarketStats({ symbol }: { symbol: string }) {
+  const locale = await getLocale();
+  const m = getDictionary(locale).marketStats;
+  const o = getDictionary(locale).options;
   const snap = await fetchTickerMarketSnapshot(symbol);
   const changeCls =
     snap.changePct == null
@@ -43,22 +48,26 @@ export async function TickerMarketStats({ symbol }: { symbol: string }) {
     <div className="mt-3 space-y-3">
       <div className="grid grid-cols-2 gap-3 rounded-md border border-border bg-surface-muted p-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCell
-          label="现价"
+          label={m.price}
           value={fmtMoney(snap.price, snap.currency)}
           sub={snap.changePct != null ? fmtPct(snap.changePct) : undefined}
         />
         <StatCell
-          label="涨跌"
+          label={m.change}
           value={
             snap.changeAbs != null
               ? `${snap.changeAbs >= 0 ? "+" : "-"}${fmtMoney(Math.abs(snap.changeAbs), snap.currency)}`
               : "—"
           }
-          sub={snap.prevClose != null ? `前收 ${fmtMoney(snap.prevClose, snap.currency)}` : undefined}
+          sub={
+            snap.prevClose != null
+              ? fmt(m.prevCloseFmt, { price: fmtMoney(snap.prevClose, snap.currency) })
+              : undefined
+          }
           valueClass={changeCls}
         />
         <StatCell
-          label="日内"
+          label={m.intraday}
           value={
             snap.dayLow != null && snap.dayHigh != null
               ? `${fmtMoney(snap.dayLow, snap.currency)} – ${fmtMoney(snap.dayHigh, snap.currency)}`
@@ -66,12 +75,12 @@ export async function TickerMarketStats({ symbol }: { symbol: string }) {
           }
         />
         <StatCell
-          label="市值"
+          label={m.marketCap}
           value={fmtMarketCap(snap.marketCapM)}
-          sub={snap.sharesM != null ? `${snap.sharesM.toFixed(0)}M 股` : undefined}
+          sub={snap.sharesM != null ? fmt(m.sharesFmt, { n: snap.sharesM.toFixed(0) }) : undefined}
         />
         <StatCell
-          label="估值"
+          label={m.valuation}
           value={snap.peTtm != null ? `PE ${fmtRatio(snap.peTtm)}` : "—"}
           sub={
             snap.psTtm != null
@@ -79,21 +88,25 @@ export async function TickerMarketStats({ symbol }: { symbol: string }) {
               : undefined
           }
         />
-        <StatCell label="52 周" value={range52} sub={snap.beta != null ? `Beta ${fmtRatio(snap.beta)}` : undefined} />
+        <StatCell
+          label={m.week52}
+          value={range52}
+          sub={snap.beta != null ? `Beta ${fmtRatio(snap.beta)}` : undefined}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-soft">
-        {snap.ipo ? <span>IPO {snap.ipo}</span> : null}
+        {snap.ipo ? <span>{fmt(m.ipoFmt, { date: snap.ipo })}</span> : null}
         {snap.divYieldPct != null && snap.divYieldPct > 0 ? (
-          <span>股息率 {fmtRatio(snap.divYieldPct, "%")}</span>
+          <span>{fmt(m.divYieldFmt, { pct: fmtRatio(snap.divYieldPct, "%") })}</span>
         ) : null}
-        <span>{snap.currency} 计价 · 行情约 1 分钟延迟</span>
+        <span>{fmt(m.quoteNoteFmt, { currency: snap.currency })}</span>
         {isUsEquityTicker(symbol) ? (
           <Link
             href={`/expiring-options?symbol=${symbol}&week=this#option-chain`}
             className="font-semibold text-accent-strong hover:underline"
           >
-            Option Alpha 期权策略 →
+            {o.optionAlphaLink}
           </Link>
         ) : null}
       </div>

@@ -9,6 +9,7 @@ import { TopRatedPanel } from "@/components/top-rated";
 import { getCachedPosts } from "@/lib/cached-data";
 import { getSessionUser } from "@/lib/auth";
 import { getDictionary, getLocale } from "@/lib/i18n";
+import { postTitle } from "@/lib/i18n/post-locale";
 
 export const dynamic = "force-dynamic";
 
@@ -104,7 +105,7 @@ export default async function Home() {
                       </span>
                     </div>
                     <Link href={`/news/${n.slug}`} className="link-title mt-1 block text-[14px] leading-snug">
-                      {n.title}
+                      {postTitle(n, locale)}
                     </Link>
                   </li>
                 ))}

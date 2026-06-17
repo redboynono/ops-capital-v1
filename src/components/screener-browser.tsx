@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Bookmark, ChevronDown, ChevronUp, Filter, RotateCcw, Save, Trash2 } from "lucide-react";
 
+import { useDict } from "@/components/locale-provider";
+import { fmt } from "@/lib/i18n/fmt";
 import type { ScreenerRow } from "@/lib/screener";
 import type { FactorKey, Grade, Verdict } from "@/lib/ratings";
 
@@ -27,40 +29,15 @@ type Props = {
   rows: ScreenerRow[];
 };
 
-const EXCHANGES: { value: string; label: string }[] = [
-  { value: "NASDAQ", label: "美股·NASDAQ" },
-  { value: "NYSE", label: "美股·NYSE" },
-  { value: "HKEX", label: "港股·HKEX" },
-  { value: "CRYPTO", label: "加密" },
-  { value: "OTHER", label: "其他" },
-];
-
-const VERDICTS: { value: Verdict; label: string; bg: string }[] = [
-  { value: "STRONG_BUY", label: "强买", bg: "#166534" },
-  { value: "BUY", label: "买入", bg: "#15803d" },
-  { value: "HOLD", label: "持有", bg: "#ca8a04" },
-  { value: "SELL", label: "卖出", bg: "#dc2626" },
-  { value: "STRONG_SELL", label: "强卖", bg: "#991b1b" },
-];
-
-const FACTOR_LABELS: Record<(typeof CORE_FACTORS)[number], string> = {
-  VALUATION: "估值",
-  GROWTH: "成长",
-  PROFITABILITY: "盈利",
-  MOMENTUM: "动能",
-  REVISIONS: "上调",
+const VERDICT_BG: Record<Verdict, string> = {
+  STRONG_BUY: "#166534",
+  BUY: "#15803d",
+  HOLD: "#ca8a04",
+  SELL: "#dc2626",
+  STRONG_SELL: "#991b1b",
 };
 
-// 评级阈值选项：UI 用 "≥ A-" 这样的语义
-const GRADE_THRESHOLDS: { value: number; label: string }[] = [
-  { value: 0, label: "不限" },
-  { value: 4.0, label: "≥ A" },
-  { value: 3.7, label: "≥ A-" },
-  { value: 3.3, label: "≥ B+" },
-  { value: 3.0, label: "≥ B" },
-  { value: 2.7, label: "≥ B-" },
-  { value: 2.0, label: "≥ C" },
-];
+const GRADE_THRESHOLD_VALUES = [0, 4.0, 3.7, 3.3, 3.0, 2.7, 2.0] as const;
 
 type SortKey =
   | "quant_score"
@@ -91,31 +68,26 @@ const EMPTY_FACTOR: Preset["factorMin"] = {
   VALUATION: 0, GROWTH: 0, PROFITABILITY: 0, MOMENTUM: 0, REVISIONS: 0,
 };
 
-// 内置精选预设（不可删除）
-const BUILTIN_PRESETS: Preset[] = [
+const BUILTIN_PRESET_CONFIGS: Omit<Preset, "name">[] = [
   {
-    name: "🌱 高成长强买",
     exchanges: [], verdicts: ["STRONG_BUY", "BUY"], sectors: [],
     factorMin: { ...EMPTY_FACTOR, GROWTH: 3.7 },
     minQuant: 3.5, hasDividend: "any",
     sortKey: "quant_score", sortDir: "desc",
   },
   {
-    name: "💰 高股息 A 级盈利",
     exchanges: [], verdicts: [], sectors: [],
     factorMin: { ...EMPTY_FACTOR, PROFITABILITY: 3.7 },
     minQuant: 0, hasDividend: "yes",
     sortKey: "PROFITABILITY", sortDir: "desc",
   },
   {
-    name: "📉 超跌价值",
     exchanges: [], verdicts: [], sectors: [],
     factorMin: { ...EMPTY_FACTOR, VALUATION: 3.7 },
     minQuant: 0, hasDividend: "any",
-    sortKey: "MOMENTUM", sortDir: "asc", // 动能差 = 跌得多
+    sortKey: "MOMENTUM", sortDir: "asc",
   },
   {
-    name: "⭐ 全 A 标的",
     exchanges: [], verdicts: ["STRONG_BUY", "BUY"], sectors: [],
     factorMin: { VALUATION: 3.7, GROWTH: 3.7, PROFITABILITY: 3.7, MOMENTUM: 3.7, REVISIONS: 3.7 },
     minQuant: 4.0, hasDividend: "any",
@@ -134,21 +106,60 @@ function gradeColor(g: Grade | null | undefined): string {
   return "text-red-500"; // F
 }
 
-function verdictBadge(v: Verdict | null) {
+function verdictBadge(v: Verdict | null, s: ReturnType<typeof useDict>["screener"]) {
   if (!v) return <span className="text-muted">—</span>;
-  const found = VERDICTS.find((x) => x.value === v);
-  if (!found) return <span className="text-muted">{v}</span>;
+  const label = s.verdicts[v];
+  const bg = VERDICT_BG[v];
   return (
     <span
       className="inline-flex items-center justify-center rounded-sm px-2 py-0.5 mono text-[10px] font-bold tracking-wide text-white"
-      style={{ background: found.bg }}
+      style={{ background: bg }}
     >
-      {found.label}
+      {label}
     </span>
   );
 }
 
 export function ScreenerBrowser({ rows }: Props) {
+  const dict = useDict();
+  const s = dict.screener;
+
+  const exchangeOptions = useMemo(
+    () =>
+      (["NASDAQ", "NYSE", "HKEX", "CRYPTO", "OTHER"] as const).map((value) => ({
+        value,
+        label: s.exchanges[value],
+      })),
+    [s.exchanges],
+  );
+
+  const verdictOptions = useMemo(
+    () =>
+      (["STRONG_BUY", "BUY", "HOLD", "SELL", "STRONG_SELL"] as const).map((value) => ({
+        value,
+        label: s.verdicts[value],
+        bg: VERDICT_BG[value],
+      })),
+    [s.verdicts],
+  );
+
+  const gradeThresholds = useMemo(
+    () =>
+      GRADE_THRESHOLD_VALUES.map((value, i) => {
+        const keys = ["any", "a", "aMinus", "bPlus", "b", "bMinus", "c"] as const;
+        return { value, label: s.gradeThresholds[keys[i]] };
+      }),
+    [s.gradeThresholds],
+  );
+
+  const builtinPresets = useMemo(
+    () =>
+      BUILTIN_PRESET_CONFIGS.map((cfg, i) => ({
+        ...cfg,
+        name: s.builtinPresets[i] ?? `Preset ${i + 1}`,
+      })),
+    [s.builtinPresets],
+  );
   const [exchanges, setExchanges] = useState<Set<string>>(new Set());
   const [verdicts, setVerdicts] = useState<Set<Verdict>>(new Set());
   const [sectors, setSectors] = useState<Set<string>>(new Set());
@@ -211,10 +222,10 @@ export function ScreenerBrowser({ rows }: Props) {
   }
 
   function saveCustomPreset() {
-    const name = prompt("命名这套筛选（例如：科技 + 强买 + 高 ROE）")?.trim();
+    const name = prompt(s.savePrompt)?.trim();
     if (!name) return;
-    if (BUILTIN_PRESETS.some((b) => b.name === name)) {
-      alert("名称与内置预设冲突，请换一个");
+    if (builtinPresets.some((b) => b.name === name)) {
+      alert(s.nameConflict);
       return;
     }
     const next = customPresets.filter((p) => p.name !== name);
@@ -223,7 +234,7 @@ export function ScreenerBrowser({ rows }: Props) {
   }
 
   function deleteCustomPreset(name: string) {
-    if (!confirm(`删除预设「${name}」？`)) return;
+    if (!confirm(fmt(s.deleteConfirmFmt, { name }))) return;
     persistCustom(customPresets.filter((p) => p.name !== name));
   }
 
@@ -322,24 +333,22 @@ export function ScreenerBrowser({ rows }: Props) {
         <header className="mb-2 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
             <Bookmark className="h-3.5 w-3.5" strokeWidth={1.8} />
-            预设
-            <span className="text-[10px] font-normal text-muted">
-              · 一键应用，本地保存
-            </span>
+            {s.presets}
+            <span className="text-[10px] font-normal text-muted">{s.presetsHint}</span>
           </h2>
           <button
             type="button"
             onClick={saveCustomPreset}
             disabled={!hasAnyFilter}
             className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-accent-strong disabled:opacity-40"
-            title={hasAnyFilter ? "把当前筛选保存为新预设" : "先选点筛选再保存"}
+            title={hasAnyFilter ? s.saveTitle : s.saveDisabledTitle}
           >
             <Save className="h-3 w-3" strokeWidth={1.8} />
-            保存当前
+            {s.saveCurrent}
           </button>
         </header>
         <div className="flex flex-wrap gap-1.5">
-          {BUILTIN_PRESETS.map((p) => (
+          {builtinPresets.map((p) => (
             <button
               key={p.name}
               type="button"
@@ -369,7 +378,7 @@ export function ScreenerBrowser({ rows }: Props) {
                 type="button"
                 onClick={() => deleteCustomPreset(p.name)}
                 className="border-l border-border px-1 py-1 text-muted hover:text-[color:var(--danger)]"
-                aria-label="删除"
+                aria-label={s.delete}
               >
                 <Trash2 className="h-2.5 w-2.5" strokeWidth={1.8} />
               </button>
@@ -383,7 +392,7 @@ export function ScreenerBrowser({ rows }: Props) {
         <header className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
             <Filter className="h-3.5 w-3.5" strokeWidth={1.8} />
-            筛选条件
+            {s.filters}
           </h2>
           {hasAnyFilter ? (
             <button
@@ -392,27 +401,25 @@ export function ScreenerBrowser({ rows }: Props) {
               className="flex items-center gap-1 text-[11px] text-muted hover:text-accent-strong"
             >
               <RotateCcw className="h-3 w-3" strokeWidth={1.8} />
-              重置
+              {s.reset}
             </button>
           ) : null}
         </header>
 
-        {/* exchange chips */}
-        <FilterRow label="市场">
-          {EXCHANGES.map((e) => (
+        <FilterRow label={s.market}>
+          {exchangeOptions.map((ex) => (
             <Chip
-              key={e.value}
-              active={exchanges.has(e.value)}
-              onClick={() => setExchanges(toggleSet(exchanges, e.value))}
+              key={ex.value}
+              active={exchanges.has(ex.value)}
+              onClick={() => setExchanges(toggleSet(exchanges, ex.value))}
             >
-              {e.label}
+              {ex.label}
             </Chip>
           ))}
         </FilterRow>
 
-        {/* verdict chips */}
-        <FilterRow label="OPS 评级">
-          {VERDICTS.map((v) => (
+        <FilterRow label={s.opsRating}>
+          {verdictOptions.map((v) => (
             <Chip
               key={v.value}
               active={verdicts.has(v.value)}
@@ -423,8 +430,7 @@ export function ScreenerBrowser({ rows }: Props) {
           ))}
         </FilterRow>
 
-        {/* quant score min */}
-        <FilterRow label={`最低 Quant 分（${minQuant.toFixed(1)} / 5.0）`}>
+        <FilterRow label={fmt(s.minQuantFmt, { n: minQuant.toFixed(1) })}>
           <input
             type="range"
             min={0}
@@ -436,14 +442,11 @@ export function ScreenerBrowser({ rows }: Props) {
           />
         </FilterRow>
 
-        {/* 5 factor grades */}
-        <FilterRow label="五因子评级（最低）">
+        <FilterRow label={s.factorMinLabel}>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             {CORE_FACTORS.map((f) => (
               <div key={f} className="flex flex-col gap-1">
-                <span className="text-[10px] uppercase tracking-wider text-muted">
-                  {FACTOR_LABELS[f]}
-                </span>
+                <span className="text-[10px] uppercase tracking-wider text-muted">{s.factors[f]}</span>
                 <select
                   value={factorMin[f]}
                   onChange={(e) =>
@@ -451,7 +454,7 @@ export function ScreenerBrowser({ rows }: Props) {
                   }
                   className="rounded border border-border bg-surface px-2 py-1 text-[12px] text-foreground"
                 >
-                  {GRADE_THRESHOLDS.map((g) => (
+                  {gradeThresholds.map((g) => (
                     <option key={g.value} value={g.value}>
                       {g.label}
                     </option>
@@ -462,35 +465,33 @@ export function ScreenerBrowser({ rows }: Props) {
           </div>
         </FilterRow>
 
-        {/* sectors + dividend */}
         {allSectors.length > 0 ? (
-          <FilterRow label="行业">
-            {allSectors.map((s) => (
-              <Chip key={s} active={sectors.has(s)} onClick={() => setSectors(toggleSet(sectors, s))}>
-                {s}
+          <FilterRow label={s.sector}>
+            {allSectors.map((sec) => (
+              <Chip key={sec} active={sectors.has(sec)} onClick={() => setSectors(toggleSet(sectors, sec))}>
+                {sec}
               </Chip>
             ))}
           </FilterRow>
         ) : null}
 
-        <FilterRow label="股息">
+        <FilterRow label={s.dividend}>
           {(["any", "yes", "no"] as const).map((opt) => (
             <Chip
               key={opt}
               active={hasDividend === opt}
               onClick={() => setHasDividend(opt)}
             >
-              {opt === "any" ? "不限" : opt === "yes" ? "派息" : "不派息"}
+              {opt === "any" ? s.dividendAny : opt === "yes" ? s.dividendPay : s.dividendNoPay}
             </Chip>
           ))}
         </FilterRow>
       </section>
 
-      {/* ---------- 结果计数 ---------- */}
       <p className="text-[11px] text-muted">
-        命中 <span className="mono font-bold text-accent-strong">{matched}</span> / {total} 个标的
+        {fmt(s.resultsFmt, { filtered: matched, total })}
         {sortKey !== "quant_score" || sortDir !== "desc" ? (
-          <span className="ml-2">· 排序 {sortKey} {sortDir}</span>
+          <span className="ml-2">{fmt(s.sortFmt, { key: sortKey, dir: sortDir })}</span>
         ) : null}
       </p>
 
@@ -500,14 +501,14 @@ export function ScreenerBrowser({ rows }: Props) {
           <thead>
             <tr className="border-b border-border bg-surface-muted text-left text-[11px] uppercase tracking-wider text-muted">
               <Th onClick={() => clickHeader("symbol")} sortKey="symbol" curKey={sortKey} dir={sortDir}>
-                代码
+                {s.colSymbol}
               </Th>
-              <th className="px-3 py-2 font-normal">名称</th>
-              <th className="px-3 py-2 font-normal">市场</th>
+              <th className="px-3 py-2 font-normal">{s.colName}</th>
+              <th className="px-3 py-2 font-normal">{s.colExchange}</th>
               <Th onClick={() => clickHeader("quant_score")} sortKey="quant_score" curKey={sortKey} dir={sortDir}>
-                Quant
+                {s.colQuant}
               </Th>
-              <th className="px-3 py-2 font-normal">OPS</th>
+              <th className="px-3 py-2 font-normal">{s.colOps}</th>
               {CORE_FACTORS.map((f) => (
                 <Th
                   key={f}
@@ -516,11 +517,11 @@ export function ScreenerBrowser({ rows }: Props) {
                   curKey={sortKey}
                   dir={sortDir}
                 >
-                  {FACTOR_LABELS[f]}
+                  {s.factors[f]}
                 </Th>
               ))}
               <Th onClick={() => clickHeader("rank_overall")} sortKey="rank_overall" curKey={sortKey} dir={sortDir}>
-                排名
+                {s.colRank}
               </Th>
             </tr>
           </thead>
@@ -542,7 +543,7 @@ export function ScreenerBrowser({ rows }: Props) {
                 <td className="px-3 py-2 mono">
                   {r.quant_score != null ? r.quant_score.toFixed(2) : <span className="text-muted">—</span>}
                 </td>
-                <td className="px-3 py-2">{verdictBadge(r.ops_verdict)}</td>
+                <td className="px-3 py-2">{verdictBadge(r.ops_verdict, s)}</td>
                 {CORE_FACTORS.map((f) => {
                   const g = r.grades[f];
                   return (
@@ -561,7 +562,7 @@ export function ScreenerBrowser({ rows }: Props) {
             {sorted.length === 0 ? (
               <tr>
                 <td colSpan={11} className="px-3 py-8 text-center text-muted">
-                  没有符合条件的标的，试着放宽筛选
+                  {s.noResults}
                 </td>
               </tr>
             ) : null}

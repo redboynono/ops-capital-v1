@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useDict } from "@/components/locale-provider";
 
 export function WatchlistToggle({
   symbol,
@@ -9,6 +10,7 @@ export function WatchlistToggle({
   symbol: string;
   initialInWatchlist: boolean;
 }) {
+  const w = useDict().watchlistUi;
   const [inList, setInList] = useState(initialInWatchlist);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -25,12 +27,12 @@ export function WatchlistToggle({
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          setError(data?.error ?? "操作失败，可能需要先登录。");
+          setError(data?.error ?? w.toggleFail);
           return;
         }
         setInList(!inList);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "网络错误");
+        setError(err instanceof Error ? err.message : w.networkErr);
       }
     });
   };
@@ -43,7 +45,7 @@ export function WatchlistToggle({
         disabled={pending}
         className={inList ? "btn-outline px-3 py-1.5 text-[12px]" : "btn-primary px-3 py-1.5 text-[12px]"}
       >
-        {pending ? "处理中..." : inList ? "已在自选 · 移除" : "加入自选"}
+        {pending ? w.togglePending : inList ? w.toggleRemove : w.toggleAdd}
       </button>
       {error ? <span className="text-[11px] text-[color:var(--danger)]">{error}</span> : null}
     </div>

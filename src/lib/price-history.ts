@@ -1,11 +1,13 @@
 /**
- * 价格历史（用于 sparkline）。
+ * 价格历史（sparkline、战绩、对比等）。
  *
- * 优先 Yahoo Finance v8 chart API（免费、无 key、无 rate-limit 风险阈值低）。
- * Finnhub /stock/candle 已转付费，不再走它。
+ * 美股 / SPY：优先 Massive（Polygon.io）aggregates（需 POLYGON_API_KEY）。
+ * 港股、加密、指数、外汇：Yahoo chart（无 key，覆盖广）。
  *
- * 缓存 1 小时：sparkline 不需要分钟级新鲜度。
+ * 缓存 1 小时：不需要分钟级新鲜度。
  */
+
+import { fetchPolygonPriceBars, isUsEquityTicker } from "@/lib/polygon";
 
 export type PriceHistoryRange = "1mo" | "3mo" | "6mo" | "1y" | "5y";
 
@@ -40,13 +42,14 @@ async function fetchYahoo(symbol: string, range: PriceHistoryRange): Promise<Pri
     const res = await fetch(url, {
       cache: "no-store",
       headers: {
-        // Yahoo 偶尔会拒绝默认 UA，给一个浏览器味的串
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36",
       },
     });
     if (!res.ok) return null;
-    const j = (await res.json()) as {
+    const text = await res.text();
+    if (text.startsWith("Too Many")) return null;
+    const j = JSON.parse(text) as {
       chart?: {
         result?: {
           timestamp?: number[];
@@ -72,6 +75,15 @@ async function fetchYahoo(symbol: string, range: PriceHistoryRange): Promise<Pri
   }
 }
 
+async function fetchPriceHistory(symbol: string, range: PriceHistoryRange): Promise<PriceHistory | null> {
+  const sym = symbol.trim();
+  if (isUsEquityTicker(sym) && process.env.POLYGON_API_KEY) {
+    const bars = await fetchPolygonPriceBars(sym, range);
+    if (bars) return { symbol: sym.toUpperCase(), range, points: bars };
+  }
+  return fetchYahoo(sym, range);
+}
+
 export async function getPriceHistory(
   symbol: string,
   range: PriceHistoryRange = "1y",
@@ -81,7 +93,7 @@ export async function getPriceHistory(
   const cached = CACHE.get(key);
   if (cached && now - cached.at < TTL_MS) return cached.data;
 
-  const data = await fetchYahoo(symbol, range);
+  const data = await fetchPriceHistory(symbol, range);
   CACHE.set(key, { at: now, data });
   return data;
 }

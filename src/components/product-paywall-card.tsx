@@ -1,26 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import type { ProductLine } from "@/lib/payments/plans";
-
-const COPY: Record<
-  ProductLine,
-  { title: string; body: string; cta: string }
-> = {
-  research: {
-    title: "Research Pro",
-    body: "解锁目标价、止损、完整投资逻辑与深度研报全文。",
-    cta: "订阅 Research Pro",
-  },
-  options: {
-    title: "Option Alpha",
-    body: "解锁全标的扫描、Trade Idea、收益分析器与完整期权链。",
-    cta: "订阅 Option Alpha",
-  },
-  bundle: {
-    title: "全站 Bundle",
-    body: "Research Pro + Option Alpha 一次开通。",
-    cta: "订阅 Bundle",
-  },
-};
+import { useDict } from "@/components/locale-provider";
 
 export function ProductPaywallCard({
   product,
@@ -31,7 +13,10 @@ export function ProductPaywallCard({
   loggedIn: boolean;
   compact?: boolean;
 }) {
-  const c = COPY[product];
+  const { products } = useDict().paywall;
+  const c = products[product];
+  const loginLabel = useDict().paywall.login;
+
   return (
     <div
       className={`rounded-lg border border-accent/40 bg-accent-soft/40 ${
@@ -53,7 +38,7 @@ export function ProductPaywallCard({
         </Link>
         {!loggedIn ? (
           <Link href={`/login?redirect=/pricing?product=${product}`} className="btn-outline px-4 py-2 text-[12px]">
-            登录
+            {loginLabel}
           </Link>
         ) : null}
       </div>
