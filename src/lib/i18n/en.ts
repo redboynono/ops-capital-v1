@@ -91,6 +91,7 @@ export const en: Dictionary = {
   nav: {
     alphaHome: "Alpha Home",
     picks: "OPS Picks",
+    signals: "AI Weekly",
     conviction: "OPS Rankings",
     analysis: "Research",
     news: "News",
@@ -115,6 +116,7 @@ export const en: Dictionary = {
     adminEditor: "AI editor",
     adminRatings: "Ratings",
     adminPicks: "Picks admin",
+    adminSignals: "AI Weekly admin",
     adminSocial: "Social ops",
     tabHome: "Home",
     tabAnalysis: "Research",
@@ -797,6 +799,22 @@ export const en: Dictionary = {
       disclaimer:
         "Disclaimer: This OPS Pick is research only—not investment advice. Entry and target are model views at publish time.",
     },
+  },
+  signals: {
+    metaTitle: "AI Weekly Signals · OPS Alpha",
+    metaDesc: "Quant-screened ideas with AI reasoning · 5 names weekly · Research Pro exclusive",
+    title: "AI Weekly Signals",
+    subtitle: "OPS quant pre-screen · AI deep reasoning · updated every week",
+    weeklyLabel: "Weekly Edition",
+    empty: "This week's edition is not published yet.",
+    ctaPro: "Subscribe to Research Pro",
+    teaserNote: "Free preview: tickers & teaser visible; targets, stops & full AI thesis require Research Pro.",
+    target: "Target",
+    stop: "Stop",
+    entry: "Entry ref.",
+    opsScore: "OPS score",
+    unlock: "Unlock full thesis",
+    disclaimer: "AI-generated content based on platform quant data and public information—for research only, not investment advice.",
   },
   optionsPage: {
     labelCaps: "OPTION ALPHA · AI",

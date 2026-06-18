@@ -29,7 +29,7 @@ sshpass -p "$PASS" ssh -o ServerAliveInterval=15 "$SERVER" '
   docker logs --tail 5 ops-alpha
 '
 echo "--> db migrations"
-for mig in 015_entitlement_brief.sql 016_social_content_type_chokepoint.sql 022_content_feedback.sql; do
+for mig in 015_entitlement_brief.sql 016_social_content_type_chokepoint.sql 022_content_feedback.sql 023_ai_weekly_signals.sql; do
   sshpass -p "$PASS" ssh -o ServerAliveInterval=15 "$SERVER" \
     'PW=$(grep -m1 "^MYSQL_URL=" /opt/ops-alpha/.env.production | sed -n "s#.*root:\([^@]*\)@.*#\1#p" | sed "s/%21/!/g"); docker exec -i ops-mysql mysql -uroot -p"$PW" ops_alpha' \
     < "$HERE/mysql/migrations/$mig" 2>/dev/null || echo "  ($mig skipped or already applied)"

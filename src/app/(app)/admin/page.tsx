@@ -41,6 +41,11 @@ export default async function AdminHome() {
           <h2 className="mt-1 text-lg font-bold">OPS 精选</h2>
           <p className="mt-1 text-[13px] text-muted">发布 / 平仓 / 止损 Picks，前台自动计算实时收益 + 组合绩效。</p>
         </Link>
+        <Link href="/admin/ai-signals" className="card p-4 hover:border-accent">
+          <p className="label-caps">AI Weekly</p>
+          <h2 className="mt-1 text-lg font-bold">AI 周选</h2>
+          <p className="mt-1 text-[13px] text-muted">周一 cron 量化预筛 + AI 生成，admin 复核发布，Pro 邮件推送。</p>
+        </Link>
         <Link href="/admin/conviction" className="card p-4 hover:border-accent">
           <p className="label-caps">OPS Rankings</p>
           <h2 className="mt-1 text-lg font-bold">OPS 榜单</h2>

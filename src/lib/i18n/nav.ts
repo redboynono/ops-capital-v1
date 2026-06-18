@@ -11,6 +11,7 @@ export function buildNavSections(dict: Dictionary, optionsNavLabel: string): Nav
       items: [
         { href: "/alpha", label: n.alphaHome },
         { href: "/picks", label: n.picks },
+        { href: "/signals", label: n.signals },
         { href: "/conviction", label: n.conviction },
         { href: "/analysis", label: n.analysis },
         { href: "/news", label: n.news },

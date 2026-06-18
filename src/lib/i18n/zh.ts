@@ -89,6 +89,7 @@ export const zh = {
   nav: {
     alphaHome: "Alpha 首页",
     picks: "OPS 精选",
+    signals: "AI 周选",
     conviction: "OPS 榜单",
     analysis: "深度研报",
     news: "市场快讯",
@@ -113,6 +114,7 @@ export const zh = {
     adminEditor: "AI 编辑器",
     adminRatings: "评级管理",
     adminPicks: "OPS 精选 管理",
+    adminSignals: "AI 周选 管理",
     adminSocial: "社媒运营",
     tabHome: "首页",
     tabAnalysis: "研报",
@@ -796,6 +798,22 @@ export const zh = {
       disclaimer:
         "免责声明：本 OPS Pick 为研究观点，不构成投资建议。入场价与目标价为发布时刻基于公开信息的量化模型判断。",
     },
+  },
+  signals: {
+    metaTitle: "AI 周选 · OPS Alpha",
+    metaDesc: "量化预筛 + AI 深度理由 · 每周 5 只 · Research Pro 专属",
+    title: "AI 周选",
+    subtitle: "OPS 量化评分预筛 · AI 生成深度理由 · 每周更新",
+    weeklyLabel: "Weekly Edition",
+    empty: "本周周选尚未发布，敬请期待。",
+    ctaPro: "订阅 Research Pro",
+    teaserNote: "免费预览：标的与摘要可见；目标价、止损与完整 AI 理由需 Research Pro。",
+    target: "目标价",
+    stop: "止损",
+    entry: "入场参考",
+    opsScore: "OPS 分",
+    unlock: "解锁完整理由",
+    disclaimer: "AI 生成内容基于平台量化数据与公开信息，仅供参考，不构成投资建议。",
   },
   optionsPage: {
     labelCaps: "OPTION ALPHA · AI",
