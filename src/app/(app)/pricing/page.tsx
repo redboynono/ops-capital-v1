@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { LegalDisclaimer } from "@/components/legal-disclaimer";
 import { PricingProductGrid } from "@/components/pricing-product-grid";
 import { TrackRecordBar } from "@/components/track-record-bar";
@@ -40,7 +41,11 @@ export default async function PricingPage({
 
   logEvent("pricing_view", {
     userId: user?.id ?? null,
-    meta: { product: initialProduct, logged_in: Boolean(user) },
+    meta: {
+      product: initialProduct,
+      logged_in: Boolean(user),
+      utm_campaign: (await cookies()).get("ops_utm_campaign")?.value ?? null,
+    },
   });
 
   const active = user

@@ -123,7 +123,8 @@ export type EventType =
   | "trial_start" // 开始免费试用
   | "subscription_paid" // 完成付费（含试用转正/直接付费）
   | "email_capture" // 留下邮箱（免费简报）
-  | "short_link_click"; // X 短链点击（按 ref_key 分桶）
+  | "short_link_click" // X 短链点击（按 ref_key 分桶）
+  | "start_landing_view"; // X /start 落地页浏览
 
 /**
  * 极轻量打点。永远 fire-and-forget；调用方不需要 await。

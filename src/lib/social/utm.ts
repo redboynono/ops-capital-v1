@@ -1,5 +1,7 @@
 import { siteUrl } from "@/lib/seo";
 
+export const X_LANDING_PATH = "/start";
+
 export function withUtm(
   path: string,
   opts: { source: "x" | "xhs"; campaign?: string; medium?: string; lang?: "zh" | "en" },

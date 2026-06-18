@@ -358,3 +358,109 @@ export async function getUtmBreakdown(): Promise<UtmSourceRow[]> {
       limit 10`,
   );
 }
+
+export type ContentConversionRow = {
+  ref_key: string;
+  title: string;
+  content_type: string;
+  posted_at: string | null;
+  clicks: number;
+  landing_views: number;
+  paywall_hits: number;
+  pricing_views: number;
+  checkouts: number;
+  paid: number;
+  helpful_pct: number | null;
+  helpful_total: number;
+};
+
+/** 按 ref_key / utm_campaign 串内容转化：点击 → 落地 → 付费墙 → 定价 → 结账 → 付费 */
+export async function getContentConversionLeaderboard(days = 30, limit = 25): Promise<ContentConversionRow[]> {
+  const rows = await mysqlQuery<
+    Array<{
+      ref_key: string;
+      title: string | null;
+      content_type: string | null;
+      posted_at: Date | string | null;
+      clicks: string | number;
+      landing_views: string | number;
+      paywall_hits: string | number;
+      pricing_views: string | number;
+      checkouts: string | number;
+      paid: string | number;
+      helpful_pct: string | number | null;
+      helpful_total: string | number;
+    }>
+  >(
+    `with posts as (
+       select ref_key,
+              max(title) as title,
+              max(content_type) as content_type,
+              max(posted_x_at) as posted_at
+         from social_ops_posts
+        where ref_key is not null
+          and posted_x_at >= date_sub(current_timestamp, interval ? day)
+        group by ref_key
+     ),
+     link_clicks as (
+       select ref_key, coalesce(sum(clicks), 0) as clicks
+         from short_links
+        where ref_key is not null
+        group by ref_key
+     ),
+     ev as (
+       select json_unquote(json_extract(meta_json, '$.utm_campaign')) as campaign,
+              sum(case when event_type = 'start_landing_view' then 1 else 0 end) as landing_views,
+              sum(case when event_type = 'paywall_hit' then 1 else 0 end) as paywall_hits,
+              sum(case when event_type = 'pricing_view' then 1 else 0 end) as pricing_views,
+              sum(case when event_type = 'checkout_start' then 1 else 0 end) as checkouts,
+              sum(case when event_type = 'subscription_paid' then 1 else 0 end) as paid
+         from events
+        where ts >= date_sub(current_timestamp, interval ? day)
+          and json_extract(meta_json, '$.utm_campaign') is not null
+        group by campaign
+     ),
+     fb as (
+       select ref_key,
+              count(*) as helpful_total,
+              round(100 * sum(helpful = 1) / count(*), 1) as helpful_pct
+         from content_feedback
+        where ref_type = 'post'
+        group by ref_key
+     )
+     select p.ref_key,
+            coalesce(p.title, p.ref_key) as title,
+            coalesce(p.content_type, 'other') as content_type,
+            p.posted_at,
+            coalesce(lc.clicks, 0) as clicks,
+            coalesce(ev.landing_views, 0) as landing_views,
+            coalesce(ev.paywall_hits, 0) as paywall_hits,
+            coalesce(ev.pricing_views, 0) as pricing_views,
+            coalesce(ev.checkouts, 0) as checkouts,
+            coalesce(ev.paid, 0) as paid,
+            fb.helpful_pct,
+            coalesce(fb.helpful_total, 0) as helpful_total
+       from posts p
+       left join link_clicks lc on lc.ref_key = p.ref_key
+       left join ev on ev.campaign = p.ref_key
+       left join fb on fb.ref_key = p.ref_key
+      order by lc.clicks desc, ev.paywall_hits desc, p.posted_at desc
+      limit ?`,
+    [days, days, limit],
+  );
+
+  return rows.map((r) => ({
+    ref_key: r.ref_key,
+    title: r.title ?? r.ref_key,
+    content_type: r.content_type ?? "other",
+    posted_at: r.posted_at ? new Date(r.posted_at).toISOString().slice(0, 16).replace("T", " ") : null,
+    clicks: Number(r.clicks),
+    landing_views: Number(r.landing_views),
+    paywall_hits: Number(r.paywall_hits),
+    pricing_views: Number(r.pricing_views),
+    checkouts: Number(r.checkouts),
+    paid: Number(r.paid),
+    helpful_pct: r.helpful_pct != null ? Number(r.helpful_pct) : null,
+    helpful_total: Number(r.helpful_total ?? 0),
+  }));
+}

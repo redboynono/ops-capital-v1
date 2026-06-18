@@ -19,6 +19,7 @@ export async function POST(req: Request) {
     path?: string;
     visitorId?: string;
     utmSource?: string;
+    utmCampaign?: string;
     product?: string;
     slug?: string;
     planId?: string;
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
       path: (body?.path ?? "").slice(0, 512) || null,
       visitor_id: (body?.visitorId ?? "").slice(0, 64) || null,
       utm_source: (body?.utmSource ?? "").slice(0, 32) || null,
+      utm_campaign: (body?.utmCampaign ?? "").slice(0, 64) || null,
       product: (body?.product ?? "").slice(0, 32) || null,
       slug: (body?.slug ?? "").slice(0, 128) || null,
       plan_id: (body?.planId ?? "").slice(0, 32) || null,

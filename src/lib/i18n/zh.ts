@@ -1102,6 +1102,13 @@ export const zh = {
     disabled: "已关闭每日邮件简报",
     updateFail: "更新失败",
   },
+  feedbackUi: {
+    question: "这篇对你有用吗？",
+    yes: "有用",
+    no: "没用",
+    thanks: "感谢反馈！",
+    publicFmt: "有用 {pct}% · {n} 次反馈",
+  },
   alertsUi: {
     ruleTypes: {
       price_above: "现价突破上方",

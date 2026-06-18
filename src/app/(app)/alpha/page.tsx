@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { MarketSnapshot } from "@/components/market-snapshot";
 import { PostRow } from "@/components/post-row";
 import { ExpiringOptionsDirectSignals } from "@/components/expiring-options-direct-signals";
@@ -15,11 +14,10 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const user = await getSessionUser();
-  if (!user) redirect("/login?redirect=/alpha");
-
   const locale = await getLocale();
   const t = getDictionary(locale);
   const a = t.alpha;
+  const en = locale === "en";
 
   const [analysis, news] = await Promise.all([
     getCachedPosts({ kind: "analysis", limit: 10 }),
@@ -30,6 +28,27 @@ export default async function Home() {
 
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 py-5 md:px-6">
+      {!user ? (
+        <div className="mb-4 rounded-lg border border-accent/40 bg-accent/8 px-4 py-3">
+          <p className="text-[13px] font-semibold text-foreground">
+            {en ? "OPS Alpha demo · no login required" : "OPS Alpha 演示 · 无需登录"}
+          </p>
+          <p className="mt-1 text-[12px] text-muted">
+            {en
+              ? "Browse market data and research previews. Sign up for watchlists, alerts, and full Research Pro access."
+              : "浏览市场数据与研报预览。注册后可使用自选股、提醒与 Research Pro 全文。"}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link href="/login?tab=signup&redirect=/alpha" className="btn-primary px-3 py-1.5 text-[12px]">
+              {en ? "Sign up free" : "免费注册"}
+            </Link>
+            <Link href="/start" className="btn-outline px-3 py-1.5 text-[12px]">
+              {en ? "Plans & track record" : "方案与战绩"}
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       <MarketSnapshot dict={t} />
 
       <div className="mt-5">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { AskAI } from "@/components/ask-ai";
 import { BookmarkButton } from "@/components/bookmark-button";
 import { ShareButton } from "@/components/share/share-button";
@@ -25,6 +26,8 @@ import { ReaderModeShell, ReaderPrefsProvider, ReaderPrefsToolbar } from "@/comp
 import { formatDate } from "@/lib/i18n/common";
 import { getDictionary, getLocale } from "@/lib/i18n";
 import { hasEnglishBody, postContent, postExcerpt, postTitle } from "@/lib/i18n/post-locale";
+import { ContentFeedback } from "@/components/content-feedback";
+import { getFeedbackSummary } from "@/lib/content-feedback";
 import { isUsEquityTicker } from "@/lib/polygon";
 
 export const dynamic = "force-dynamic";
@@ -68,7 +71,12 @@ export default async function AnalysisDetailPage({
   if (!canViewFull) {
     logEvent("paywall_hit", {
       userId: user?.id ?? null,
-      meta: { slug: post.slug, product: paywallProduct, logged_in: Boolean(user) },
+      meta: {
+        slug: post.slug,
+        product: paywallProduct,
+        logged_in: Boolean(user),
+        utm_campaign: (await cookies()).get("ops_utm_campaign")?.value ?? null,
+      },
     });
   }
 
@@ -82,6 +90,16 @@ export default async function AnalysisDetailPage({
   const showZhBodyNotice = locale === "en" && canViewFull && !hasEnglishBody(post);
   const primarySymbol = tickers[0]?.symbol;
   const showSentiment = primarySymbol && isUsEquityTicker(primarySymbol);
+
+  const cookieStore = await cookies();
+  const visitorId = cookieStore.get("ops_vid")?.value ?? null;
+  let feedbackSummary = { total: 0, yesCount: 0, helpfulPct: null as number | null, userVote: null as boolean | null };
+  try {
+    feedbackSummary = await getFeedbackSummary("post", post.slug, user?.id ?? visitorId);
+  } catch {
+    /* table not migrated */
+  }
+  const fb = dict.feedbackUi;
 
   return (
     <ReaderPrefsProvider enabled={readerMode}>
@@ -186,6 +204,20 @@ export default async function AnalysisDetailPage({
       {canViewFull ? (
         <AskAI context={{ kind: "post", slug: post.slug }} loggedIn={Boolean(user)} />
       ) : null}
+
+      <ContentFeedback
+        refType="post"
+        refKey={post.slug}
+        initial={feedbackSummary}
+        readerMode={readerMode}
+        labels={{
+          question: fb.question,
+          yes: fb.yes,
+          no: fb.no,
+          thanks: fb.thanks,
+          publicFmt: fb.publicFmt,
+        }}
+      />
 
       <div className="mt-8 pt-4">
         <LegalDisclaimer variant="compact" />

@@ -9,7 +9,7 @@ import {
 import { isXPostingEnabled, postThread } from "@/lib/social/x-api";
 import { buildTrackRecordThread, type TrackRecordCallLite } from "@/lib/social/copy";
 import { getTrackRecord, isTrackRecordPresentable } from "@/lib/track-record";
-import { withUtm } from "@/lib/social/utm";
+import { withUtm, X_LANDING_PATH } from "@/lib/social/utm";
 import { mysqlQuery } from "@/lib/mysql";
 
 export type AutoPostXResult =
@@ -339,7 +339,7 @@ export type TrackRecordPostResult = {
 
 /**
  * 战绩应验帖：用真实「评级以来 vs SPY 超额」数据发一条 thread（中/英）。
- * 每自然日最多发一次；落地公开的 /pricing（含信任条 + 试用）。不喊单、不晒杠杆。
+ * 每自然日最多发一次；落地 /start（Picks / Brief / Research CTA）。不喊单、不晒杠杆。
  */
 export async function runTrackRecordPostX(
   opts: { dryRun?: boolean; lang?: "zh" | "en" } = {},
@@ -388,7 +388,7 @@ export async function runTrackRecordPostX(
   let lastError: string | null = null;
   for (let i = 0; i < langs.length; i++) {
     const locale = langs[i]!;
-    const url = withUtm("/pricing", { source: "x", campaign: refKey, lang: locale });
+    const url = withUtm(X_LANDING_PATH, { source: "x", campaign: refKey, lang: locale });
     const tweets = buildTrackRecordThread({
       top,
       buyCount: tr.buyCount,
@@ -415,7 +415,7 @@ export async function runTrackRecordPostX(
     contentType: "custom",
     refKey,
     title: "OPS ratings track record",
-    canonicalUrl: withUtm("/pricing", { source: "x", campaign: refKey }),
+    canonicalUrl: withUtm(X_LANDING_PATH, { source: "x", campaign: refKey }),
     xCopy: Object.entries(preview)
       .map(([l, ts]) => `[${l}]\n${ts.join("\n— — —\n")}`)
       .join("\n\n===\n\n"),

@@ -6,7 +6,8 @@
  */
 
 const VISITOR_COOKIE = "ops_vid";
-const UTM_COOKIE = "ops_utm"; // 首触渠道归因
+const UTM_COOKIE = "ops_utm";
+const UTM_CAMPAIGN_COOKIE = "ops_utm_campaign";
 
 function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
@@ -35,6 +36,7 @@ export function trackEvent(
         path: window.location.pathname,
         visitorId: readCookie(VISITOR_COOKIE),
         utmSource: readCookie(UTM_COOKIE),
+        utmCampaign: readCookie(UTM_CAMPAIGN_COOKIE),
         ...extra,
       }),
     }).catch(() => null);

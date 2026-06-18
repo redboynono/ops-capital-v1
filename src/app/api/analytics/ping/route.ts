@@ -10,11 +10,13 @@ export async function POST(req: Request) {
     path?: string;
     visitorId?: string;
     utmSource?: string;
+    utmCampaign?: string;
   } | null;
 
   const path = (body?.path ?? "/").slice(0, 512);
   const visitorId = (body?.visitorId ?? "").slice(0, 64) || null;
   const utmSource = (body?.utmSource ?? "").slice(0, 32) || null;
+  const utmCampaign = (body?.utmCampaign ?? "").slice(0, 64) || null;
 
   const user = await getSessionUser();
 
@@ -24,6 +26,7 @@ export async function POST(req: Request) {
       path,
       visitor_id: visitorId,
       utm_source: utmSource,
+      utm_campaign: utmCampaign,
       locale: req.headers.get("x-ops-locale") ?? null,
     },
   });

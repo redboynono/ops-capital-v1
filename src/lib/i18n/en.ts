@@ -1101,6 +1101,13 @@ export const en: Dictionary = {
     disabled: "Daily email briefing disabled",
     updateFail: "Update failed",
   },
+  feedbackUi: {
+    question: "Was this helpful?",
+    yes: "Yes",
+    no: "No",
+    thanks: "Thanks for your feedback!",
+    publicFmt: "{pct}% found helpful · {n} responses",
+  },
   alertsUi: {
     ruleTypes: {
       price_above: "Price breaks above",

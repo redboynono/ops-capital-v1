@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+import { ContentFeedback } from "@/components/content-feedback";
 import { ShareButton } from "@/components/share/share-button";
 import { StickyPaywall } from "@/components/sticky-paywall";
 import { ProductPaywallCard } from "@/components/product-paywall-card";
@@ -10,6 +12,7 @@ import { getSessionUser } from "@/lib/auth";
 import { getDictionary, getLocale } from "@/lib/i18n";
 import { fmt } from "@/lib/i18n/fmt";
 import { computePerformance, getPickBySlug } from "@/lib/picks";
+import { getFeedbackSummary } from "@/lib/content-feedback";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +80,16 @@ export default async function PickDetailPage({
   const headlinePct = pick.status === "open" ? perf.unrealizedPct : perf.realizedPct;
   const convictionLabel =
     pick.conviction === "high" ? conv.high : pick.conviction === "low" ? conv.low : conv.medium;
+
+  const cookieStore = await cookies();
+  const visitorId = cookieStore.get("ops_vid")?.value ?? null;
+  let feedbackSummary = { total: 0, yesCount: 0, helpfulPct: null as number | null, userVote: null as boolean | null };
+  try {
+    feedbackSummary = await getFeedbackSummary("pick", pick.slug, user?.id ?? visitorId);
+  } catch {
+    /* table not migrated */
+  }
+  const fb = dict.feedbackUi;
 
   return (
     <ReaderPrefsProvider enabled={readerMode}>
@@ -200,6 +213,20 @@ export default async function PickDetailPage({
         </div>
 
         {!canViewFull ? <StickyPaywall loggedIn={Boolean(user)} product="research" /> : null}
+
+        <ContentFeedback
+          refType="pick"
+          refKey={pick.slug}
+          initial={feedbackSummary}
+          readerMode={readerMode}
+          labels={{
+            question: fb.question,
+            yes: fb.yes,
+            no: fb.no,
+            thanks: fb.thanks,
+            publicFmt: fb.publicFmt,
+          }}
+        />
 
         <p className={`mt-8 pt-4 text-[11px] leading-relaxed ${readerMode ? "border-t border-[#d8d0c2] text-[#6b5c3f]" : "border-t border-border text-muted-soft"}`}>
           {d.disclaimer}

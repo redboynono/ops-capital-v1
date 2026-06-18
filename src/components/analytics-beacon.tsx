@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 const VISITOR_COOKIE = "ops_vid";
 const UTM_COOKIE = "ops_utm";
+const UTM_CAMPAIGN_COOKIE = "ops_utm_campaign";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 function readCookie(name: string): string | null {
@@ -21,11 +22,14 @@ function ensureVisitorId(): string {
   return vid;
 }
 
-// 首触渠道归因：只在第一次带 utm_source 时写入，后续不覆盖
-function captureFirstTouchUtm(utmSource?: string | null): void {
-  if (!utmSource) return;
-  if (readCookie(UTM_COOKIE)) return;
-  document.cookie = `${UTM_COOKIE}=${encodeURIComponent(utmSource)}; path=/; max-age=${COOKIE_MAX_AGE}; samesite=lax`;
+// 首触渠道归因：只在第一次带 utm 时写入，后续不覆盖
+function captureFirstTouchUtm(utmSource?: string | null, utmCampaign?: string | null): void {
+  if (utmSource && !readCookie(UTM_COOKIE)) {
+    document.cookie = `${UTM_COOKIE}=${encodeURIComponent(utmSource)}; path=/; max-age=${COOKIE_MAX_AGE}; samesite=lax`;
+  }
+  if (utmCampaign && !readCookie(UTM_CAMPAIGN_COOKIE)) {
+    document.cookie = `${UTM_CAMPAIGN_COOKIE}=${encodeURIComponent(utmCampaign)}; path=/; max-age=${COOKIE_MAX_AGE}; samesite=lax`;
+  }
 }
 
 /** 轻量 page_view 埋点，支撑 DAU / UV / 路径分析 */
@@ -43,12 +47,13 @@ export function AnalyticsBeacon() {
 
     const vid = ensureVisitorId();
     const utmSource = searchParams?.get("utm_source") ?? undefined;
-    captureFirstTouchUtm(utmSource);
+    const utmCampaign = searchParams?.get("utm_campaign") ?? undefined;
+    captureFirstTouchUtm(utmSource, utmCampaign);
 
     void fetch("/api/analytics/ping", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ path, visitorId: vid, utmSource }),
+      body: JSON.stringify({ path, visitorId: vid, utmSource, utmCampaign }),
       keepalive: true,
     }).catch(() => null);
   }, [pathname, searchParams]);

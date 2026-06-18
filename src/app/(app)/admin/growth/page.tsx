@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import {
   getConversionFunnel,
+  getContentConversionLeaderboard,
   getGrowthKpi,
   getGrowthTrend,
   getRecentXPosts,
@@ -10,6 +11,7 @@ import {
   getTopPaths,
   getUtmBreakdown,
 } from "@/lib/admin-growth";
+import { getContentHelpfulLeaderboard } from "@/lib/content-feedback";
 
 export const dynamic = "force-dynamic";
 
@@ -102,7 +104,8 @@ export default async function GrowthDashboardPage() {
     );
   }
 
-  const [kpi, trend, topPaths, utm, recentX, funnel7d, funnel30d, socialCtr] = await Promise.all([
+  const [kpi, trend, topPaths, utm, recentX, funnel7d, funnel30d, socialCtr, contentConv, helpfulRank] =
+    await Promise.all([
     getGrowthKpi(),
     getGrowthTrend(30),
     getTopPaths(10),
@@ -111,6 +114,8 @@ export default async function GrowthDashboardPage() {
     getConversionFunnel(7),
     getConversionFunnel(30),
     getSocialCtrByContentType(30),
+    getContentConversionLeaderboard(30, 20),
+    getContentHelpfulLeaderboard(5, 15).catch(() => []),
   ]);
 
   const maxDau = Math.max(1, ...trend.map((t) => t.dau));
@@ -251,6 +256,102 @@ export default async function GrowthDashboardPage() {
                 </div>
               ))
             )}
+          </div>
+        </section>
+
+        {/* 内容转化排行（30d） */}
+        <section className="card p-4 lg:col-span-2">
+          <h2 className="text-[12px] font-bold text-foreground">内容转化排行（30 天）</h2>
+          <p className="mt-0.5 text-[11px] text-muted">
+            按 ref_key / utm_campaign：短链点击 → 落地 → 付费墙 → 定价 → 结账 → 付费
+          </p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-[11px]">
+              <thead>
+                <tr className="border-b border-border text-[10px] uppercase tracking-wide text-muted">
+                  <th className="py-2 pr-2">内容</th>
+                  <th className="py-2 pr-2">类型</th>
+                  <th className="py-2 pr-2">点击</th>
+                  <th className="py-2 pr-2">落地</th>
+                  <th className="py-2 pr-2">付费墙</th>
+                  <th className="py-2 pr-2">定价</th>
+                  <th className="py-2 pr-2">结账</th>
+                  <th className="py-2 pr-2">付费</th>
+                  <th className="py-2">有用率</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contentConv.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-4 text-muted">
+                      暂无发帖或 utm_campaign 归因数据
+                    </td>
+                  </tr>
+                ) : (
+                  contentConv.map((row) => (
+                    <tr key={row.ref_key} className="border-b border-border/60">
+                      <td className="max-w-[200px] py-2 pr-2">
+                        <p className="line-clamp-1 font-medium text-foreground">{row.title}</p>
+                        <p className="mono text-[10px] text-muted">{row.ref_key}</p>
+                      </td>
+                      <td className="py-2 pr-2 text-muted">{row.content_type}</td>
+                      <td className="py-2 pr-2 mono">{row.clicks}</td>
+                      <td className="py-2 pr-2 mono">{row.landing_views}</td>
+                      <td className="py-2 pr-2 mono">{row.paywall_hits}</td>
+                      <td className="py-2 pr-2 mono">{row.pricing_views}</td>
+                      <td className="py-2 pr-2 mono">{row.checkouts}</td>
+                      <td className="py-2 pr-2 mono text-[color:var(--success)]">{row.paid}</td>
+                      <td className="py-2 mono text-foreground-soft">
+                        {row.helpful_total >= 5 && row.helpful_pct != null
+                          ? `${row.helpful_pct}% (${row.helpful_total})`
+                          : row.helpful_total > 0
+                            ? `${row.helpful_total}票`
+                            : "—"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* 内容有用度排行 */}
+        <section className="card p-4 lg:col-span-2">
+          <h2 className="text-[12px] font-bold text-foreground">内容有用度排行</h2>
+          <p className="mt-0.5 text-[11px] text-muted">👍/👎 反馈 · 样本 ≥5 才入榜</p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-[11px]">
+              <thead>
+                <tr className="border-b border-border text-[10px] uppercase tracking-wide text-muted">
+                  <th className="py-2 pr-2">内容</th>
+                  <th className="py-2 pr-2">类型</th>
+                  <th className="py-2 pr-2">有用率</th>
+                  <th className="py-2">反馈数</th>
+                </tr>
+              </thead>
+              <tbody>
+                {helpfulRank.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-4 text-muted">
+                      暂无足够样本的反馈数据
+                    </td>
+                  </tr>
+                ) : (
+                  helpfulRank.map((row) => (
+                    <tr key={`${row.ref_type}-${row.ref_key}`} className="border-b border-border/60">
+                      <td className="max-w-[220px] py-2 pr-2">
+                        <p className="line-clamp-1 font-medium text-foreground">{row.title}</p>
+                        <p className="mono text-[10px] text-muted">{row.ref_key}</p>
+                      </td>
+                      <td className="py-2 pr-2 text-muted">{row.ref_type}</td>
+                      <td className="py-2 pr-2 mono text-accent-strong">{row.helpful_pct}%</td>
+                      <td className="py-2 mono">{row.total}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
 
