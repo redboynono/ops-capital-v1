@@ -1,5 +1,18 @@
 import { AI_VALUE_CHAIN_LAYERS } from "@/lib/marketing/ai-value-chain";
-import { callModel, extractJson, parseModelJsonField } from "@/lib/ai/_runtime";
+import { callModel, extractJson, parseModelJsonField, stripModelNoise } from "@/lib/ai/_runtime";
+
+function replyMaxTokens(): number {
+  const env = Number(process.env.OPENAI_MAX_TOKENS ?? 8192);
+  return Number.isFinite(env) && env > 0 ? env : 8192;
+}
+
+function pickJsonField(raw: string, field: string): string {
+  try {
+    return parseModelJsonField(raw, field);
+  } catch {
+    return "";
+  }
+}
 
 export type XWatchTopicType =
   | "framework"
@@ -138,38 +151,58 @@ ${input.tweetText}
 ${context.length > 0 ? `\nContext:\n${context.join("\n\n")}\n` : ""}
 Return JSON: { "reply_draft": "English reply ≤280 chars", "reply_draft_zh": "中文对照" }`;
 
-  const raw = await callModel(REPLY_SYSTEM, userPrompt, {
-    temperature: 0.45,
-    maxTokens: 8192,
-    jsonMode: true,
-  });
-  let reply_draft: string;
-  let reply_draft_zh: string;
-  try {
-    reply_draft = parseModelJsonField(raw, "reply_draft");
-    reply_draft_zh = parseModelJsonField(raw, "reply_draft_zh");
-  } catch {
-    const j = extractJson(raw);
-    reply_draft = String(j.reply_draft ?? "").trim();
-    reply_draft_zh = String(j.reply_draft_zh ?? "").trim();
+  const tokenBudgets = [Math.min(replyMaxTokens(), 8192), replyMaxTokens()];
+  let lastError = "AI 未返回有效 JSON，请重试";
+
+  for (let attempt = 0; attempt < tokenBudgets.length; attempt++) {
+    const raw = await callModel(REPLY_SYSTEM, userPrompt, {
+      temperature: 0.45,
+      maxTokens: tokenBudgets[attempt],
+      jsonMode: true,
+    });
+
+    let reply_draft = pickJsonField(raw, "reply_draft");
+    let reply_draft_zh = pickJsonField(raw, "reply_draft_zh");
+
+    if (!reply_draft) {
+      try {
+        const j = extractJson(raw);
+        reply_draft = String(j.reply_draft ?? "").trim();
+        if (!reply_draft_zh) reply_draft_zh = String(j.reply_draft_zh ?? "").trim();
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : lastError;
+        continue;
+      }
+    }
+
+    if (!reply_draft) {
+      lastError = "empty reply from model";
+      continue;
+    }
+
+    if (reply_draft.length > 280) reply_draft = reply_draft.slice(0, 277) + "…";
+    if (!reply_draft_zh) {
+      try {
+        reply_draft_zh = await translateXWatchReplyZh(reply_draft);
+      } catch {
+        reply_draft_zh = "";
+      }
+    }
+    return { reply_draft, reply_draft_zh };
   }
-  if (!reply_draft) throw new Error("empty reply from model");
-  if (reply_draft.length > 280) reply_draft = reply_draft.slice(0, 277) + "…";
-  if (!reply_draft_zh) reply_draft_zh = await translateXWatchReplyZh(reply_draft);
-  return { reply_draft, reply_draft_zh };
+
+  throw new Error(lastError.includes("JSON") ? "AI 未返回有效 JSON，请重试" : lastError);
 }
 
 export async function translateXWatchReplyZh(english: string): Promise<string> {
   const text = english.trim();
   if (!text) return "";
   const raw = await callModel(
-    "Translate the English X reply draft to natural Chinese for admin review. Output JSON: { \"reply_draft_zh\": \"...\" }",
-    `English draft:\n${text}`,
-    { temperature: 0.2, maxTokens: 2048, jsonMode: true },
+    "将以下英文 X 回复草稿翻译成自然中文，仅供 admin 阅读对照。只输出中文译文，不要解释、不要引号、不要 JSON。",
+    text,
+    { temperature: 0.2, maxTokens: 1024, jsonMode: false },
   );
-  try {
-    return parseModelJsonField(raw, "reply_draft_zh");
-  } catch {
-    return String(extractJson(raw).reply_draft_zh ?? "").trim();
-  }
+  const zh = stripModelNoise(raw).trim();
+  if (zh) return zh;
+  throw new Error("AI 未返回中文对照");
 }

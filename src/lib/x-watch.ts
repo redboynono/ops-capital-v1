@@ -88,6 +88,20 @@ function tweetUrl(username: string, tweetId: string): string {
   return `https://x.com/${username}/status/${tweetId}`;
 }
 
+function friendlyAiError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("no json object") || m.includes("no reply_draft") || m.includes("未返回有效 json")) {
+    return "AI 未返回有效 JSON，请重试（Gemini 思考模型偶发截断）";
+  }
+  if (m.includes("empty model output") || m.includes("empty reply")) {
+    return "AI 未返回有效草稿，请重试";
+  }
+  if (m.includes("timeout") || m.includes("abort")) {
+    return "AI 请求超时，请重试";
+  }
+  return message;
+}
+
 function friendlyPostError(message: string): string {
   const m = message.toLowerCase();
   if (m.includes("not been mentioned") || m.includes("not allowed because you have not")) {
@@ -116,7 +130,7 @@ export async function translateReplyForXWatchItemById(id: string): Promise<{ ok:
     );
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "translate failed" };
+    return { ok: false, error: friendlyAiError(e instanceof Error ? e.message : "translate failed") };
   }
 }
 
@@ -292,7 +306,8 @@ export async function generateReplyForXWatchItemById(id: string): Promise<{ ok: 
     );
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "generate reply failed" };
+    const raw = e instanceof Error ? e.message : "generate reply failed";
+    return { ok: false, error: friendlyAiError(raw) };
   }
 }
 

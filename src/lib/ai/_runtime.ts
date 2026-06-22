@@ -43,15 +43,22 @@ export async function callModel(
   }
   const content = data?.choices?.[0]?.message?.content;
   if (!content || typeof content !== "string") throw new Error("empty model output");
-  return content;
+  return stripModelNoise(content);
 }
 
-export function extractJson(raw: string): Record<string, unknown> {
-  const stripped = raw
-    .replace(/<think>[\s\S]*?<\/think>\s*/gi, "")
+/** Strip reasoning / markdown noise from model output (Gemini thinking, MiniMax, etc.). */
+export function stripModelNoise(raw: string): string {
+  return raw
+    .replace(/<think>[\s\S]*?(?:<\/redacted_thinking>|<\/think>)/gi, "")
+    .replace(/<\/?think>/gi, "")
+    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
     .replace(/^\s*```(?:json)?\s*\n?/i, "")
     .replace(/\n?```\s*$/i, "")
     .trim();
+}
+
+export function extractJson(raw: string): Record<string, unknown> {
+  const stripped = stripModelNoise(raw);
   const firstBrace = stripped.indexOf("{");
   const lastBrace = stripped.lastIndexOf("}");
   if (firstBrace < 0 || lastBrace <= firstBrace) {
