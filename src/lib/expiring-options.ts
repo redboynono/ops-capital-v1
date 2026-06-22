@@ -102,7 +102,7 @@ export async function listExpiringOptionsRadar(opts?: {
   summaries: Underlying0DteSummary[];
   byUnderlying: Record<string, ExpiringOptionHighlight[]>;
   fetchedAt: string;
-  delayedNote: string;
+  quotesAvailable: boolean;
 }> {
   const expirationDate = opts?.expirationDate ?? thisFridayIso();
   const underlyings = opts?.underlyings ?? [...ZERO_DTE_WATCHLIST];
@@ -122,7 +122,7 @@ export async function listExpiringOptionsRadar(opts?: {
       summaries: CACHE.summaries,
       byUnderlying: CACHE.byUnderlying,
       fetchedAt: new Date(CACHE.at).toISOString(),
-      delayedNote: "约 15 分钟延迟",
+      quotesAvailable: true,
     };
   }
 
@@ -133,7 +133,7 @@ export async function listExpiringOptionsRadar(opts?: {
       summaries: [],
       byUnderlying: {},
       fetchedAt: new Date().toISOString(),
-      delayedNote: "行情暂不可用",
+      quotesAvailable: false,
     };
   }
 
@@ -187,7 +187,7 @@ export async function listExpiringOptionsRadar(opts?: {
     summaries,
     byUnderlying,
     fetchedAt: new Date(now).toISOString(),
-    delayedNote: "约 15 分钟延迟",
+    quotesAvailable: true,
   };
 }
 

@@ -32,7 +32,6 @@ export function resolveExpirySelection(params?: {
 }): {
   expirationDate: string;
   week: ExpiryWeek;
-  label: string;
   thisFriday: string;
   nextFriday: string;
 } {
@@ -40,12 +39,9 @@ export function resolveExpirySelection(params?: {
   const nextFriday = nextFridayIso();
 
   if (params?.exp && /^\d{4}-\d{2}-\d{2}$/.test(params.exp)) {
-    const label =
-      params.exp === thisFriday ? "本周五" : params.exp === nextFriday ? "下周五" : params.exp;
     return {
       expirationDate: params.exp,
       week: params.exp === nextFriday ? "next" : "this",
-      label,
       thisFriday,
       nextFriday,
     };
@@ -56,10 +52,20 @@ export function resolveExpirySelection(params?: {
   return {
     expirationDate,
     week,
-    label: week === "next" ? "下周五" : "本周五",
     thisFriday,
     nextFriday,
   };
+}
+
+export function expiryWeekLabel(
+  expirationDate: string,
+  thisFriday: string,
+  nextFriday: string,
+  labels: { thisFriday: string; nextFriday: string },
+): string {
+  if (expirationDate === nextFriday) return labels.nextFriday;
+  if (expirationDate === thisFriday) return labels.thisFriday;
+  return expirationDate;
 }
 
 export function buildExpiringOptionsQuery(opts: {

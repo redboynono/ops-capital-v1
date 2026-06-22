@@ -1,5 +1,7 @@
 import { ExpiringOptionsPickCard } from "@/components/expiring-options-pick-card";
 import { buildSymbolExpiringOptionsPlaybook } from "@/lib/expiring-options-playbook";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
 import { OPTION_ALPHA } from "@/lib/option-alpha-brand";
 
 export async function ExpiringOptionsSymbolPlaybook({
@@ -11,7 +13,14 @@ export async function ExpiringOptionsSymbolPlaybook({
   expirationDate: string;
   expiryLabel: string;
 }) {
-  const result = await buildSymbolExpiringOptionsPlaybook(symbol, expirationDate, expiryLabel);
+  const locale = await getLocale();
+  const o = getDictionary(locale).optionsPage;
+  const result = await buildSymbolExpiringOptionsPlaybook(
+    symbol,
+    o.playbook,
+    expirationDate,
+    expiryLabel,
+  );
 
   if (result.status === "error") {
     return (
@@ -21,7 +30,7 @@ export async function ExpiringOptionsSymbolPlaybook({
             <span className="font-mono text-accent-strong">{result.symbol}</span>
           ) : null}
           {result.symbol ? " · " : null}
-          无法生成策略
+          {o.symbolPlaybook.errorTitle}
         </p>
         <p className="mt-2 text-[12px] leading-relaxed text-muted">{result.message}</p>
       </section>
@@ -29,31 +38,41 @@ export async function ExpiringOptionsSymbolPlaybook({
   }
 
   const { summary, pick, flowNote, expirationDate: exp } = result;
+  const biasLabel =
+    summary.bias === "bullish"
+      ? o.symbolPlaybook.biasBullish
+      : summary.bias === "bearish"
+        ? o.symbolPlaybook.biasBearish
+        : o.symbolPlaybook.biasNeutral;
 
   return (
     <section className="card overflow-hidden">
       <header className="border-b border-border bg-surface-muted px-4 py-3">
-        <span className="label-caps">{OPTION_ALPHA.name} · {expiryLabel}</span>
+        <span className="label-caps">
+          {OPTION_ALPHA.name} · {expiryLabel}
+        </span>
         <h2 className="mt-0.5 text-[17px] font-bold text-foreground">
-          <span className="font-mono text-accent-strong">{result.symbol}</span> AI 跟单策略
+          {fmt(o.symbolPlaybook.titleFmt, { symbol: result.symbol })}
         </h2>
         <p className="mt-1 text-[12px] text-muted">
-          到期 {exp}（{expiryLabel}）· {flowNote}
+          {fmt(o.symbolPlaybook.expiryFmt, { date: exp, label: expiryLabel, flow: flowNote })}
         </p>
       </header>
 
       <div className="px-4 py-4">
-        <ExpiringOptionsPickCard leg={pick} badge={`${result.symbol} · ${expiryLabel}`} />
+        <ExpiringOptionsPickCard
+          leg={pick}
+          badge={`${result.symbol} · ${expiryLabel}`}
+          ui={o.pickCard}
+        />
       </div>
 
       <div className="border-t border-border px-4 py-3 text-[12px] text-muted-soft">
         <p>
-          总成交 {summary.totalVolume.toLocaleString()} 张 · 方向判定：
-          {summary.bias === "bullish"
-            ? "偏多"
-            : summary.bias === "bearish"
-              ? "偏空"
-              : "震荡/不明"}
+          {fmt(o.symbolPlaybook.summaryFmt, {
+            vol: summary.totalVolume.toLocaleString(),
+            bias: biasLabel,
+          })}
         </p>
       </div>
     </section>

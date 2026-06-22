@@ -9,7 +9,7 @@ import { ExpiringOptionsPlaybook } from "@/components/expiring-options-playbook"
 import { ExpiringOptionsRadar } from "@/components/expiring-options-radar";
 import { ExpiringOptionsSymbolForm } from "@/components/expiring-options-symbol-form";
 import { normalizeUsTickerInput, ZERO_DTE_WATCHLIST } from "@/lib/expiring-options";
-import { buildExpiringOptionsQuery, resolveExpirySelection } from "@/lib/options-expiry";
+import { buildExpiringOptionsQuery, expiryWeekLabel, resolveExpirySelection } from "@/lib/options-expiry";
 import { OPTION_ALPHA } from "@/lib/option-alpha-brand";
 import { ProductPaywallCard } from "@/components/product-paywall-card";
 import { getSessionUser } from "@/lib/auth";
@@ -40,6 +40,12 @@ export default async function ExpiringOptionsPage({
 
   const locale = await getLocale();
   const o = getDictionary(locale).optionsPage;
+  const expiryLabel = expiryWeekLabel(
+    expiry.expirationDate,
+    expiry.thisFriday,
+    expiry.nextFriday,
+    o.expiry,
+  );
 
   const optionPro = hasOptionAlphaAccess(user);
   const previewOnly =
@@ -78,7 +84,7 @@ export default async function ExpiringOptionsPage({
       <section className="card mb-5 p-4">
         <h2 className="text-[15px] font-bold text-foreground">{o.filterBySymbol}</h2>
         <p className="mt-1 text-[12px] text-muted">
-          {fmt(o.filterSubFmt, { label: expiry.label, date: expiry.expirationDate })}
+          {fmt(o.filterSubFmt, { label: expiryLabel, date: expiry.expirationDate })}
         </p>
         <div className="mt-3">
           <ExpiringOptionsSymbolForm initialSymbol={querySymbol} week={expiry.week} />
@@ -98,7 +104,7 @@ export default async function ExpiringOptionsPage({
         <div className="mb-5">
           <ExpiringOptionsDirectSignals
             expirationDate={expiry.expirationDate}
-            expiryLabel={expiry.label}
+            expiryLabel={expiryLabel}
             symbol={effectiveSymbol || undefined}
             rowLimit={optionPro ? undefined : 5}
           />
@@ -110,14 +116,14 @@ export default async function ExpiringOptionsPage({
           <OptionTradeIdeasPanel
             symbol={effectiveSymbol}
             expirationDate={expiry.expirationDate}
-            expiryLabel={expiry.label}
+            expiryLabel={expiryLabel}
             week={expiry.week}
           />
           <div className="mb-5" id="option-chain">
             <ExpiringOptionsChainTable
               symbol={effectiveSymbol}
               expirationDate={expiry.expirationDate}
-              expiryLabel={expiry.label}
+              expiryLabel={expiryLabel}
             />
           </div>
         </>
@@ -140,13 +146,13 @@ export default async function ExpiringOptionsPage({
           <div className="mt-4 space-y-5">
             <ExpiringOptionsPlaybook
               expirationDate={expiry.expirationDate}
-              expiryLabel={expiry.label}
+              expiryLabel={expiryLabel}
             />
             <ExpiringOptionsRadar
               limit={50}
               compact
               expirationDate={expiry.expirationDate}
-              expiryLabel={expiry.label}
+              expiryLabel={expiryLabel}
             />
           </div>
         </details>

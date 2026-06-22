@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { getUnderlying0DteData } from "@/lib/expiring-options";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
 import { formatOptionContractLabel } from "@/lib/option-copilot-scans";
 import { OPTION_ALPHA } from "@/lib/option-alpha-brand";
 
@@ -18,6 +20,8 @@ export async function ExpiringOptionsChainTable({
   expirationDate: string;
   expiryLabel: string;
 }) {
+  const locale = await getLocale();
+  const c = getDictionary(locale).optionsPage.chain;
   const { contracts, summary } = await getUnderlying0DteData(symbol, expirationDate);
   const sorted = [...contracts].sort((a, b) => {
     if (a.strike !== b.strike) return a.strike - b.strike;
@@ -25,41 +29,45 @@ export async function ExpiringOptionsChainTable({
   });
 
   const spot = summary?.underlyingPrice;
+  const meta =
+    spot != null
+      ? fmt(c.metaFmt, {
+          date: expirationDate,
+          label: expiryLabel,
+          spot: spot.toFixed(2),
+          count: sorted.length,
+          callVol: fmtNum(summary!.callVolume),
+          putVol: fmtNum(summary!.putVolume),
+        })
+      : fmt(c.metaNoSpotFmt, {
+          date: expirationDate,
+          label: expiryLabel,
+          count: sorted.length,
+          callVol: summary ? fmtNum(summary.callVolume) : "0",
+          putVol: summary ? fmtNum(summary.putVolume) : "0",
+        });
 
   return (
     <section id="option-chain" className="card scroll-mt-24 overflow-hidden">
       <header className="border-b border-border bg-surface-muted px-4 py-3">
         <h2 className="text-[17px] font-bold text-foreground">
-          完整期权链 · <span className="font-mono text-accent-strong">{symbol}</span>
+          {fmt(c.titleFmt, { symbol })}
         </h2>
-        <p className="mt-1 text-[12px] text-muted">
-          到期 {expirationDate}（{expiryLabel}）
-          {spot != null ? (
-            <>
-              {" "}
-              · 现价 <span className="font-mono font-semibold text-foreground">${spot.toFixed(2)}</span>
-            </>
-          ) : null}
-          {" "}
-          · 共 {sorted.length} 张有成交合约
-          {summary ? (
-            <>
-              {" "}
-              · Call {fmtNum(summary.callVolume)} / Put {fmtNum(summary.putVolume)}
-            </>
-          ) : null}
-        </p>
+        <p className="mt-1 text-[12px] text-muted">{meta}</p>
       </header>
 
       {sorted.length === 0 ? (
         <div className="px-4 py-10 text-center">
-          <p className="text-[13px] text-muted">该到期日暂无成交数据。</p>
+          <p className="text-[13px] text-muted">{c.empty}</p>
           <p className="mt-2 text-[12px] text-muted-soft">
-            请尝试切换
-            <Link href={`/expiring-options?symbol=${symbol}&week=next`} className="mx-1 text-accent-strong hover:underline">
-              下周五
+            {c.emptyHint}
+            <Link
+              href={`/expiring-options?symbol=${symbol}&week=next`}
+              className="mx-1 text-accent-strong hover:underline"
+            >
+              {c.emptyHintLink}
             </Link>
-            或确认标的代码正确。
+            {c.emptyHintEnd}
           </p>
         </div>
       ) : (
@@ -67,10 +75,10 @@ export async function ExpiringOptionsChainTable({
           <table className="w-full min-w-[720px] text-left text-[12px]">
             <thead className="sticky top-0 z-10 bg-surface-muted">
               <tr className="border-b border-border text-[10px] uppercase tracking-wide text-muted">
-                <th className="px-3 py-2">行权价</th>
-                <th className="px-3 py-2">类型</th>
-                <th className="px-3 py-2">合约</th>
-                <th className="px-3 py-2 text-right">成交量</th>
+                <th className="px-3 py-2">{c.colStrike}</th>
+                <th className="px-3 py-2">{c.colType}</th>
+                <th className="px-3 py-2">{c.colContract}</th>
+                <th className="px-3 py-2 text-right">{c.colVolume}</th>
                 <th className="px-3 py-2 text-right">OI</th>
                 <th className="px-3 py-2 text-right">Vol/OI</th>
                 <th className="px-3 py-2 text-right">VWAP</th>
@@ -120,7 +128,7 @@ export async function ExpiringOptionsChainTable({
       )}
 
       <p className="border-t border-border px-4 py-2 text-[10px] text-muted-soft">
-        {OPTION_ALPHA.name} · 行情约 15 分钟延迟 · 高亮行为贴近现价（±1%）
+        {fmt(c.footnoteFmt, { brand: OPTION_ALPHA.name })}
       </p>
     </section>
   );

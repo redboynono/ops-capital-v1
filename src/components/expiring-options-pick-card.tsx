@@ -1,41 +1,56 @@
 import Link from "next/link";
 import type { FollowLeg, PlayAction } from "@/lib/expiring-options-playbook";
+import { fmt } from "@/lib/i18n/fmt";
+import type { Dictionary } from "@/lib/i18n/zh";
+
+export type PickCardCopy = Dictionary["optionsPage"]["pickCard"];
 
 const ACTION_STYLE: Record<
   PlayAction,
-  { bg: string; border: string; text: string; label: string }
+  { bg: string; border: string; text: string }
 > = {
-  跟涨: {
+  long: {
     bg: "bg-[color:color-mix(in_srgb,var(--success)_12%,transparent)]",
     border: "border-[color:var(--success)]",
     text: "text-[color:var(--success)]",
-    label: "轻仓跟涨",
   },
-  跟跌: {
+  short: {
     bg: "bg-[color:color-mix(in_srgb,var(--danger)_10%,transparent)]",
     border: "border-[color:var(--danger)]",
     text: "text-[color:var(--danger)]",
-    label: "轻仓跟跌",
   },
-  观望: {
+  watch: {
     bg: "bg-surface-muted",
     border: "border-border",
     text: "text-muted",
-    label: "今日观望",
   },
 };
+
+function actionLabel(action: PlayAction, ui: PickCardCopy): string {
+  if (action === "long") return ui.actionLong;
+  if (action === "short") return ui.actionShort;
+  return ui.actionWatch;
+}
+
+function confidenceLabel(conf: FollowLeg["confidence"], ui: PickCardCopy): string {
+  if (conf === "high") return ui.confidenceHigh;
+  if (conf === "medium") return ui.confidenceMed;
+  return ui.confidenceLow;
+}
 
 export function ExpiringOptionsPickCard({
   leg,
   index,
   badge,
+  ui,
 }: {
   leg: FollowLeg;
   index?: number;
   badge?: string;
+  ui: PickCardCopy;
 }) {
   const style = ACTION_STYLE[leg.action];
-  const typeZh = leg.contractType === "call" ? "看涨 Call" : "看跌 Put";
+  const typeLabel = leg.contractType === "call" ? "Call" : "Put";
 
   return (
     <article className={`rounded-md border p-4 ${style.bg} ${style.border}`}>
@@ -47,7 +62,7 @@ export function ExpiringOptionsPickCard({
             </span>
           ) : index != null ? (
             <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-              建议 {index + 1}
+              {fmt(ui.pickFmt, { n: index + 1 })}
             </span>
           ) : null}
           <h3 className="mt-0.5 text-[16px] font-bold text-foreground">
@@ -64,24 +79,28 @@ export function ExpiringOptionsPickCard({
         <span
           className={`rounded px-2 py-0.5 text-[11px] font-bold ${style.text} border ${style.border}`}
         >
-          {style.label}
+          {actionLabel(leg.action, ui)}
         </span>
       </div>
 
       <p className="mt-2 text-[13px] leading-relaxed text-foreground-soft">{leg.headline}</p>
 
-      {leg.action !== "观望" ? (
+      {leg.action !== "watch" ? (
         <div className="mt-3 rounded border border-border bg-surface px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">跟单要点</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+            {ui.followPoints}
+          </p>
           <dl className="mt-1.5 grid grid-cols-[72px_1fr] gap-x-2 gap-y-1 text-[12px]">
-            <dt className="text-muted">方向</dt>
-            <dd className="font-semibold text-foreground">{typeZh}</dd>
-            <dt className="text-muted">行权价</dt>
+            <dt className="text-muted">{ui.direction}</dt>
+            <dd className="font-semibold text-foreground">{typeLabel}</dd>
+            <dt className="text-muted">{ui.strike}</dt>
             <dd className="font-mono font-bold text-foreground">{leg.strike}</dd>
-            <dt className="text-muted">价位</dt>
-            <dd>{leg.moneyness}（贴近现价流动性更好）</dd>
-            <dt className="text-muted">置信度</dt>
-            <dd>{leg.confidence}</dd>
+            <dt className="text-muted">{ui.moneyness}</dt>
+            <dd>
+              {leg.moneyness} ({ui.moneynessHint})
+            </dd>
+            <dt className="text-muted">{ui.confidence}</dt>
+            <dd>{confidenceLabel(leg.confidence, ui)}</dd>
           </dl>
         </div>
       ) : null}

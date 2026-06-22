@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { resolveExpirySelection } from "@/lib/options-expiry";
 import { buildSymbolExpiringOptionsPlaybook } from "@/lib/expiring-options-playbook";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { expiryWeekLabel, resolveExpirySelection } from "@/lib/options-expiry";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +13,19 @@ export async function GET(req: Request) {
     week: url.searchParams.get("week") ?? undefined,
     exp: url.searchParams.get("exp") ?? undefined,
   });
+  const locale = await getLocale();
+  const o = getDictionary(locale).optionsPage;
+  const expiryLabel = expiryWeekLabel(
+    expiry.expirationDate,
+    expiry.thisFriday,
+    expiry.nextFriday,
+    o.expiry,
+  );
   const result = await buildSymbolExpiringOptionsPlaybook(
     symbol,
+    o.playbook,
     expiry.expirationDate,
-    expiry.label,
+    expiryLabel,
   );
   return NextResponse.json(result);
 }

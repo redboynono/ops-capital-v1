@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useDict } from "@/components/locale-provider";
 import { buildExpiringOptionsQuery, type ExpiryWeek } from "@/lib/options-expiry";
 
 export function ExpiringOptionsSymbolForm({
@@ -13,6 +14,7 @@ export function ExpiringOptionsSymbolForm({
 }) {
   const router = useRouter();
   const [value, setValue] = useState(initialSymbol);
+  const f = useDict().optionsPage.symbolForm;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,13 +31,13 @@ export function ExpiringOptionsSymbolForm({
   return (
     <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
       <label className="min-w-[200px] flex-1">
-        <span className="mb-1 block text-[11px] font-semibold text-muted">查询标的</span>
+        <span className="mb-1 block text-[11px] font-semibold text-muted">{f.label}</span>
         <input
           type="text"
           name="symbol"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="例如 NVDA、TSLA、SPY"
+          placeholder={f.placeholder}
           className="w-full rounded border border-border bg-surface px-3 py-2 font-mono text-[14px] text-foreground outline-none ring-accent/30 focus:border-accent focus:ring-2"
           autoComplete="off"
           spellCheck={false}
@@ -45,7 +47,7 @@ export function ExpiringOptionsSymbolForm({
         type="submit"
         className="rounded bg-accent px-4 py-2 text-[13px] font-bold text-white hover:bg-accent-strong"
       >
-        生成策略
+        {f.submit}
       </button>
       {initialSymbol ? (
         <button
@@ -53,7 +55,7 @@ export function ExpiringOptionsSymbolForm({
           className="rounded border border-border px-3 py-2 text-[12px] text-muted hover:text-foreground"
           onClick={clear}
         >
-          清除
+          {f.clear}
         </button>
       ) : null}
     </form>

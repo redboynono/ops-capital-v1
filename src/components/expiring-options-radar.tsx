@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listExpiringOptionsRadar } from "@/lib/expiring-options";
-import { OPTION_ALPHA } from "@/lib/option-alpha-brand";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
 
 function fmtNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -12,29 +13,32 @@ export async function ExpiringOptionsRadar({
   limit = 12,
   compact = false,
   expirationDate,
-  expiryLabel = "本周五",
+  expiryLabel,
   symbol,
 }: {
   limit?: number;
   compact?: boolean;
   expirationDate?: string;
-  expiryLabel?: string;
+  expiryLabel: string;
   symbol?: string;
 }) {
-  const { expirationDate: exp, rows, delayedNote } = await listExpiringOptionsRadar({
+  const locale = await getLocale();
+  const o = getDictionary(locale).optionsPage;
+  const { expirationDate: exp, rows, quotesAvailable } = await listExpiringOptionsRadar({
     expirationDate,
     underlyings: symbol ? [symbol] : undefined,
     topPerUnderlying: symbol ? 120 : undefined,
     globalLimit: symbol ? 200 : limit,
   });
+  const delayed = quotesAvailable ? o.delayed.minutes15 : o.delayed.unavailable;
 
   return (
     <section className="card">
       <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
         <div>
-          <h2 className="text-[15px] font-bold text-foreground">{OPTION_ALPHA.radarTitle}</h2>
+          <h2 className="text-[15px] font-bold text-foreground">{o.radar.title}</h2>
           <p className="text-[11px] text-muted">
-            到期 {exp}（{expiryLabel}）· {delayedNote}
+            {fmt(o.radar.expiryFmt, { date: exp, label: expiryLabel, delayed })}
           </p>
         </div>
         {!compact ? (
@@ -42,24 +46,22 @@ export async function ExpiringOptionsRadar({
             href="/expiring-options"
             className="text-[12px] font-semibold text-accent-strong hover:underline"
           >
-            全部 →
+            {o.radar.viewAll}
           </Link>
         ) : null}
       </header>
 
       <div className="overflow-x-auto">
         {rows.length === 0 ? (
-          <p className="px-4 py-8 text-center text-[12px] text-muted">
-            该到期日暂无可展示的 Option Alpha 异动，请切换「下周五」或稍后再试。
-          </p>
+          <p className="px-4 py-8 text-center text-[12px] text-muted">{o.radar.empty}</p>
         ) : (
           <table className="w-full min-w-[640px] text-left text-[12px]">
             <thead>
               <tr className="border-b border-border text-[10px] uppercase tracking-wide text-muted">
-                <th className="px-3 py-2 font-semibold">标的</th>
-                <th className="px-3 py-2 font-semibold">类型</th>
-                <th className="px-3 py-2 font-semibold text-right">行权价</th>
-                <th className="px-3 py-2 font-semibold text-right">成交量</th>
+                <th className="px-3 py-2 font-semibold">{o.radar.colUnderlying}</th>
+                <th className="px-3 py-2 font-semibold">{o.radar.colType}</th>
+                <th className="px-3 py-2 font-semibold text-right">{o.radar.colStrike}</th>
+                <th className="px-3 py-2 font-semibold text-right">{o.radar.colVolume}</th>
                 <th className="px-3 py-2 font-semibold text-right">OI</th>
                 <th className="px-3 py-2 font-semibold text-right">Vol/OI</th>
               </tr>
@@ -105,7 +107,7 @@ export async function ExpiringOptionsRadar({
       </div>
 
       <p className="border-t border-border px-4 py-2 text-[10px] text-muted-soft">
-        Vol/OI &gt; 1 通常表示当日新开仓活跃。数据仅供研究，非实时盘口。
+        {o.radar.footnote}
       </p>
     </section>
   );

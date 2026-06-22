@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { useDict } from "@/components/locale-provider";
+import { fmt } from "@/lib/i18n/fmt";
 import { buildExpiringOptionsQuery, type ExpiryWeek } from "@/lib/options-expiry";
 
 export function ExpiringOptionsExpiryPicker({
@@ -17,6 +19,7 @@ export function ExpiringOptionsExpiryPicker({
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const o = useDict().optionsPage;
 
   const href = (w: ExpiryWeek) => {
     const q = buildExpiringOptionsQuery({ week: w, symbol: symbol || undefined });
@@ -32,16 +35,20 @@ export function ExpiringOptionsExpiryPicker({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-[11px] font-semibold text-muted">到期日</span>
+      <span className="text-[11px] font-semibold text-muted">{o.expiryPicker.label}</span>
       <Link href={href("this")} className={tabCls(week === "this")} prefetch={false}>
-        本周五 <span className="font-mono text-[10px] opacity-90">{thisFriday}</span>
+        {o.expiry.thisFriday}{" "}
+        <span className="font-mono text-[10px] opacity-90">{thisFriday}</span>
       </Link>
       <Link href={href("next")} className={tabCls(week === "next")} prefetch={false}>
-        下周五 <span className="font-mono text-[10px] opacity-90">{nextFriday}</span>
+        {o.expiry.nextFriday}{" "}
+        <span className="font-mono text-[10px] opacity-90">{nextFriday}</span>
       </Link>
       {searchParams.get("symbol") ? (
         <span className="text-[11px] text-muted-soft">
-          标的 {searchParams.get("symbol")?.toUpperCase()}
+          {fmt(o.expiryPicker.symbolFmt, {
+            symbol: searchParams.get("symbol")!.toUpperCase(),
+          })}
         </span>
       ) : null}
     </div>

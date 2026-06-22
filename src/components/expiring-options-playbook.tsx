@@ -1,34 +1,42 @@
 import Link from "next/link";
 import { ExpiringOptionsPickCard } from "@/components/expiring-options-pick-card";
 import { buildTodayExpiringOptionsPlaybook } from "@/lib/expiring-options-playbook";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { fmt } from "@/lib/i18n/fmt";
 import { OPTION_ALPHA } from "@/lib/option-alpha-brand";
 
 export async function ExpiringOptionsPlaybook({
   compact = false,
   expirationDate,
-  expiryLabel = "本周五",
+  expiryLabel,
 }: {
   compact?: boolean;
   expirationDate?: string;
-  expiryLabel?: string;
+  expiryLabel: string;
 }) {
-  const pb = await buildTodayExpiringOptionsPlaybook(expirationDate, expiryLabel);
+  const locale = await getLocale();
+  const o = getDictionary(locale).optionsPage;
+  const pb = await buildTodayExpiringOptionsPlaybook(expirationDate, expiryLabel, o.playbook);
 
   return (
     <section className="card overflow-hidden">
       <header className="border-b border-border bg-accent-soft/40 px-4 py-3">
         <span className="label-caps">{OPTION_ALPHA.labelCaps}</span>
-        <h2 className="mt-0.5 text-[17px] font-bold text-foreground">{OPTION_ALPHA.strategyTitle}</h2>
-        <p className="text-[11px] text-muted">{OPTION_ALPHA.strategySubtitle}</p>
+        <h2 className="mt-0.5 text-[17px] font-bold text-foreground">{o.playbook.strategyTitle}</h2>
+        <p className="text-[11px] text-muted">{o.playbook.strategySubtitle}</p>
         <p className="mt-1 text-[12px] leading-relaxed text-foreground-soft">
-          到期 <span className="font-mono">{pb.expirationDate}</span>（{expiryLabel}）
-          {" · "}
-          {pb.marketMood}
+          {fmt(o.playbook.expiryMoodFmt, {
+            date: pb.expirationDate,
+            label: expiryLabel,
+            mood: pb.marketMood,
+          })}
         </p>
       </header>
 
       <div className="px-4 py-3">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">纪律（先看）</h3>
+        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+          {o.playbook.disciplineTitle}
+        </h3>
         <ul className="mt-1.5 space-y-1 text-[12px] leading-relaxed text-muted-soft">
           {pb.discipline.map((d, i) => (
             <li key={i} className="flex gap-2">
@@ -41,7 +49,7 @@ export async function ExpiringOptionsPlaybook({
 
       {pb.followPicks.length === 0 ? (
         <p className="border-t border-border px-4 py-6 text-center text-[12px] text-muted">
-          今日成交不足以生成明确跟单建议，请以观望为主。
+          {o.playbook.emptyPicks}
         </p>
       ) : (
         <div
@@ -50,7 +58,12 @@ export async function ExpiringOptionsPlaybook({
           }`}
         >
           {pb.followPicks.map((leg, i) => (
-            <ExpiringOptionsPickCard key={`${leg.underlying}-${leg.action}`} leg={leg} index={i} />
+            <ExpiringOptionsPickCard
+              key={`${leg.underlying}-${leg.action}`}
+              leg={leg}
+              index={i}
+              ui={o.pickCard}
+            />
           ))}
         </div>
       )}
@@ -65,7 +78,7 @@ export async function ExpiringOptionsPlaybook({
             href="/expiring-options?week=this"
             className="font-semibold text-accent-strong hover:underline"
           >
-            查看完整策略与雷达 →
+            {o.playbook.viewFull}
           </Link>
         </p>
       )}
