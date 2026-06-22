@@ -7,8 +7,10 @@ import {
   getXWatchItem,
   getXWatchMeta,
   listXWatchItems,
-  pollXWatch,
+  pollAllXWatch,
+  postXWatchQuoteReply,
   postXWatchReply,
+  syncXWatchReplyMetrics,
   translateReplyForXWatchItemById,
   skipXWatchItem,
   updateXWatchDraft,
@@ -52,11 +54,16 @@ export async function POST(req: Request) {
   const action = body?.action ?? "poll";
 
   if (action === "poll") {
-    const result = await pollXWatch({ analyze: true });
-    if (!result.ok) {
-      return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
+    const result = await pollAllXWatch({ analyze: true });
+    if (!result.ok && result.inserted === 0 && result.fetched === 0) {
+      return NextResponse.json({ ok: false, error: result.errors?.join("; ") }, { status: 502 });
     }
     return NextResponse.json(result);
+  }
+
+  if (action === "sync_metrics") {
+    const result = await syncXWatchReplyMetrics();
+    return NextResponse.json({ ok: true, ...result });
   }
 
   const id = body?.id;
@@ -96,6 +103,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, item });
   }
 
+  if (action === "post_quote") {
+    if (body?.reply_draft != null) {
+      await updateXWatchDraft(id, { reply_draft: body.reply_draft });
+    }
+    const result = await postXWatchQuoteReply(id);
+    if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
+    const item = await getXWatchItem(id);
+    return NextResponse.json({
+      ok: true,
+      replyTweetId: result.replyTweetId,
+      postMode: result.postMode,
+      item,
+      posted: true,
+    });
+  }
+
   if (action === "post_reply") {
     if (body?.reply_draft != null) {
       await updateXWatchDraft(id, { reply_draft: body.reply_draft });
@@ -103,7 +126,13 @@ export async function POST(req: Request) {
     const result = await postXWatchReply(id);
     if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
     const item = await getXWatchItem(id);
-    return NextResponse.json({ ok: true, replyTweetId: result.replyTweetId, item, posted: true });
+    return NextResponse.json({
+      ok: true,
+      replyTweetId: result.replyTweetId,
+      postMode: result.postMode,
+      item,
+      posted: true,
+    });
   }
 
   if (action === "skip") {

@@ -28,6 +28,7 @@ export type XWatchAnalysis = {
   summary_md: string;
   ops_angle_md: string;
   reply_draft: string;
+  reply_quality_score: number;
 };
 
 const LAYER_BRIEF = AI_VALUE_CHAIN_LAYERS.map(
@@ -40,7 +41,7 @@ OPS uses an L0–L5 AI value-chain framework and "chokepoint" thesis (structural
 Value chain layers:
 ${LAYER_BRIEF}
 
-You help an admin understand posts from Serenity (@aleabitoreddit) — Neocloud, macro buckets, conviction lists, chokepoints.
+You help an admin understand posts from AI/supply-chain X accounts (e.g. Neocloud, macro buckets, conviction lists, chokepoints).
 Output strict JSON only. Reply drafts must be English, concise, thoughtful, ≤280 characters, not sycophantic.
 Never give investment advice; use "NFA / DYODD" tone. Add one differentiated OPS angle (upstream chokepoint or L-layer mapping) when possible.`;
 
@@ -65,7 +66,8 @@ Return JSON:
   "tickers": ["SYM", ...],
   "summary_md": "3-5 bullet points in Chinese for admin (use \\n- prefix)",
   "ops_angle_md": "2-3 sentences in Chinese: map to L0-L5 / chokepoint, what's the incremental insight vs just agreeing",
-  "reply_draft": "English reply ≤280 chars, 1-2 sentences agree/reframe + optional sharp question"
+  "reply_draft": "English reply ≤280 chars, 1-2 sentences agree/reframe + optional sharp question",
+  "reply_quality_score": 1-10 integer — engagement potential if posted as Quote (sharp OPS angle, not generic praise)
 }`;
 
   const raw = await callModel(SYSTEM, userPrompt, {
@@ -95,13 +97,41 @@ Return JSON:
   let reply_draft = String(j.reply_draft ?? "").trim();
   if (reply_draft.length > 280) reply_draft = reply_draft.slice(0, 277) + "…";
 
+  let reply_quality_score = Number(j.reply_quality_score ?? 0);
+  if (!Number.isFinite(reply_quality_score)) reply_quality_score = 0;
+  reply_quality_score = Math.max(0, Math.min(10, Math.round(reply_quality_score)));
+
   return {
     topic_type,
     tickers,
     summary_md: String(j.summary_md ?? "").trim(),
     ops_angle_md: String(j.ops_angle_md ?? "").trim(),
     reply_draft,
+    reply_quality_score,
   };
+}
+
+export async function scoreXWatchReplyDraft(input: {
+  username: string;
+  tweetText: string;
+  replyDraft: string;
+  topicType?: string | null;
+}): Promise<number> {
+  const draft = input.replyDraft.trim();
+  if (!draft) return 0;
+  const raw = await callModel(
+    `Score this English X Quote reply 1-10 for engagement potential (sharp insight, not generic). Output JSON: { "reply_quality_score": number }`,
+    `Original @${input.username}:\n${input.tweetText.slice(0, 800)}\n\nProposed Quote reply:\n${draft}\nTopic: ${input.topicType ?? "other"}`,
+    { temperature: 0.2, maxTokens: 512, jsonMode: true },
+  );
+  try {
+    const j = extractJson(raw);
+    const n = Number(j.reply_quality_score ?? 0);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(10, Math.round(n)));
+  } catch {
+    return 0;
+  }
 }
 
 const REPLY_SYSTEM = `You draft English replies for OPS Capital (@opscapital) responding to Serenity (@aleabitoreddit) on X.
@@ -122,6 +152,7 @@ Output strict JSON: { "reply_draft": "...", "reply_draft_zh": "中文对照（�
 export type XWatchReplyDraft = {
   reply_draft: string;
   reply_draft_zh: string;
+  reply_quality_score: number;
 };
 
 export async function generateXWatchReply(input: {
@@ -149,7 +180,7 @@ URL: ${input.tweetUrl}
 ${input.tweetText}
 ---
 ${context.length > 0 ? `\nContext:\n${context.join("\n\n")}\n` : ""}
-Return JSON: { "reply_draft": "English reply ≤280 chars", "reply_draft_zh": "中文对照" }`;
+Return JSON: { "reply_draft": "English reply ≤280 chars", "reply_draft_zh": "中文对照", "reply_quality_score": 1-10 }`;
 
   const tokenBudgets = [Math.min(replyMaxTokens(), 8192), replyMaxTokens()];
   let lastError = "AI 未返回有效 JSON，请重试";
@@ -163,15 +194,27 @@ Return JSON: { "reply_draft": "English reply ≤280 chars", "reply_draft_zh": "�
 
     let reply_draft = pickJsonField(raw, "reply_draft");
     let reply_draft_zh = pickJsonField(raw, "reply_draft_zh");
+    let reply_quality_score = 0;
 
     if (!reply_draft) {
       try {
         const j = extractJson(raw);
         reply_draft = String(j.reply_draft ?? "").trim();
         if (!reply_draft_zh) reply_draft_zh = String(j.reply_draft_zh ?? "").trim();
+        reply_quality_score = Number(j.reply_quality_score ?? 0);
       } catch (e) {
         lastError = e instanceof Error ? e.message : lastError;
         continue;
+      }
+    } else {
+      try {
+        reply_quality_score = Number(extractJson(raw).reply_quality_score ?? 0);
+      } catch {
+        try {
+          reply_quality_score = Number(parseModelJsonField(raw, "reply_quality_score"));
+        } catch {
+          reply_quality_score = 0;
+        }
       }
     }
 
@@ -188,7 +231,16 @@ Return JSON: { "reply_draft": "English reply ≤280 chars", "reply_draft_zh": "�
         reply_draft_zh = "";
       }
     }
-    return { reply_draft, reply_draft_zh };
+    if (!Number.isFinite(reply_quality_score) || reply_quality_score <= 0) {
+      reply_quality_score = await scoreXWatchReplyDraft({
+        username: input.username,
+        tweetText: input.tweetText,
+        replyDraft: reply_draft,
+        topicType: input.topicType,
+      });
+    }
+    reply_quality_score = Math.max(0, Math.min(10, Math.round(reply_quality_score)));
+    return { reply_draft, reply_draft_zh, reply_quality_score };
   }
 
   throw new Error(lastError.includes("JSON") ? "AI 未返回有效 JSON，请重试" : lastError);

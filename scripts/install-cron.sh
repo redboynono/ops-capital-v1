@@ -37,13 +37,14 @@ $CRON_MARKER
 */15 * * * * /usr/local/bin/ops-alpha-alerts-check.sh >> /var/log/ops-alpha-alerts.log 2>&1
 30 16 * * 1-5 /usr/local/bin/ops-alpha-snapshot-ratings.sh >> /var/log/ops-alpha-snapshot-ratings.log 2>&1
 0 9 * * * /usr/local/bin/ops-alpha-social-x.sh >> /var/log/ops-alpha-social-x.log 2>&1
+30 14 * * * /usr/local/bin/ops-alpha-social-x.sh extra >> /var/log/ops-alpha-social-x.log 2>&1
 0 7 * * 1,3,5 /usr/local/bin/ops-alpha-chokepoint.sh 2 >> /var/log/ops-alpha-chokepoint.log 2>&1
 30 10 * * 1,3,5 /usr/local/bin/ops-alpha-social-x.sh chokepoint >> /var/log/ops-alpha-social-x.log 2>&1
 0 13 * * 1 /usr/local/bin/ops-alpha-social-x.sh record >> /var/log/ops-alpha-social-x.log 2>&1
 35 16 * * 1-5 /usr/local/bin/ops-alpha-warm-track-record.sh >> /var/log/ops-alpha-warm-track-record.log 2>&1
 0 1 * * 1 /usr/local/bin/ops-alpha-ai-weekly-signals.sh >> /var/log/ops-alpha-ai-weekly-signals.log 2>&1
 30 0 * * 2 /usr/local/bin/ops-alpha-ai-signals-email.sh >> /var/log/ops-alpha-ai-signals-email.log 2>&1
-*/30 * * * * /usr/local/bin/ops-alpha-x-watch.sh >> /var/log/ops-alpha-x-watch.log 2>&1
+*/5 * * * * /usr/local/bin/ops-alpha-x-watch.sh >> /var/log/ops-alpha-x-watch.log 2>&1
 EOF
 
 crontab "$TMP"

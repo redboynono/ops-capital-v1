@@ -15,17 +15,34 @@ export type XWatchItemDto = {
   ops_angle_md: string | null;
   reply_draft: string | null;
   reply_draft_zh: string | null;
+  reply_quality_score: number | null;
   status: "pending" | "posted" | "skipped";
   posted_reply_tweet_id: string | null;
   posted_reply_at: string | null;
+  post_mode: "reply" | "quote" | "mention" | null;
+  last_post_error: string | null;
+  auto_post_skip_reason: string | null;
+  reply_impressions: number | null;
+  reply_likes: number | null;
+  reply_retweets: number | null;
+  metrics_synced_at: string | null;
 };
 
 export type XWatchMetaDto = {
   username: string;
+  watchUsernames: string[];
   readConfigured: boolean;
   postConfigured: boolean;
+  autoReplyEnabled: boolean;
+  autoReplyMinScore: number;
   lastPolledAt: string | null;
   pendingCount: number;
+};
+
+const POST_MODE_LABEL: Record<string, string> = {
+  quote: "Quote",
+  mention: "@ 提及",
+  reply: "楼中回复",
 };
 
 const TOPIC_LABEL: Record<string, string> = {
@@ -68,6 +85,7 @@ export function AdminXWatchPanel({
     return m;
   });
   const [cardMsg, setCardMsg] = useState<Record<string, CardMsg | undefined>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const q = filter === "pending" ? "?status=pending" : "";
@@ -95,15 +113,27 @@ export function AdminXWatchPanel({
     setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, ...item } : it)));
   };
 
-  const copyDraft = async (id: string) => {
-    const text = drafts[id]?.trim();
-    if (!text) {
+  const copyDraft = async (id: string, item?: XWatchItemDto) => {
+    const draft = drafts[id]?.trim();
+    if (!draft) {
       setCardMsg((m) => ({ ...m, [id]: { tone: "err", text: "英文草稿为空" } }));
       return;
     }
+    const lines = [draft];
+    if (item?.tweet_url) lines.push("", item.tweet_url);
     try {
-      await navigator.clipboard.writeText(text);
-      setCardMsg((m) => ({ ...m, [id]: { tone: "ok", text: "已复制英文草稿，可到 X 手动 Quote / 发推" } }));
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId((cur) => (cur === id ? null : cur)), 2000);
+      setCardMsg((m) => ({
+        ...m,
+        [id]: {
+          tone: "ok",
+          text: item?.tweet_url
+            ? "已复制英文草稿 + 原帖链接，打开链接后 Quote 粘贴即可"
+            : "已复制英文草稿，可到 X 手动 Quote / 发推",
+        },
+      }));
     } catch {
       setCardMsg((m) => ({ ...m, [id]: { tone: "err", text: "复制失败，请手动选中复制" } }));
     }
@@ -125,9 +155,15 @@ export function AdminXWatchPanel({
       let data: {
         ok?: boolean;
         error?: string;
+        autoPosted?: number;
+        autoSkipped?: number;
+        autoFailed?: number;
+        metricsSynced?: number;
+        usernames?: string[];
         inserted?: number;
         analyzed?: number;
         replyTweetId?: string;
+        postMode?: string;
         posted?: boolean;
         item?: XWatchItemDto;
       };
@@ -146,17 +182,29 @@ export function AdminXWatchPanel({
         return;
       }
       if (action === "poll") {
-        setMsg(`拉取完成 · 新增 ${data.inserted ?? 0} 条 · AI 分析 ${data.analyzed ?? 0} 条`);
-      } else if (action === "post_reply") {
+        const parts = [
+          `拉取完成 · 新增 ${data.inserted ?? 0} 条 · AI 分析 ${data.analyzed ?? 0} 条`,
+        ];
+        if (meta.autoReplyEnabled) {
+          parts.push(
+            `自动 Quote ${data.autoPosted ?? 0} · 跳过 ${data.autoSkipped ?? 0} · 失败 ${data.autoFailed ?? 0}`,
+          );
+        }
+        if (data.metricsSynced != null && data.metricsSynced > 0) {
+          parts.push(`指标同步 ${data.metricsSynced} 条`);
+        }
+        setMsg(parts.join(" · "));
+      } else if (action === "post_reply" || action === "post_quote") {
+        const mode = data.postMode ? POST_MODE_LABEL[data.postMode] ?? data.postMode : "";
         const link = data.replyTweetId
           ? `https://x.com/i/status/${data.replyTweetId}`
           : undefined;
-        const okText = `✓ 发布成功${data.replyTweetId ? ` · tweet ${data.replyTweetId}` : ""}`;
+        const okText = `✓ 发布成功${mode ? `（${mode}）` : ""}${data.replyTweetId ? ` · tweet ${data.replyTweetId}` : ""}`;
         setMsg(okText);
         if (id) {
           setCardMsg((m) => ({
             ...m,
-            [id]: { tone: "ok", text: "✓ 已成功回复到 X", link },
+            [id]: { tone: "ok", text: `✓ 已成功发到 X${mode ? `（${mode}）` : ""}`, link },
           }));
         }
       } else if (action === "save_draft") {
@@ -164,6 +212,9 @@ export function AdminXWatchPanel({
         if (id) setCardMsg((m) => ({ ...m, [id]: { tone: "ok", text: "草稿已保存" } }));
       } else if (action === "skip") {
         setMsg("已跳过");
+      } else if (action === "sync_metrics") {
+        setMsg(`已同步 ${(data as { synced?: number }).synced ?? 0} 条 Quote 指标`);
+        await refresh();
       } else if (action === "analyze") {
         setMsg("已重新分析");
         if (data.item) applyItem(data.item);
@@ -190,7 +241,7 @@ export function AdminXWatchPanel({
           }));
         }
       }
-      if (action === "post_reply" || action === "skip") {
+      if (action === "post_reply" || action === "post_quote" || action === "skip") {
         await refresh();
       } else if (action === "analyze" || action === "generate_reply" || action === "translate_reply") {
         /* item already applied */
@@ -218,7 +269,7 @@ export function AdminXWatchPanel({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[13px] font-bold">
-              监听 @{meta.username}
+              监听 {meta.watchUsernames.map((u) => `@${u}`).join(" · ")}
               <span className="ml-2 font-normal text-muted">
                 · 待审 {meta.pendingCount}
               </span>
@@ -229,7 +280,16 @@ export function AdminXWatchPanel({
               读 X {meta.readConfigured ? "✓" : "✗"}
               {" · "}
               发回复 {meta.postConfigured ? "✓" : "✗"}
+              {" · "}
+              自动 Quote {meta.autoReplyEnabled ? `✓ ≥${meta.autoReplyMinScore}分` : "✗ 关"}
             </p>
+            {!meta.autoReplyEnabled ? (
+              <p className="mt-1 text-[11px] text-muted-soft">
+                自动回复：<code className="font-mono">X_WATCH_AUTO_REPLY=1</code>
+                {" · "}
+                多账号：<code className="font-mono">X_WATCH_USERNAMES=aleabitoreddit,handle2</code>
+              </p>
+            ) : null}
             {!meta.readConfigured ? (
               <p className="mt-2 text-[11px] text-[color:var(--danger)]">
                 需配置 X_BEARER_TOKEN 或 OAuth2（/api/admin/x-oauth/start）
@@ -244,6 +304,14 @@ export function AdminXWatchPanel({
               className="btn-primary px-3 py-1.5 text-[12px] disabled:opacity-50"
             >
               {busy === "poll" ? "拉取中…" : "立即拉取新帖"}
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={() => call("sync_metrics")}
+              className="btn-outline px-3 py-1.5 text-[12px] disabled:opacity-50"
+            >
+              {busy === "sync_metrics" ? "同步中…" : "同步 Quote 数据"}
             </button>
             <button
               type="button"
@@ -285,8 +353,8 @@ export function AdminXWatchPanel({
           </p>
         ) : null}
         <p className="mt-2 text-[11px] text-muted-soft">
-          Cron 每 30 分钟自动拉取；AI 生成中文摘要 + OPS 角度 + 英文回复（附中文对照）。
-          <span className="text-[color:var(--danger)]"> 注意：X 常限制未互动账号无法在别人帖下回复，失败时请「复制英文草稿」手动发。</span>
+          Cron 每 5 分钟拉取多账号；原创帖 9:00 + 14:30 各发研报 Thread。自动 Quote 需 AI 评分 ≥ 阈值（markets topic）。
+          <span className="text-muted"> 楼中回复仍受 X 互动限制。</span>
         </p>
       </section>
 
@@ -300,7 +368,18 @@ export function AdminXWatchPanel({
             <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border bg-surface-muted px-4 py-3">
               <div>
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  {TOPIC_LABEL[item.topic_type ?? "other"] ?? item.topic_type ?? "—"}
+                  @{item.source_username} · {TOPIC_LABEL[item.topic_type ?? "other"] ?? item.topic_type ?? "—"}
+                  {item.reply_quality_score != null ? (
+                    <span
+                      className={`ml-2 font-mono normal-case ${
+                        item.reply_quality_score >= meta.autoReplyMinScore
+                          ? "text-[color:var(--success)]"
+                          : "text-[color:var(--danger)]"
+                      }`}
+                    >
+                      AI {item.reply_quality_score}/10
+                    </span>
+                  ) : null}
                   {item.tickers.length > 0 ? (
                     <span className="ml-2 font-mono normal-case">
                       {item.tickers.slice(0, 8).map((t) => `$${t}`).join(" ")}
@@ -356,13 +435,27 @@ export function AdminXWatchPanel({
               <div className="border-t border-border px-4 py-3">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted">回复草稿（英文）</h3>
-                  <span
-                    className={`font-mono text-[10px] ${
-                      (drafts[item.id]?.length ?? 0) > 280 ? "text-[color:var(--danger)]" : "text-muted"
-                    }`}
-                  >
-                    {drafts[item.id]?.length ?? 0}/280
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`font-mono text-[10px] ${
+                        (drafts[item.id]?.length ?? 0) > 280 ? "text-[color:var(--danger)]" : "text-muted"
+                      }`}
+                    >
+                      {drafts[item.id]?.length ?? 0}/280
+                    </span>
+                    <button
+                      type="button"
+                      disabled={Boolean(busy) || !(drafts[item.id]?.trim())}
+                      onClick={() => copyDraft(item.id, item)}
+                      className={`rounded px-2.5 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${
+                        copiedId === item.id
+                          ? "bg-[color:color-mix(in_srgb,var(--success)_15%,transparent)] text-[color:var(--success)]"
+                          : "bg-accent/15 text-accent-strong hover:bg-accent/25"
+                      }`}
+                    >
+                      {copiedId === item.id ? "已复制 ✓" : "一键复制"}
+                    </button>
+                  </div>
                 </div>
                 <textarea
                   value={drafts[item.id] ?? ""}
@@ -389,8 +482,18 @@ export function AdminXWatchPanel({
                     {draftsZh[item.id]?.trim() || "生成回复后自动显示中文；也可点「刷新中文」"}
                   </p>
                 </div>
+                {item.auto_post_skip_reason && item.status === "pending" ? (
+                  <p className="mt-3 rounded bg-surface-muted px-3 py-2 text-[12px] text-muted">
+                    未自动 Quote：{item.auto_post_skip_reason}
+                  </p>
+                ) : null}
+                {item.last_post_error && item.status === "pending" ? (
+                  <p className="mt-3 rounded bg-[color:color-mix(in_srgb,var(--danger)_10%,transparent)] px-3 py-2 text-[12px] text-[color:var(--danger)]">
+                    上次发帖失败：{item.last_post_error}
+                  </p>
+                ) : null}
                 {cardMsg[item.id] ? (
-                  <p
+                  <div
                     className={`mt-3 rounded px-3 py-2 text-[12px] ${
                       cardMsg[item.id]!.tone === "ok"
                         ? "bg-[color:color-mix(in_srgb,var(--success)_12%,transparent)] text-[color:var(--success)]"
@@ -399,21 +502,45 @@ export function AdminXWatchPanel({
                           : "bg-surface-muted text-muted"
                     }`}
                   >
-                    {cardMsg[item.id]!.text}
-                    {cardMsg[item.id]!.link ? (
-                      <>
-                        {" "}
+                    <p>
+                      {cardMsg[item.id]!.text}
+                      {cardMsg[item.id]!.link ? (
+                        <>
+                          {" "}
+                          <a
+                            href={cardMsg[item.id]!.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold underline"
+                          >
+                            查看回复 →
+                          </a>
+                        </>
+                      ) : null}
+                    </p>
+                    {cardMsg[item.id]!.tone === "err" &&
+                    (drafts[item.id]?.trim()) &&
+                    cardMsg[item.id]!.text.includes("复制") ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={Boolean(busy)}
+                          onClick={() => copyDraft(item.id, item)}
+                          className="rounded bg-accent px-3 py-1 text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                        >
+                          {copiedId === item.id ? "已复制 ✓" : "一键复制草稿 + 原帖链接"}
+                        </button>
                         <a
-                          href={cardMsg[item.id]!.link}
+                          href={item.tweet_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-semibold underline"
+                          className="rounded border border-current px-3 py-1 text-[11px] font-semibold hover:opacity-80"
                         >
-                          查看回复 →
+                          打开原帖 →
                         </a>
-                      </>
+                      </div>
                     ) : null}
-                  </p>
+                  </div>
                 ) : null}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
@@ -445,10 +572,20 @@ export function AdminXWatchPanel({
                   <button
                     type="button"
                     disabled={Boolean(busy) || !(drafts[item.id]?.trim())}
-                    onClick={() => copyDraft(item.id)}
+                    onClick={() => copyDraft(item.id, item)}
                     className="btn-outline px-3 py-1.5 text-[12px] disabled:opacity-50"
                   >
-                    复制英文草稿
+                    {copiedId === item.id ? "已复制 ✓" : "复制草稿 + 链接"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(busy) || !meta.postConfigured || !(drafts[item.id]?.trim())}
+                    onClick={() =>
+                      call("post_quote", item.id, { reply_draft: drafts[item.id] ?? "" })
+                    }
+                    className="btn-primary px-3 py-1.5 text-[12px] disabled:opacity-50"
+                  >
+                    {busy === `post_quote${item.id}` ? "发布中…" : "Quote 发布"}
                   </button>
                   <button
                     type="button"
@@ -456,9 +593,9 @@ export function AdminXWatchPanel({
                     onClick={() =>
                       call("post_reply", item.id, { reply_draft: drafts[item.id] ?? "" })
                     }
-                    className="rounded border border-accent bg-accent/10 px-3 py-1.5 text-[12px] font-semibold text-accent-strong hover:bg-accent/20 disabled:opacity-50"
+                    className="rounded border border-border px-3 py-1.5 text-[12px] text-muted hover:text-foreground disabled:opacity-50"
                   >
-                    {busy === `post_reply${item.id}` ? "发布中…" : "发布回复"}
+                    {busy === `post_reply${item.id}` ? "发布中…" : "楼中回复"}
                   </button>
                   <button
                     type="button"
@@ -472,7 +609,15 @@ export function AdminXWatchPanel({
               </div>
             ) : item.status === "posted" && item.posted_reply_tweet_id ? (
               <div className="border-t border-border px-4 py-2 text-[11px] text-muted">
-                已回复 ·{" "}
+                已发布
+                {item.post_mode ? `（${POST_MODE_LABEL[item.post_mode] ?? item.post_mode}）` : ""}
+                {item.reply_impressions != null ? (
+                  <span className="ml-2 font-mono">
+                    · 👁 {item.reply_impressions.toLocaleString()} · ♥ {item.reply_likes ?? 0} · ↻{" "}
+                    {item.reply_retweets ?? 0}
+                  </span>
+                ) : null}{" "}
+                ·{" "}
                 <a
                   href={`https://x.com/i/status/${item.posted_reply_tweet_id}`}
                   target="_blank"

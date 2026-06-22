@@ -3,11 +3,21 @@ import { randomUUID } from "node:crypto";
 import { analyzeXWatchTweet, generateXWatchReply, translateXWatchReplyZh } from "@/lib/ai/xWatchAnalyze";
 import { mysqlQuery } from "@/lib/mysql";
 import { postTweet, isXPostingEnabled } from "@/lib/social/x-api";
-import { fetchUserTimeline, isXReadConfigured, resolveXUserId } from "@/lib/social/x-read";
+import { fetchTweetMetrics, fetchUserTimeline, isXReadConfigured, resolveXUserId } from "@/lib/social/x-read";
 
 export const DEFAULT_X_WATCH_USERNAME = "aleabitoreddit";
 
 export type XWatchStatus = "pending" | "posted" | "skipped";
+
+export type XWatchPostMode = "reply" | "quote" | "mention";
+
+export const X_WATCH_AUTO_REPLY_TOPICS = new Set([
+  "framework",
+  "watchlist",
+  "conviction",
+  "rotation",
+  "cheatsheet",
+]);
 
 export type XWatchItem = {
   id: string;
@@ -22,9 +32,17 @@ export type XWatchItem = {
   ops_angle_md: string | null;
   reply_draft: string | null;
   reply_draft_zh: string | null;
+  reply_quality_score: number | null;
   status: XWatchStatus;
   posted_reply_tweet_id: string | null;
   posted_reply_at: string | null;
+  post_mode: XWatchPostMode | null;
+  last_post_error: string | null;
+  auto_post_skip_reason: string | null;
+  reply_impressions: number | null;
+  reply_likes: number | null;
+  reply_retweets: number | null;
+  metrics_synced_at: string | null;
   analyzed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -71,9 +89,17 @@ function rowToItem(r: ItemRow): XWatchItem {
     ops_angle_md: r.ops_angle_md,
     reply_draft: r.reply_draft,
     reply_draft_zh: r.reply_draft_zh ?? null,
+    reply_quality_score: r.reply_quality_score != null ? Number(r.reply_quality_score) : null,
     status: r.status,
     posted_reply_tweet_id: r.posted_reply_tweet_id,
     posted_reply_at: r.posted_reply_at ? toIso(r.posted_reply_at) : null,
+    post_mode: (r.post_mode as XWatchPostMode | null) ?? null,
+    last_post_error: r.last_post_error ?? null,
+    auto_post_skip_reason: r.auto_post_skip_reason ?? null,
+    reply_impressions: r.reply_impressions != null ? Number(r.reply_impressions) : null,
+    reply_likes: r.reply_likes != null ? Number(r.reply_likes) : null,
+    reply_retweets: r.reply_retweets != null ? Number(r.reply_retweets) : null,
+    metrics_synced_at: r.metrics_synced_at ? toIso(r.metrics_synced_at) : null,
     analyzed_at: r.analyzed_at ? toIso(r.analyzed_at) : null,
     created_at: toIso(r.created_at),
     updated_at: toIso(r.updated_at),
@@ -81,7 +107,68 @@ function rowToItem(r: ItemRow): XWatchItem {
 }
 
 export function watchUsername(): string {
-  return (process.env.X_WATCH_USERNAME ?? DEFAULT_X_WATCH_USERNAME).replace(/^@/, "");
+  return watchUsernames()[0] ?? DEFAULT_X_WATCH_USERNAME.replace(/^@/, "");
+}
+
+export function watchUsernames(): string[] {
+  const raw = process.env.X_WATCH_USERNAMES?.trim();
+  if (raw) {
+    return [
+      ...new Set(
+        raw
+          .split(/[,;\s]+/)
+          .map((u) => u.replace(/^@/, "").trim())
+          .filter(Boolean),
+      ),
+    ];
+  }
+  const single = (process.env.X_WATCH_USERNAME ?? DEFAULT_X_WATCH_USERNAME).replace(/^@/, "");
+  return [single];
+}
+
+export function autoReplyMinScore(): number {
+  const n = Number(process.env.X_WATCH_AUTO_REPLY_MIN_SCORE ?? 7);
+  if (!Number.isFinite(n)) return 7;
+  return Math.max(1, Math.min(10, Math.round(n)));
+}
+
+export function isXWatchAutoReplyEnabled(): boolean {
+  return process.env.X_WATCH_AUTO_REPLY === "1";
+}
+
+function shouldAutoReplyTopic(topic: string | null): boolean {
+  return topic != null && X_WATCH_AUTO_REPLY_TOPICS.has(topic);
+}
+
+function withMention(username: string, text: string): string {
+  const handle = `@${username.replace(/^@/, "")}`;
+  if (text.toLowerCase().includes(handle.toLowerCase())) return text;
+  const combined = `${handle} ${text}`;
+  return combined.length <= 280 ? combined : text;
+}
+
+async function markXWatchPosted(id: string, tweetId: string, postMode: XWatchPostMode) {
+  await mysqlQuery(
+    `update x_watch_items set
+      status = 'posted', posted_reply_tweet_id = ?, posted_reply_at = current_timestamp(3),
+      post_mode = ?, last_post_error = null, auto_post_skip_reason = null, updated_at = current_timestamp(3)
+     where id = ?`,
+    [tweetId, postMode, id],
+  );
+}
+
+async function markAutoPostSkip(id: string, reason: string) {
+  await mysqlQuery(
+    `update x_watch_items set auto_post_skip_reason = ?, updated_at = current_timestamp(3) where id = ?`,
+    [reason.slice(0, 128), id],
+  );
+}
+
+async function markXWatchPostFailed(id: string, error: string) {
+  await mysqlQuery(
+    `update x_watch_items set last_post_error = ?, updated_at = current_timestamp(3) where id = ?`,
+    [error.slice(0, 512), id],
+  );
 }
 
 function tweetUrl(username: string, tweetId: string): string {
@@ -185,11 +272,24 @@ export async function pollXWatch(opts?: {
   fetched: number;
   inserted: number;
   analyzed: number;
+  autoPosted: number;
+  autoSkipped: number;
+  autoFailed: number;
   error?: string;
 }> {
   const username = (opts?.username ?? watchUsername()).replace(/^@/, "");
   if (!isXReadConfigured()) {
-    return { ok: false, username, fetched: 0, inserted: 0, analyzed: 0, error: "X read API not configured" };
+    return {
+      ok: false,
+      username,
+      fetched: 0,
+      inserted: 0,
+      analyzed: 0,
+      autoPosted: 0,
+      autoSkipped: 0,
+      autoFailed: 0,
+      error: "X read API not configured",
+    };
   }
 
   const state = await getState(username);
@@ -207,6 +307,9 @@ export async function pollXWatch(opts?: {
 
   let inserted = 0;
   let analyzed = 0;
+  let autoPosted = 0;
+  let autoSkipped = 0;
+  let autoFailed = 0;
   const sorted = [...tweets].sort((a, b) => {
     const da = BigInt(a.id);
     const db = BigInt(b.id);
@@ -231,7 +334,13 @@ export async function pollXWatch(opts?: {
 
     if (opts?.analyze !== false) {
       const ok = await analyzeXWatchItemById(id);
-      if (ok.ok) analyzed++;
+      if (ok.ok) {
+        analyzed++;
+        const auto = await tryAutoPostXWatchItem(id);
+        if (auto === "posted") autoPosted++;
+        else if (auto === "failed") autoFailed++;
+        else autoSkipped++;
+      }
     }
   }
 
@@ -242,7 +351,99 @@ export async function pollXWatch(opts?: {
     await upsertState(username, { x_user_id: userId });
   }
 
-  return { ok: true, username, fetched: tweets.length, inserted, analyzed };
+  return {
+    ok: true,
+    username,
+    fetched: tweets.length,
+    inserted,
+    analyzed,
+    autoPosted,
+    autoSkipped,
+    autoFailed,
+  };
+}
+
+export async function pollAllXWatch(opts?: {
+  analyze?: boolean;
+  maxFetch?: number;
+}): Promise<{
+  ok: boolean;
+  usernames: string[];
+  fetched: number;
+  inserted: number;
+  analyzed: number;
+  autoPosted: number;
+  autoSkipped: number;
+  autoFailed: number;
+  metricsSynced: number;
+  errors?: string[];
+}> {
+  const usernames = watchUsernames();
+  const errors: string[] = [];
+  let fetched = 0;
+  let inserted = 0;
+  let analyzed = 0;
+  let autoPosted = 0;
+  let autoSkipped = 0;
+  let autoFailed = 0;
+  let ok = true;
+
+  for (const username of usernames) {
+    const r = await pollXWatch({ ...opts, username });
+    if (!r.ok) {
+      ok = false;
+      if (r.error) errors.push(`@${username}: ${r.error}`);
+      continue;
+    }
+    fetched += r.fetched;
+    inserted += r.inserted;
+    analyzed += r.analyzed;
+    autoPosted += r.autoPosted;
+    autoSkipped += r.autoSkipped;
+    autoFailed += r.autoFailed;
+  }
+
+  const { synced: metricsSynced } = await syncXWatchReplyMetrics();
+
+  return {
+    ok,
+    usernames,
+    fetched,
+    inserted,
+    analyzed,
+    autoPosted,
+    autoSkipped,
+    autoFailed,
+    metricsSynced,
+    errors: errors.length > 0 ? errors : undefined,
+  };
+}
+
+export async function syncXWatchReplyMetrics(opts?: { limit?: number }): Promise<{ synced: number }> {
+  if (!isXReadConfigured()) return { synced: 0 };
+  const rows = await mysqlQuery<{ id: string; posted_reply_tweet_id: string }[]>(
+    `select id, posted_reply_tweet_id from x_watch_items
+     where status = 'posted' and posted_reply_tweet_id is not null
+     order by posted_reply_at desc limit ?`,
+    [Math.min(Math.max(opts?.limit ?? 40, 1), 100)],
+  );
+  if (rows.length === 0) return { synced: 0 };
+
+  const metrics = await fetchTweetMetrics(rows.map((r) => r.posted_reply_tweet_id));
+  let synced = 0;
+  for (const row of rows) {
+    const m = metrics.get(row.posted_reply_tweet_id);
+    if (!m) continue;
+    await mysqlQuery(
+      `update x_watch_items set
+        reply_impressions = ?, reply_likes = ?, reply_retweets = ?,
+        metrics_synced_at = current_timestamp(3), updated_at = current_timestamp(3)
+       where id = ?`,
+      [m.impressions, m.likes, m.retweets, row.id],
+    );
+    synced++;
+  }
+  return { synced };
 }
 
 export async function analyzeXWatchItemById(id: string): Promise<{ ok: boolean; error?: string }> {
@@ -267,6 +468,7 @@ export async function analyzeXWatchItemById(id: string): Promise<{ ok: boolean; 
     await mysqlQuery(
       `update x_watch_items set
         topic_type = ?, tickers_json = ?, summary_md = ?, ops_angle_md = ?, reply_draft = ?, reply_draft_zh = ?,
+        reply_quality_score = ?, auto_post_skip_reason = null,
         analyzed_at = current_timestamp(3), updated_at = current_timestamp(3)
        where id = ?`,
       [
@@ -276,6 +478,7 @@ export async function analyzeXWatchItemById(id: string): Promise<{ ok: boolean; 
         a.ops_angle_md,
         a.reply_draft,
         reply_draft_zh || null,
+        a.reply_quality_score || null,
         id,
       ],
     );
@@ -291,7 +494,7 @@ export async function generateReplyForXWatchItemById(id: string): Promise<{ ok: 
   if (item.status !== "pending") return { ok: false, error: "item not pending" };
 
   try {
-    const { reply_draft, reply_draft_zh } = await generateXWatchReply({
+    const { reply_draft, reply_draft_zh, reply_quality_score } = await generateXWatchReply({
       username: item.source_username,
       tweetText: item.tweet_text,
       tweetUrl: item.tweet_url,
@@ -301,8 +504,8 @@ export async function generateReplyForXWatchItemById(id: string): Promise<{ ok: 
       currentDraft: item.reply_draft,
     });
     await mysqlQuery(
-      `update x_watch_items set reply_draft = ?, reply_draft_zh = ?, updated_at = current_timestamp(3) where id = ?`,
-      [reply_draft, reply_draft_zh, id],
+      `update x_watch_items set reply_draft = ?, reply_draft_zh = ?, reply_quality_score = ?, auto_post_skip_reason = null, updated_at = current_timestamp(3) where id = ?`,
+      [reply_draft, reply_draft_zh, reply_quality_score || null, id],
     );
     return { ok: true };
   } catch (e) {
@@ -349,9 +552,10 @@ export async function skipXWatchItem(id: string): Promise<{ ok: boolean; error?:
   return { ok: true };
 }
 
-export async function postXWatchReply(id: string): Promise<{
+export async function postXWatchQuoteReply(id: string): Promise<{
   ok: boolean;
   replyTweetId?: string;
+  postMode?: XWatchPostMode;
   error?: string;
 }> {
   const item = await getXWatchItem(id);
@@ -362,38 +566,101 @@ export async function postXWatchReply(id: string): Promise<{
   if (text.length > 280) return { ok: false, error: "reply exceeds 280 characters" };
 
   try {
-    const { tweetId } = await postTweet(text, item.tweet_id);
-    await mysqlQuery(
-      `update x_watch_items set
-        status = 'posted', posted_reply_tweet_id = ?, posted_reply_at = current_timestamp(3),
-        updated_at = current_timestamp(3)
-       where id = ?`,
-      [tweetId, id],
-    );
-    return { ok: true, replyTweetId: tweetId };
+    const { tweetId } = await postTweet(text, { quoteTweetId: item.tweet_id });
+    await markXWatchPosted(id, tweetId, "quote");
+    return { ok: true, replyTweetId: tweetId, postMode: "quote" };
+  } catch (e) {
+    const quoteErr = e instanceof Error ? e.message : "quote failed";
+    try {
+      const mentionText = withMention(item.source_username, text);
+      const { tweetId } = await postTweet(mentionText);
+      await markXWatchPosted(id, tweetId, "mention");
+      return { ok: true, replyTweetId: tweetId, postMode: "mention" };
+    } catch (e2) {
+      const err = friendlyPostError(e2 instanceof Error ? e2.message : quoteErr);
+      await markXWatchPostFailed(id, err);
+      return { ok: false, error: err };
+    }
+  }
+}
+
+export async function tryAutoPostXWatchItem(id: string): Promise<"posted" | "skipped" | "failed"> {
+  if (!isXWatchAutoReplyEnabled() || !isXPostingEnabled()) return "skipped";
+  const item = await getXWatchItem(id);
+  if (!item || item.status !== "pending") return "skipped";
+  if (!shouldAutoReplyTopic(item.topic_type)) {
+    await markAutoPostSkip(id, `topic ${item.topic_type ?? "other"}`);
+    return "skipped";
+  }
+  if (!item.reply_draft?.trim()) {
+    await markAutoPostSkip(id, "empty draft");
+    return "skipped";
+  }
+
+  const minScore = autoReplyMinScore();
+  const score = item.reply_quality_score ?? 0;
+  if (score < minScore) {
+    await markAutoPostSkip(id, `score ${score} < ${minScore}`);
+    return "skipped";
+  }
+
+  const result = await postXWatchQuoteReply(id);
+  return result.ok ? "posted" : "failed";
+}
+
+export async function postXWatchReply(id: string): Promise<{
+  ok: boolean;
+  replyTweetId?: string;
+  postMode?: XWatchPostMode;
+  error?: string;
+}> {
+  const item = await getXWatchItem(id);
+  if (!item) return { ok: false, error: "not found" };
+  if (item.status !== "pending") return { ok: false, error: "item not pending" };
+  const text = item.reply_draft?.trim();
+  if (!text) return { ok: false, error: "reply draft empty" };
+  if (text.length > 280) return { ok: false, error: "reply exceeds 280 characters" };
+
+  try {
+    const { tweetId } = await postTweet(text, { replyToId: item.tweet_id });
+    await markXWatchPosted(id, tweetId, "reply");
+    return { ok: true, replyTweetId: tweetId, postMode: "reply" };
   } catch (e) {
     const raw = e instanceof Error ? e.message : "post failed";
-    return { ok: false, error: friendlyPostError(raw) };
+    const err = friendlyPostError(raw);
+    await markXWatchPostFailed(id, err);
+    return { ok: false, error: err };
   }
 }
 
 export async function getXWatchMeta(): Promise<{
   username: string;
+  watchUsernames: string[];
   readConfigured: boolean;
   postConfigured: boolean;
+  autoReplyEnabled: boolean;
+  autoReplyMinScore: number;
   lastPolledAt: string | null;
   pendingCount: number;
 }> {
-  const username = watchUsername();
-  const state = await getState(username);
+  const usernames = watchUsernames();
+  const states = await Promise.all(usernames.map((u) => getState(u)));
+  const lastPolled = states
+    .map((s) => (s?.last_polled_at ? toIso(s.last_polled_at) : null))
+    .filter(Boolean)
+    .sort()
+    .pop() ?? null;
   const [cnt] = await mysqlQuery<{ n: number }[]>(
     `select count(*) as n from x_watch_items where status = 'pending'`,
   );
   return {
-    username,
+    username: usernames[0] ?? DEFAULT_X_WATCH_USERNAME,
+    watchUsernames: usernames,
     readConfigured: isXReadConfigured(),
     postConfigured: isXPostingEnabled(),
-    lastPolledAt: state?.last_polled_at ? toIso(state.last_polled_at) : null,
+    autoReplyEnabled: isXWatchAutoReplyEnabled(),
+    autoReplyMinScore: autoReplyMinScore(),
+    lastPolledAt: lastPolled,
     pendingCount: Number(cnt?.n ?? 0),
   };
 }

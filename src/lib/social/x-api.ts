@@ -1,5 +1,12 @@
 import crypto from "node:crypto";
-import { getValidOAuth2AccessToken, isXOAuth2Configured, postTweetOAuth2 } from "@/lib/social/x-oauth2";
+import {
+  getValidOAuth2AccessToken,
+  isXOAuth2Configured,
+  postTweetOAuth2,
+  type XPostOpts,
+} from "@/lib/social/x-oauth2";
+
+export type { XPostOpts };
 
 export type XPostResult = {
   tweetId: string;
@@ -48,13 +55,13 @@ export function isXPostingEnabled(): boolean {
   return readXConfig() != null;
 }
 
-/** 发布一条 X 推文（优先 OAuth 2.0，回退 OAuth 1.0a）；replyToId 用于串成 thread */
-export async function postTweet(text: string, replyToId?: string): Promise<XPostResult> {
+/** 发布一条 X 推文（优先 OAuth 2.0，回退 OAuth 1.0a）；replyToId / quoteTweetId 二选一 */
+export async function postTweet(text: string, opts?: XPostOpts): Promise<XPostResult> {
   if (isXOAuth2Configured()) {
     const token = await getValidOAuth2AccessToken();
-    if (token) return postTweetOAuth2(text, replyToId);
+    if (token) return postTweetOAuth2(text, opts);
   }
-  return postTweetOAuth1(text, replyToId);
+  return postTweetOAuth1(text, opts);
 }
 
 /**
@@ -67,7 +74,7 @@ export async function postThread(tweets: string[]): Promise<{ tweetIds: string[]
   const tweetIds: string[] = [];
   let replyTo: string | undefined;
   for (let i = 0; i < clean.length; i++) {
-    const { tweetId } = await postTweet(clean[i]!, replyTo);
+    const { tweetId } = await postTweet(clean[i]!, replyTo ? { replyToId: replyTo } : undefined);
     tweetIds.push(tweetId);
     replyTo = tweetId;
     if (i < clean.length - 1) await new Promise((r) => setTimeout(r, 2500));
@@ -75,13 +82,16 @@ export async function postThread(tweets: string[]): Promise<{ tweetIds: string[]
   return { tweetIds };
 }
 
-function tweetBody(text: string, replyToId?: string): string {
+function tweetBody(text: string, opts?: XPostOpts): string {
+  if (opts?.quoteTweetId) {
+    return JSON.stringify({ text, quote_tweet_id: opts.quoteTweetId });
+  }
   return JSON.stringify(
-    replyToId ? { text, reply: { in_reply_to_tweet_id: replyToId } } : { text },
+    opts?.replyToId ? { text, reply: { in_reply_to_tweet_id: opts.replyToId } } : { text },
   );
 }
 
-async function postTweetOAuth1(text: string, replyToId?: string): Promise<XPostResult> {
+async function postTweetOAuth1(text: string, opts?: XPostOpts): Promise<XPostResult> {
   const cfg = readXConfig();
   if (!cfg) {
     throw new Error("X API credentials missing (X_API_KEY / X_API_SECRET / X_ACCESS_TOKEN / X_ACCESS_TOKEN_SECRET)");
@@ -115,7 +125,7 @@ async function postTweetOAuth1(text: string, replyToId?: string): Promise<XPostR
       Authorization: header,
       "Content-Type": "application/json",
     },
-    body: tweetBody(text, replyToId),
+    body: tweetBody(text, opts),
   });
 
   const json = (await res.json().catch(() => ({}))) as {

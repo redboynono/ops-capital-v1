@@ -82,6 +82,48 @@ export async function fetchUserTimeline(
   }));
 }
 
+export type XTweetMetrics = {
+  id: string;
+  impressions: number;
+  likes: number;
+  retweets: number;
+  replies: number;
+};
+
+/** Batch-fetch public_metrics for our posted quote/reply tweets. */
+export async function fetchTweetMetrics(tweetIds: string[]): Promise<Map<string, XTweetMetrics>> {
+  const ids = [...new Set(tweetIds.map((id) => id.trim()).filter(Boolean))].slice(0, 100);
+  const out = new Map<string, XTweetMetrics>();
+  if (ids.length === 0) return out;
+
+  const json = await xGet<{
+    data?: {
+      id: string;
+      public_metrics?: {
+        impression_count?: number;
+        like_count?: number;
+        retweet_count?: number;
+        reply_count?: number;
+      };
+    }[];
+  }>(`/tweets`, {
+    ids: ids.join(","),
+    "tweet.fields": "public_metrics",
+  });
+
+  for (const t of json.data ?? []) {
+    const m = t.public_metrics;
+    out.set(t.id, {
+      id: t.id,
+      impressions: Number(m?.impression_count ?? 0),
+      likes: Number(m?.like_count ?? 0),
+      retweets: Number(m?.retweet_count ?? 0),
+      replies: Number(m?.reply_count ?? 0),
+    });
+  }
+  return out;
+}
+
 export function isXReadConfigured(): boolean {
   return Boolean(process.env.X_BEARER_TOKEN?.trim()) || Boolean(process.env.X_OAUTH2_CLIENT_ID?.trim());
 }

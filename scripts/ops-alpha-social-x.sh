@@ -13,7 +13,8 @@ MODE="${1:-analysis}"
 case "$MODE" in
   record) QUERY="mode=record" ;;
   chokepoint) QUERY="mode=chokepoint&count=2" ;;
-  *) QUERY="count=5&mode=analysis" ;;
+  extra) QUERY="count=1&mode=analysis" ;;
+  *) QUERY="count=2&mode=analysis" ;;
 esac
 
 ts() { date '+%Y-%m-%dT%H:%M:%S%z'; }

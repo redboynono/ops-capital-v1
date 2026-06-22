@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { pollXWatch } from "@/lib/x-watch";
+import { pollAllXWatch } from "@/lib/x-watch";
 import { logEvent } from "@/lib/observability";
 
 export const runtime = "nodejs";
@@ -15,23 +15,28 @@ async function authorizeCron(): Promise<boolean> {
   return Boolean(expected && bearer === `Bearer ${expected}`);
 }
 
-/** POST /api/cron/x-watch — 拉取 @aleabitoreddit 新帖并生成回复草稿 */
+/** POST /api/cron/x-watch — 拉取 @aleabitoreddit 新帖、AI 分析，并按配置自动 Quote 回复 */
 export async function POST() {
   if (!(await authorizeCron())) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const result = await pollXWatch({ analyze: true });
-  if (!result.ok) {
-    return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
+  const result = await pollAllXWatch({ analyze: true });
+  if (!result.ok && result.inserted === 0 && result.fetched === 0) {
+    return NextResponse.json({ ok: false, error: result.errors?.join("; ") ?? "poll failed" }, { status: 502 });
   }
 
   logEvent("x_watch_polled", {
     meta: {
-      username: result.username,
+      usernames: result.usernames,
       fetched: result.fetched,
       inserted: result.inserted,
       analyzed: result.analyzed,
+      autoPosted: result.autoPosted,
+      autoSkipped: result.autoSkipped,
+      autoFailed: result.autoFailed,
+      metricsSynced: result.metricsSynced,
+      errors: result.errors,
     },
   });
 
