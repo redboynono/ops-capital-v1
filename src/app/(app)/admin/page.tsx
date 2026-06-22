@@ -71,6 +71,13 @@ export default async function AdminHome() {
           <h2 className="mt-1 text-lg font-bold">文章管理</h2>
           <p className="mt-1 text-[13px] text-muted">列表编辑、批量发布 / 下架。</p>
         </Link>
+        <Link href="/admin/x-watch" className="card p-4 hover:border-accent">
+          <p className="label-caps">X Watch</p>
+          <h2 className="mt-1 text-lg font-bold">X 新帖解读</h2>
+          <p className="mt-1 text-[13px] text-muted">
+            监听 @aleabitoreddit 新 topic · AI 摘要 + OPS 角度 + 英文回复草稿 · 审阅后发送。
+          </p>
+        </Link>
         <Link href="/admin/social" className="card p-4 hover:border-accent">
           <p className="label-caps">Social Ops</p>
           <h2 className="mt-1 text-lg font-bold">社媒运营</h2>
