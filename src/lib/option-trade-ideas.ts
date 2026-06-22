@@ -1,6 +1,10 @@
 import { getUnderlying0DteData, type ExpiringOptionHighlight } from "@/lib/expiring-options";
 import { formatOptionContractLabel } from "@/lib/option-copilot-scans";
+import { fmt } from "@/lib/i18n/fmt";
+import type { Dictionary } from "@/lib/i18n/zh";
 import { thisFridayIso } from "@/lib/options-expiry";
+
+export type TradeIdeasCopy = Dictionary["optionsPage"]["tradeIdeas"];
 
 export type IdeaLeg = {
   action: "buy" | "sell";
@@ -19,6 +23,8 @@ export type TradeIdeaKind =
   | "long_call"
   | "long_put";
 
+export type TradeIdeaConfidence = "high" | "medium" | "low";
+
 export type TradeIdea = {
   id: string;
   kind: TradeIdeaKind;
@@ -31,7 +37,7 @@ export type TradeIdea = {
   netPremium: number | null;
   isCredit: boolean;
   spreadWidth: number | null;
-  confidence: "高" | "中" | "低";
+  confidence: TradeIdeaConfidence;
   flowScore: number;
   flowNote: string;
   opsAlphaRec: string;
@@ -98,6 +104,7 @@ function buildBullPutSpread(
   spot: number,
   exp: string,
   underlying: string,
+  copy: TradeIdeasCopy,
 ): TradeIdea | null {
   const sell = pickByStrike(puts, (k) => k < spot * 0.995 && k > spot * 0.9, "volume", spot);
   if (!sell) return null;
@@ -111,14 +118,14 @@ function buildBullPutSpread(
     id: `${underlying}-bps-${sell.strike}`,
     kind: "bull_put_spread",
     title: "Bull Put Spread",
-    titleZh: "牛市看跌价差",
+    titleZh: copy.kindTitles.bull_put_spread,
     accent: "green",
     expirationDate: exp,
     legs,
     netPremium: estimateNetPremium(legs, isCredit),
     isCredit,
     spreadWidth: sell.strike - buy.strike,
-    confidence: "中",
+    confidence: "medium",
     flowScore: 0,
     flowNote: "",
     opsAlphaRec: "",
@@ -131,6 +138,7 @@ function buildBearCallSpread(
   spot: number,
   exp: string,
   underlying: string,
+  copy: TradeIdeasCopy,
 ): TradeIdea | null {
   const sell = pickByStrike(calls, (k) => k > spot * 1.005 && k < spot * 1.12, "volume", spot);
   if (!sell) return null;
@@ -144,14 +152,14 @@ function buildBearCallSpread(
     id: `${underlying}-bcs-${sell.strike}`,
     kind: "bear_call_spread",
     title: "Bear Call Spread",
-    titleZh: "熊市看涨价差",
+    titleZh: copy.kindTitles.bear_call_spread,
     accent: "red",
     expirationDate: exp,
     legs,
     netPremium: estimateNetPremium(legs, isCredit),
     isCredit,
     spreadWidth: buy.strike - sell.strike,
-    confidence: "中",
+    confidence: "medium",
     flowScore: 0,
     flowNote: "",
     opsAlphaRec: "",
@@ -165,6 +173,7 @@ function buildIronCondor(
   spot: number,
   exp: string,
   underlying: string,
+  copy: TradeIdeasCopy,
 ): TradeIdea | null {
   const sellPut = pickByStrike(puts, (k) => k < spot * 0.94 && k > spot * 0.85, "volume", spot);
   const sellCall = pickByStrike(calls, (k) => k > spot * 1.06 && k < spot * 1.15, "volume", spot);
@@ -180,14 +189,14 @@ function buildIronCondor(
     id: `${underlying}-ic`,
     kind: "iron_condor",
     title: "Iron Condor",
-    titleZh: "铁鹰式（卖出波动）",
+    titleZh: copy.kindTitles.iron_condor,
     accent: "amber",
     expirationDate: exp,
     legs,
     netPremium: estimateNetPremium(legs, isCredit),
     isCredit,
     spreadWidth: w,
-    confidence: "中",
+    confidence: "medium",
     flowScore: 0,
     flowNote: "",
     opsAlphaRec: "",
@@ -198,6 +207,7 @@ function buildIronCondor(
 function buildLongOption(
   c: ExpiringOptionHighlight,
   underlying: string,
+  copy: TradeIdeasCopy,
 ): TradeIdea | null {
   const isCall = c.contractType === "call";
   const legs = [leg("buy", c)];
@@ -205,14 +215,14 @@ function buildLongOption(
     id: `${underlying}-long-${c.contractType}-${c.strike}`,
     kind: isCall ? "long_call" : "long_put",
     title: isCall ? "Long Call" : "Long Put",
-    titleZh: isCall ? "买入看涨" : "买入看跌",
+    titleZh: isCall ? copy.kindTitles.long_call : copy.kindTitles.long_put,
     accent: "blue",
     expirationDate: c.expirationDate,
     legs,
     netPremium: estimateNetPremium(legs, false),
     isCredit: false,
     spreadWidth: null,
-    confidence: "中",
+    confidence: "medium",
     flowScore: 0,
     flowNote: "",
     opsAlphaRec: "",
@@ -225,6 +235,7 @@ function enrichIdea(
   bias: "bullish" | "bearish" | "neutral",
   callVol: number,
   putVol: number,
+  copy: TradeIdeasCopy,
 ): TradeIdea {
   const biasMatch =
     (idea.kind === "bull_put_spread" || idea.kind === "long_call") && bias === "bullish"
@@ -238,34 +249,38 @@ function enrichIdea(
   const volAtLegs = idea.legs.reduce((s, l) => s + l.volume, 0);
   const flowScore = Math.min(99, Math.round(biasMatch * 0.6 + Math.min(volAtLegs / 5000, 1) * 40));
 
-  let confidence: TradeIdea["confidence"] = "低";
-  if (flowScore >= 75) confidence = "高";
-  else if (flowScore >= 55) confidence = "中";
+  let confidence: TradeIdeaConfidence = "low";
+  if (flowScore >= 75) confidence = "high";
+  else if (flowScore >= 55) confidence = "medium";
 
   const flowNote =
     bias === "bullish"
-      ? `Call 成交 ${(callVol / 1000).toFixed(1)}K vs Put ${(putVol / 1000).toFixed(1)}K`
+      ? fmt(copy.flowBullishFmt, {
+          call: (callVol / 1000).toFixed(1),
+          put: (putVol / 1000).toFixed(1),
+        })
       : bias === "bearish"
-        ? `Put 成交偏多`
-        : `多空均衡，适合区间策略`;
+        ? copy.flowBearish
+        : copy.flowNeutral;
 
   const prem =
     idea.netPremium != null
       ? idea.isCredit
-        ? `预估净收权利金约 $${idea.netPremium.toFixed(2)}`
-        : `预估成本约 $${Math.abs(idea.netPremium).toFixed(2)}`
-      : "权利金请以券商报价为准";
+        ? fmt(copy.premCreditFmt, { amount: idea.netPremium.toFixed(2) })
+        : fmt(copy.premDebitFmt, { amount: Math.abs(idea.netPremium).toFixed(2) })
+      : copy.premUnknown;
 
-  const opsAlphaRec = `${idea.isCredit ? "卖出波动" : "买入方向"} · ${idea.titleZh} · ${prem} · 小仓+止损`;
+  const kindLabel = copy.kindTitles[idea.kind];
+  const opsAlphaRec = `${idea.isCredit ? copy.opsRecCredit : copy.opsRecDebit} · ${kindLabel} · ${prem} · ${copy.opsRecSuffix}`;
 
   const rationale =
     idea.kind === "iron_condor"
-      ? "价格在区间内震荡时收取权利金；突破区间需止损。"
+      ? copy.rationaleIronCondor
       : idea.kind === "bull_put_spread"
-        ? "看涨或横盘时卖出下方 Put 价差收权利金，风险为标的大跌。"
+        ? copy.rationaleBullPut
         : idea.kind === "bear_call_spread"
-          ? "看跌或横盘时卖出上方 Call 价差，风险为标的大涨。"
-          : "单腿方向押注，适合强趋势但时间价值衰减快。";
+          ? copy.rationaleBearCall
+          : copy.rationaleLong;
 
   return {
     ...idea,
@@ -281,6 +296,7 @@ export async function buildOptionTradeIdeas(opts: {
   symbol: string;
   expirationDate?: string;
   maxIdeas?: number;
+  copy: TradeIdeasCopy;
 }): Promise<{
   symbol: string;
   expirationDate: string;
@@ -291,6 +307,7 @@ export async function buildOptionTradeIdeas(opts: {
   const symbol = opts.symbol.trim().toUpperCase();
   const expirationDate = opts.expirationDate ?? thisFridayIso();
   const maxIdeas = opts.maxIdeas ?? 3;
+  const copy = opts.copy;
 
   const { contracts, summary } = await getUnderlying0DteData(symbol, expirationDate);
   const spot = summary?.underlyingPrice ?? contracts[0]?.underlyingPrice ?? null;
@@ -308,16 +325,16 @@ export async function buildOptionTradeIdeas(opts: {
   const raw: TradeIdea[] = [];
 
   if (bias === "bullish" || bias === "neutral") {
-    const bps = buildBullPutSpread(puts, spot, expirationDate, symbol);
-    if (bps) raw.push(enrichIdea(bps, bias, callVol, putVol));
+    const bps = buildBullPutSpread(puts, spot, expirationDate, symbol, copy);
+    if (bps) raw.push(enrichIdea(bps, bias, callVol, putVol, copy));
   }
   if (bias === "bearish" || bias === "neutral") {
-    const bcs = buildBearCallSpread(calls, spot, expirationDate, symbol);
-    if (bcs) raw.push(enrichIdea(bcs, bias, callVol, putVol));
+    const bcs = buildBearCallSpread(calls, spot, expirationDate, symbol, copy);
+    if (bcs) raw.push(enrichIdea(bcs, bias, callVol, putVol, copy));
   }
   if (bias === "neutral") {
-    const ic = buildIronCondor(puts, calls, spot, expirationDate, symbol);
-    if (ic) raw.push(enrichIdea(ic, bias, callVol, putVol));
+    const ic = buildIronCondor(puts, calls, spot, expirationDate, symbol, copy);
+    if (ic) raw.push(enrichIdea(ic, bias, callVol, putVol, copy));
   }
 
   const atm =
@@ -327,8 +344,8 @@ export async function buildOptionTradeIdeas(opts: {
         ? pickByStrike(puts, () => true, "nearSpot", spot)
         : null;
   if (atm && atm.volume >= 500) {
-    const lo = buildLongOption(atm, symbol);
-    if (lo) raw.push(enrichIdea(lo, bias, callVol, putVol));
+    const lo = buildLongOption(atm, symbol, copy);
+    if (lo) raw.push(enrichIdea(lo, bias, callVol, putVol, copy));
   }
 
   const byKind = new Map<string, TradeIdea>();
@@ -341,4 +358,13 @@ export async function buildOptionTradeIdeas(opts: {
     .slice(0, maxIdeas);
 
   return { symbol, expirationDate, spot, bias, ideas };
+}
+
+export function confidenceLabel(
+  confidence: TradeIdeaConfidence,
+  copy: TradeIdeasCopy,
+): string {
+  if (confidence === "high") return copy.confidenceHigh;
+  if (confidence === "medium") return copy.confidenceMed;
+  return copy.confidenceLow;
 }

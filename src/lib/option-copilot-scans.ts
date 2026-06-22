@@ -2,6 +2,10 @@ import {
   listExpiringOptionsRadar,
   type ExpiringOptionHighlight,
 } from "@/lib/expiring-options";
+import { fmt } from "@/lib/i18n/fmt";
+import type { Dictionary } from "@/lib/i18n/zh";
+
+export type CopilotCopy = Dictionary["options"]["copilot"];
 
 export type CopilotDirectRow = {
   underlying: string;
@@ -30,49 +34,44 @@ export function formatOptionContractLabel(
   return `${d}-${mon}-${y} ${strike} ${type}`;
 }
 
-function concentrationHint(c: ExpiringOptionHighlight, pct: number): string {
-  const side = c.contractType === "call" ? "看涨" : "看跌";
+function concentrationHint(c: ExpiringOptionHighlight, pct: number, copy: CopilotCopy): string {
+  const side = c.contractType === "call" ? copy.sideCall : copy.sidePut;
+  const pctStr = pct.toFixed(1);
   if (pct >= 70) {
-    return `→ 成交高度集中，可优先跟踪该张 ${side}（占全链 ${pct.toFixed(1)}%）`;
+    return fmt(copy.concentrationHigh, { side, pct: pctStr });
   }
-  return `→ 成交偏多在此合约，关注 ${side} 方向（占全链 ${pct.toFixed(1)}%）`;
+  return fmt(copy.concentrationMed, { side, pct: pctStr });
 }
 
-function buySideHint(c: ExpiringOptionHighlight): string {
+function buySideHint(c: ExpiringOptionHighlight, copy: CopilotCopy): string {
   const chg = c.dayChangePct ?? 0;
+  const chgStr = chg.toFixed(1);
   if (c.contractType === "call") {
-    return chg > 0
-      ? `→ 买盘推升 Call（+${chg.toFixed(1)}%），倾向轻仓跟涨`
-      : `→ Call 放量，结合现价自行判断方向`;
+    return chg > 0 ? fmt(copy.buySideCallUp, { chg: chgStr }) : copy.buySideCallVol;
   }
-  return chg > 0
-    ? `→ 买盘推升 Put（+${chg.toFixed(1)}%），倾向轻仓跟跌/对冲`
-    : `→ Put 放量，结合现价自行判断方向`;
+  return chg > 0 ? fmt(copy.buySidePutUp, { chg: chgStr }) : copy.buySidePutVol;
 }
 
 function opsAlphaRecommendation(
   c: ExpiringOptionHighlight,
   kind: "concentration" | "buySide",
+  copy: CopilotCopy,
   pct?: number,
 ): string {
   const exp = c.expirationDate;
   const k = c.strike;
   if (c.contractType === "call") {
     if (kind === "concentration" && pct != null) {
-      return `买入 Call ${k}（到期 ${exp}）· 成交占全链 ${pct.toFixed(0)}% · 轻仓跟涨`;
+      return fmt(copy.recBuyCallConc, { strike: k, exp, pct: pct.toFixed(0) });
     }
     const chg = c.dayChangePct ?? 0;
-    return chg > 0
-      ? `买入 Call ${k} · 跟涨 · 小仓 + 止损`
-      : `关注 Call ${k} · 放量但未大涨 · 观望或极小仓试多`;
+    return chg > 0 ? fmt(copy.recBuyCallUp, { strike: k }) : fmt(copy.recWatchCall, { strike: k });
   }
   if (kind === "concentration" && pct != null) {
-    return `买入 Put ${k}（到期 ${exp}）· 成交占全链 ${pct.toFixed(0)}% · 轻仓跟跌/对冲`;
+    return fmt(copy.recBuyPutConc, { strike: k, exp, pct: pct.toFixed(0) });
   }
   const chg = c.dayChangePct ?? 0;
-  return chg > 0
-    ? `买入 Put ${k} · 跟跌或对冲 · 小仓 + 止损`
-    : `关注 Put ${k} · 放量但未大跌 · 观望或极小仓试空`;
+  return chg > 0 ? fmt(copy.recBuyPutUp, { strike: k }) : fmt(copy.recWatchPut, { strike: k });
 }
 
 function toRow(
@@ -80,6 +79,7 @@ function toRow(
   pctOfTotal: number | null,
   actionHint: string,
   kind: "concentration" | "buySide",
+  copy: CopilotCopy,
 ): CopilotDirectRow {
   return {
     underlying: c.underlying,
@@ -91,7 +91,7 @@ function toRow(
     pctOfTotal,
     vwap: c.vwap,
     actionHint,
-    opsAlphaRec: opsAlphaRecommendation(c, kind, pctOfTotal ?? undefined),
+    opsAlphaRec: opsAlphaRecommendation(c, kind, copy, pctOfTotal ?? undefined),
   };
 }
 
@@ -101,11 +101,13 @@ export async function buildCopilotDirectSignals(opts: {
   /** 未指定 symbol 时扫描的标的列表；默认全 watchlist */
   underlyings?: readonly string[];
   limit?: number;
+  copy: CopilotCopy;
 }): Promise<{
   concentration: CopilotDirectRow[];
   buySide: CopilotDirectRow[];
 }> {
   const limit = opts.limit ?? 12;
+  const copy = opts.copy;
   const symbol = opts.symbol?.trim().toUpperCase();
   const underlyingList = symbol
     ? [symbol]
@@ -138,7 +140,7 @@ export async function buildCopilotDirectSignals(opts: {
     if (top && top.volume >= 200) {
       const pct = (top.volume / totalVol) * 100;
       if (pct >= 35) {
-        concentration.push(toRow(top, pct, concentrationHint(top, pct), "concentration"));
+        concentration.push(toRow(top, pct, concentrationHint(top, pct, copy), "concentration", copy));
       }
     }
 
@@ -147,7 +149,7 @@ export async function buildCopilotDirectSignals(opts: {
       const volOi = c.volumeOiRatio ?? 0;
       const chg = c.dayChangePct ?? 0;
       if (chg > 0 || volOi >= 1) {
-        buySide.push(toRow(c, null, buySideHint(c), "buySide"));
+        buySide.push(toRow(c, null, buySideHint(c, copy), "buySide", copy));
       }
     }
   }

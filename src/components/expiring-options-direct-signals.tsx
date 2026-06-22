@@ -159,6 +159,7 @@ export async function ExpiringOptionsDirectSignals({
     symbol,
     underlyings,
     limit: rowLimit,
+    copy: o.copilot,
   });
 
   const expiryLine = fmt(o.expiryLineFmt, {

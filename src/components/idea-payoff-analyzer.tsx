@@ -1,5 +1,9 @@
 import type { TradeIdea } from "@/lib/option-trade-ideas";
+import type { Dictionary } from "@/lib/i18n/zh";
 import { analyzeIdeaPayoff, payoffAtPrice, type IdeaPayoffAnalysis } from "@/lib/idea-payoff";
+import { fmt } from "@/lib/i18n/fmt";
+
+type PayoffLabels = Dictionary["optionsPage"]["tradeIdeas"]["payoff"];
 
 function fmtUsd(n: number | null, opts?: { signed?: boolean }): string {
   if (n == null || !Number.isFinite(n)) return "—";
@@ -21,10 +25,12 @@ function PayoffChart({
   analysis,
   idea,
   accent,
+  labels,
 }: {
   analysis: IdeaPayoffAnalysis;
   idea: TradeIdea;
   accent: string;
+  labels: PayoffLabels;
 }) {
   const vbW = 100;
   const vbH = 44;
@@ -52,16 +58,16 @@ function PayoffChart({
   return (
     <div className="rounded-md border border-border bg-surface-muted/50 p-2">
       <div className="mb-1 flex items-center justify-between text-[9px] text-muted">
-        <span>到期盈亏（$/股）</span>
+        <span>{labels.expiryPl}</span>
         <span className="font-mono">
-          股价 {priceMin.toFixed(0)} – {priceMax.toFixed(0)}
+          {fmt(labels.priceRangeFmt, { min: priceMin.toFixed(0), max: priceMax.toFixed(0) })}
         </span>
       </div>
       <svg
         viewBox={`0 0 ${vbW} ${vbH}`}
         preserveAspectRatio="none"
         className="h-[120px] w-full"
-        aria-label="到期盈亏曲线"
+        aria-label={labels.chartAria}
       >
         <line
           x1={padX}
@@ -95,15 +101,19 @@ function PayoffChart({
         ) : null}
       </svg>
       <div className="mt-1 flex justify-between font-mono text-[9px] text-muted">
-        <span>最大亏 {fmtUsd(analysis.maxLoss, { signed: true })}</span>
+        <span>
+          {labels.maxLoss} {fmtUsd(analysis.maxLoss, { signed: true })}
+        </span>
         {spot != null && spotPl != null ? (
           <span style={{ color: accent }}>
-            现价盈亏 {fmtUsd(spotPl, { signed: true })}
+            {labels.spotPl} {fmtUsd(spotPl, { signed: true })}
           </span>
         ) : (
-          <span style={{ color: accent }}>现价</span>
+          <span style={{ color: accent }}>{labels.spot}</span>
         )}
-        <span>最大盈 {fmtUsd(analysis.maxGain, { signed: true })}</span>
+        <span>
+          {labels.maxGain} {fmtUsd(analysis.maxGain, { signed: true })}
+        </span>
       </div>
     </div>
   );
@@ -123,15 +133,17 @@ export function IdeaPayoffAnalyzer({
   idea,
   spot,
   accent,
+  labels,
 }: {
   idea: TradeIdea;
   spot: number | null;
   accent: string;
+  labels: PayoffLabels;
 }) {
   if (idea.netPremium == null) {
     return (
       <div className="border-t border-border px-4 py-3">
-        <p className="text-[11px] text-muted">权利金数据不足，暂无法计算收益分析。</p>
+        <p className="text-[11px] text-muted">{labels.noPremium}</p>
       </div>
     );
   }
@@ -144,13 +156,11 @@ export function IdeaPayoffAnalyzer({
 
   const cushionLabel = idea.isCredit
     ? idea.kind === "bear_call_spread"
-      ? "上方缓冲"
+      ? labels.cushionUp
       : idea.kind === "bull_put_spread"
-        ? "下方缓冲"
-        : "区间缓冲"
-    : idea.kind === "long_call"
-      ? "至盈亏平衡"
-      : "至盈亏平衡";
+        ? labels.cushionDown
+        : labels.cushionRange
+    : labels.toBreakeven;
 
   const cushionVal =
     idea.kind === "bear_call_spread" || idea.kind === "long_call"
@@ -169,27 +179,27 @@ export function IdeaPayoffAnalyzer({
   return (
     <div className="border-t border-border bg-surface-muted/30">
       <div className="px-4 py-2.5">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-          收益分析 · 到期盈亏
-        </p>
-        <p className="mt-0.5 text-[10px] text-muted-soft">
-          基于 Idea 腿 VWAP 估算权利金；非历史回测胜率。
-        </p>
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">{labels.title}</p>
+        <p className="mt-0.5 text-[10px] text-muted-soft">{labels.subtitle}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-2 px-4 pb-3 sm:grid-cols-4">
-        <StatCell label="盈亏平衡" value={beLabel} />
+        <StatCell label={labels.breakeven} value={beLabel} />
         <StatCell
-          label={idea.isCredit ? "最大盈利" : "理论最大盈"}
+          label={idea.isCredit ? labels.maxProfit : labels.theoreticalMax}
           value={fmtUsd(a.maxGain, { signed: true })}
-          sub={idea.isCredit ? "股价落在盈利区" : undefined}
+          sub={idea.isCredit ? labels.creditZone : undefined}
         />
-        <StatCell label="最大亏损" value={fmtUsd(a.maxLoss, { signed: true })} />
-        <StatCell label={cushionLabel} value={cushionVal} sub={yieldFlat ? `平价收益 ${yieldFlat}` : undefined} />
+        <StatCell label={labels.maxLossLabel} value={fmtUsd(a.maxLoss, { signed: true })} />
+        <StatCell
+          label={cushionLabel}
+          value={cushionVal}
+          sub={yieldFlat ? fmt(labels.flatYieldFmt, { pct: yieldFlat }) : undefined}
+        />
       </div>
 
       <div className="px-4 pb-4">
-        <PayoffChart analysis={a} idea={idea} accent={accent} />
+        <PayoffChart analysis={a} idea={idea} accent={accent} labels={labels} />
       </div>
     </div>
   );
