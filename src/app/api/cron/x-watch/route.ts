@@ -15,13 +15,13 @@ async function authorizeCron(): Promise<boolean> {
   return Boolean(expected && bearer === `Bearer ${expected}`);
 }
 
-/** POST /api/cron/x-watch — 拉取 @aleabitoreddit 新帖、AI 分析，并按配置自动 Quote 回复 */
+/** POST /api/cron/x-watch — 分批拉取 X 新帖、分批 AI 分析，并按配置自动 Quote */
 export async function POST() {
   if (!(await authorizeCron())) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const result = await pollAllXWatch({ analyze: true });
+  const result = await pollAllXWatch();
   if (!result.ok && result.inserted === 0 && result.fetched === 0) {
     return NextResponse.json({ ok: false, error: result.errors?.join("; ") ?? "poll failed" }, { status: 502 });
   }

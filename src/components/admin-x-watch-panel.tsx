@@ -39,6 +39,8 @@ export type XWatchMetaDto = {
     topN: number;
     totalAccounts: number;
     pollBatchSize: number;
+    analyzeBatchSize: number;
+    fullScanMinutes: number;
     byCategory: Partial<Record<string, string[]>>;
   };
   readConfigured: boolean;
@@ -296,7 +298,9 @@ export function AdminXWatchPanel({
             <p className="mt-1 text-[11px] text-muted">
               上次轮询 {fmtTime(meta.lastPolledAt)}
               {" · "}
-              本轮批量 {meta.influencerMeta.pollBatchSize}/{meta.influencerMeta.totalAccounts}
+              每轮拉 {meta.influencerMeta.pollBatchSize} 人 · 分析 {meta.influencerMeta.analyzeBatchSize} 条
+              {" · "}
+              全量约 {meta.influencerMeta.fullScanMinutes} 分钟
               {" · "}
               读 X {meta.readConfigured ? "✓" : "✗"}
               {" · "}
@@ -331,7 +335,11 @@ export function AdminXWatchPanel({
               <p className="mt-1 text-[11px] text-muted-soft">
                 自动回复：<code className="font-mono">X_WATCH_AUTO_REPLY=1</code>
                 {" · "}
-                三赛道 TOP20：<code className="font-mono">X_WATCH_CATEGORIES=ai,finance,semiconductor</code>
+                三赛道 TOP10：<code className="font-mono">X_WATCH_CATEGORIES=ai,finance,semiconductor</code>
+                {" · "}
+                <code className="font-mono">X_WATCH_POLL_BATCH=3</code>
+                {" · "}
+                <code className="font-mono">X_WATCH_ANALYZE_BATCH=5</code>
               </p>
             ) : null}
             {!meta.readConfigured ? (
@@ -397,9 +405,9 @@ export function AdminXWatchPanel({
           </p>
         ) : null}
         <p className="mt-2 text-[11px] text-muted-soft">
-          Cron 每 5 分钟轮询（每轮 {meta.influencerMeta.pollBatchSize} 账号，全量约{" "}
-          {Math.ceil(meta.influencerMeta.totalAccounts / Math.max(meta.influencerMeta.pollBatchSize, 1)) * 5}{" "}
-          分钟）；AI / 金融 / 半导体各 TOP{meta.influencerMeta.topN}。原创帖 9:00 + 14:30。
+          Cron 每 5 分钟一轮：先拉 {meta.influencerMeta.pollBatchSize} 个账号新帖（三赛道轮询），再 AI 分析 backlog 中{" "}
+          {meta.influencerMeta.analyzeBatchSize} 条；全量扫完约 {meta.influencerMeta.fullScanMinutes} 分钟（各 TOP
+          {meta.influencerMeta.topN}，共 {meta.influencerMeta.totalAccounts} 人）。原创帖 9:00 + 14:30。
           <span className="text-muted"> 楼中回复仍受 X 互动限制。</span>
         </p>
       </section>

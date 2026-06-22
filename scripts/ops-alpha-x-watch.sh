@@ -1,5 +1,5 @@
 #!/bin/bash
-# OPS Alpha · 监听 X 账号新帖（默认 @aleabitoreddit）并生成回复草稿
+# OPS Alpha · 监听 X 账号新帖并生成回复草稿（分批拉取 + 分批 AI 分析）
 # 安装：/usr/local/bin/ops-alpha-x-watch.sh
 
 set -euo pipefail
@@ -7,8 +7,15 @@ set -euo pipefail
 ENV_FILE="${ENV_FILE:-/opt/ops-alpha/.env.production}"
 LOG="${LOG:-/var/log/ops-alpha-x-watch.log}"
 BASE_URL="${BASE_URL:-https://opscapital.com}"
+LOCK_FILE="${LOCK_FILE:-/var/run/ops-alpha-x-watch.lock}"
 
 ts() { date '+%Y-%m-%dT%H:%M:%S%z'; }
+
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+  echo "[$(ts)] SKIP: previous x-watch still running" >> "$LOG"
+  exit 0
+fi
 
 echo "[$(ts)] ===== x-watch START =====" >> "$LOG"
 
@@ -30,7 +37,8 @@ fi
 HTTP_CODE=$(curl -sS -o /tmp/ops-alpha-x-watch.json -w "%{http_code}" \
   -X POST "${BASE_URL}/api/cron/x-watch" \
   -H "Authorization: Bearer ${CRON_SECRET}" \
-  -H "Content-Type: application/json")
+  -H "Content-Type: application/json" \
+  --max-time 120)
 
 echo "[$(ts)] HTTP ${HTTP_CODE} $(cat /tmp/ops-alpha-x-watch.json)" >> "$LOG"
 

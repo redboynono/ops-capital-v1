@@ -6,7 +6,9 @@ import { postTweet, isXPostingEnabled } from "@/lib/social/x-api";
 import { fetchTweetMetrics, fetchUserTimeline, isXReadConfigured, resolveXUserId } from "@/lib/social/x-read";
 import {
   resolveWatchInfluencers,
+  watchAnalyzeBatchSize,
   watchPollBatchSize,
+  watchTopN,
   type XWatchInfluencerCategory,
 } from "@/lib/x-watch-influencers";
 
@@ -137,7 +139,9 @@ async function getPollCursor(): Promise<number> {
     `select last_tweet_id from x_watch_state where source_username = ?`,
     [POLL_CURSOR_KEY],
   );
-  return Math.max(0, Number(row?.last_tweet_id ?? 0) || 0);
+  const raw = Math.max(0, Number(row?.last_tweet_id ?? 0) || 0);
+  const topN = watchTopN();
+  return topN > 0 ? raw % topN : 0;
 }
 
 async function setPollCursor(idx: number): Promise<void> {
@@ -155,16 +159,24 @@ export function getWatchInfluencerMeta(): {
   topN: number;
   totalAccounts: number;
   pollBatchSize: number;
+  analyzeBatchSize: number;
+  /** Minutes to poll every registry row once (cron every 5 min). */
+  fullScanMinutes: number;
   byCategory: Partial<Record<XWatchInfluencerCategory, string[]>>;
 } {
+  const pollBatchSize = watchPollBatchSize();
+  const analyzeBatchSize = watchAnalyzeBatchSize();
   if (process.env.X_WATCH_USERNAMES?.trim()) {
     const handles = watchUsernames();
+    const rounds = Math.ceil(handles.length / Math.max(pollBatchSize, 1));
     return {
       mode: "env",
       categories: [],
       topN: handles.length,
       totalAccounts: handles.length,
-      pollBatchSize: watchPollBatchSize(),
+      pollBatchSize,
+      analyzeBatchSize,
+      fullScanMinutes: rounds * 5,
       byCategory: {},
     };
   }
@@ -174,9 +186,84 @@ export function getWatchInfluencerMeta(): {
     categories: resolved.categories,
     topN: resolved.topN,
     totalAccounts: resolved.handles.length,
-    pollBatchSize: watchPollBatchSize(),
+    pollBatchSize,
+    analyzeBatchSize,
+    fullScanMinutes: resolved.topN * 5,
     byCategory: resolved.byCategory,
   };
+}
+
+function pickPollBatch(cursor: number, batchSize: number): {
+  accounts: string[];
+  nextCursor: number;
+} {
+  if (process.env.X_WATCH_USERNAMES?.trim()) {
+    const all = watchUsernames();
+    const accounts: string[] = [];
+    for (let i = 0; i < Math.min(batchSize, all.length); i++) {
+      accounts.push(all[(cursor + i) % all.length]!);
+    }
+    return {
+      accounts,
+      nextCursor: all.length > 0 ? (cursor + accounts.length) % all.length : 0,
+    };
+  }
+
+  const { categories, byCategory } = resolveWatchInfluencers();
+  const topN = watchTopN();
+  const accounts: string[] = [];
+  const seen = new Set<string>();
+  let pos = 0;
+  while (accounts.length < batchSize && pos < topN * categories.length) {
+    const round = cursor + Math.floor(pos / categories.length);
+    if (round >= topN) break;
+    const cat = categories[pos % categories.length]!;
+    const handle = byCategory[cat]?.[round];
+    if (handle) {
+      const key = handle.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        accounts.push(handle);
+      }
+    }
+    pos++;
+  }
+  const roundsUsed = accounts.length > 0 ? Math.max(1, Math.ceil(accounts.length / categories.length)) : 1;
+  return {
+    accounts,
+    nextCursor: topN > 0 ? (cursor + roundsUsed) % topN : 0,
+  };
+}
+
+async function analyzePendingXWatchItems(limit: number): Promise<{
+  analyzed: number;
+  autoPosted: number;
+  autoSkipped: number;
+  autoFailed: number;
+}> {
+  if (limit <= 0) {
+    return { analyzed: 0, autoPosted: 0, autoSkipped: 0, autoFailed: 0 };
+  }
+  const rows = await mysqlQuery<{ id: string }[]>(
+    `select id from x_watch_items
+     where status = 'pending' and analyzed_at is null
+     order by posted_at desc limit ?`,
+    [limit],
+  );
+  let analyzed = 0;
+  let autoPosted = 0;
+  let autoSkipped = 0;
+  let autoFailed = 0;
+  for (const row of rows) {
+    const ok = await analyzeXWatchItemById(row.id);
+    if (!ok.ok) continue;
+    analyzed++;
+    const auto = await tryAutoPostXWatchItem(row.id);
+    if (auto === "posted") autoPosted++;
+    else if (auto === "failed") autoFailed++;
+    else autoSkipped++;
+  }
+  return { analyzed, autoPosted, autoSkipped, autoFailed };
 }
 
 export function autoReplyMinScore(): number {
@@ -345,19 +432,53 @@ export async function pollXWatch(opts?: {
     };
   }
 
-  const state = await getState(username);
-  let userId = state?.x_user_id ?? null;
-  if (!userId) {
-    const user = await resolveXUserId(username);
-    userId = user.id;
-    await upsertState(username, { x_user_id: userId });
+  try {
+    const state = await getState(username);
+    let userId = state?.x_user_id ?? null;
+    if (!userId) {
+      const user = await resolveXUserId(username);
+      userId = user.id;
+      await upsertState(username, { x_user_id: userId });
+    }
+
+    const tweets = await fetchUserTimeline(userId, {
+      maxResults: opts?.maxFetch ?? 15,
+      sinceId: state?.last_tweet_id ?? undefined,
+    });
+
+    return await ingestXWatchTweets(username, userId, tweets, state?.last_tweet_id ?? null, opts);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      username,
+      fetched: 0,
+      inserted: 0,
+      analyzed: 0,
+      autoPosted: 0,
+      autoSkipped: 0,
+      autoFailed: 0,
+      error: message,
+    };
   }
+}
 
-  const tweets = await fetchUserTimeline(userId, {
-    maxResults: opts?.maxFetch ?? 15,
-    sinceId: state?.last_tweet_id ?? undefined,
-  });
-
+async function ingestXWatchTweets(
+  username: string,
+  userId: string,
+  tweets: Awaited<ReturnType<typeof fetchUserTimeline>>,
+  _prevLastTweetId: string | null,
+  opts?: { analyze?: boolean },
+): Promise<{
+  ok: boolean;
+  username: string;
+  fetched: number;
+  inserted: number;
+  analyzed: number;
+  autoPosted: number;
+  autoSkipped: number;
+  autoFailed: number;
+}> {
   let inserted = 0;
   let analyzed = 0;
   let autoPosted = 0;
@@ -418,6 +539,7 @@ export async function pollXWatch(opts?: {
 
 export async function pollAllXWatch(opts?: {
   analyze?: boolean;
+  analyzeBatch?: number;
   maxFetch?: number;
 }): Promise<{
   ok: boolean;
@@ -432,16 +554,14 @@ export async function pollAllXWatch(opts?: {
   metricsSynced: number;
   pollCursor: number;
   totalAccounts: number;
+  analyzeBatchSize: number;
   errors?: string[];
 }> {
   const all = watchUsernames();
   const batchSize = watchPollBatchSize();
+  const analyzeBatch = opts?.analyze === false ? 0 : (opts?.analyzeBatch ?? watchAnalyzeBatchSize());
   const cursor = await getPollCursor();
-  const polledUsernames: string[] = [];
-  for (let i = 0; i < Math.min(batchSize, all.length); i++) {
-    polledUsernames.push(all[(cursor + i) % all.length]!);
-  }
-  const nextCursor = all.length > 0 ? (cursor + polledUsernames.length) % all.length : 0;
+  const { accounts: polledUsernames, nextCursor } = pickPollBatch(cursor, batchSize);
   await setPollCursor(nextCursor);
 
   const errors: string[] = [];
@@ -454,7 +574,7 @@ export async function pollAllXWatch(opts?: {
   let ok = true;
 
   for (const username of polledUsernames) {
-    const r = await pollXWatch({ ...opts, username });
+    const r = await pollXWatch({ ...opts, username, analyze: false });
     if (!r.ok) {
       ok = false;
       if (r.error) errors.push(`@${username}: ${r.error}`);
@@ -462,11 +582,13 @@ export async function pollAllXWatch(opts?: {
     }
     fetched += r.fetched;
     inserted += r.inserted;
-    analyzed += r.analyzed;
-    autoPosted += r.autoPosted;
-    autoSkipped += r.autoSkipped;
-    autoFailed += r.autoFailed;
   }
+
+  const pending = await analyzePendingXWatchItems(analyzeBatch);
+  analyzed += pending.analyzed;
+  autoPosted += pending.autoPosted;
+  autoSkipped += pending.autoSkipped;
+  autoFailed += pending.autoFailed;
 
   const { synced: metricsSynced } = await syncXWatchReplyMetrics();
 
@@ -483,6 +605,7 @@ export async function pollAllXWatch(opts?: {
     metricsSynced,
     pollCursor: nextCursor,
     totalAccounts: all.length,
+    analyzeBatchSize: analyzeBatch,
     errors: errors.length > 0 ? errors : undefined,
   };
 }

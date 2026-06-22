@@ -16,7 +16,7 @@ export const X_WATCH_INFLUENCER_REGISTRY: Record<XWatchInfluencerCategory, XWatc
     { handle: "karpathy", label: "Andrej Karpathy · AI research" },
     { handle: "ylecun", label: "Yann LeCun · AI research" },
     { handle: "AravSrinivas", label: "Perplexity CEO" },
-    { handle: "driscoll_dr", label: "AI / tech equity" },
+    { handle: "medriscoll", label: "DCVC · AI / data infra" },
     { handle: "bindureddy", label: "Abacus AI · agents" },
     { handle: "drjimfan", label: "NVIDIA · AI" },
     { handle: "svpino", label: "AI engineering" },
@@ -99,15 +99,23 @@ export function parseWatchCategories(raw?: string | null): XWatchInfluencerCateg
 }
 
 export function watchTopN(): number {
-  const n = Number(process.env.X_WATCH_TOP_N ?? 20);
-  if (!Number.isFinite(n)) return 20;
+  const n = Number(process.env.X_WATCH_TOP_N ?? 10);
+  if (!Number.isFinite(n)) return 10;
   return Math.max(1, Math.min(50, Math.round(n)));
 }
 
+/** Accounts fetched from X per cron tick (registry mode: round-robin across categories). */
 export function watchPollBatchSize(): number {
-  const n = Number(process.env.X_WATCH_POLL_BATCH ?? 10);
-  if (!Number.isFinite(n)) return 10;
+  const n = Number(process.env.X_WATCH_POLL_BATCH ?? 3);
+  if (!Number.isFinite(n)) return 3;
   return Math.max(1, Math.min(30, Math.round(n)));
+}
+
+/** Pending tweets analyzed (+ optional auto Quote) per cron tick. */
+export function watchAnalyzeBatchSize(): number {
+  const n = Number(process.env.X_WATCH_ANALYZE_BATCH ?? 5);
+  if (!Number.isFinite(n)) return 5;
+  return Math.max(0, Math.min(20, Math.round(n)));
 }
 
 export function resolveWatchInfluencers(): {

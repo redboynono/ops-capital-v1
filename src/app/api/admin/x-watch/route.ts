@@ -54,7 +54,7 @@ export async function POST(req: Request) {
   const action = body?.action ?? "poll";
 
   if (action === "poll") {
-    const result = await pollAllXWatch({ analyze: true });
+    const result = await pollAllXWatch({ analyzeBatch: 10 });
     if (!result.ok && result.inserted === 0 && result.fetched === 0) {
       return NextResponse.json({ ok: false, error: result.errors?.join("; ") }, { status: 502 });
     }
