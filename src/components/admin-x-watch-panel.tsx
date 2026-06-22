@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from "react";
 
+import { X_WATCH_CATEGORY_LABEL } from "@/lib/x-watch-influencers";
+
 export type XWatchItemDto = {
   id: string;
   source_username: string;
@@ -31,6 +33,14 @@ export type XWatchItemDto = {
 export type XWatchMetaDto = {
   username: string;
   watchUsernames: string[];
+  influencerMeta: {
+    mode: "env" | "registry";
+    categories: string[];
+    topN: number;
+    totalAccounts: number;
+    pollBatchSize: number;
+    byCategory: Partial<Record<string, string[]>>;
+  };
   readConfigured: boolean;
   postConfigured: boolean;
   autoReplyEnabled: boolean;
@@ -159,7 +169,9 @@ export function AdminXWatchPanel({
         autoSkipped?: number;
         autoFailed?: number;
         metricsSynced?: number;
-        usernames?: string[];
+        polledUsernames?: string[];
+        pollCursor?: number;
+        totalAccounts?: number;
         inserted?: number;
         analyzed?: number;
         replyTweetId?: string;
@@ -183,7 +195,7 @@ export function AdminXWatchPanel({
       }
       if (action === "poll") {
         const parts = [
-          `拉取完成 · 新增 ${data.inserted ?? 0} 条 · AI 分析 ${data.analyzed ?? 0} 条`,
+          `拉取 ${data.polledUsernames?.length ?? 0}/${data.totalAccounts ?? meta.influencerMeta.totalAccounts} 账号 · 新增 ${data.inserted ?? 0} · 分析 ${data.analyzed ?? 0}`,
         ];
         if (meta.autoReplyEnabled) {
           parts.push(
@@ -269,13 +281,22 @@ export function AdminXWatchPanel({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[13px] font-bold">
-              监听 {meta.watchUsernames.map((u) => `@${u}`).join(" · ")}
-              <span className="ml-2 font-normal text-muted">
-                · 待审 {meta.pendingCount}
-              </span>
+              X Watch · {meta.influencerMeta.totalAccounts} 账号
+              {meta.influencerMeta.mode === "registry" ? (
+                <span className="ml-1 font-normal text-muted">
+                  （
+                  {meta.influencerMeta.categories
+                    .map((c) => X_WATCH_CATEGORY_LABEL[c as keyof typeof X_WATCH_CATEGORY_LABEL] ?? c)
+                    .join(" / ")}
+                  {" "}各 TOP{meta.influencerMeta.topN}）
+                </span>
+              ) : null}
+              <span className="ml-2 font-normal text-muted">· 待审 {meta.pendingCount}</span>
             </p>
             <p className="mt-1 text-[11px] text-muted">
               上次轮询 {fmtTime(meta.lastPolledAt)}
+              {" · "}
+              本轮批量 {meta.influencerMeta.pollBatchSize}/{meta.influencerMeta.totalAccounts}
               {" · "}
               读 X {meta.readConfigured ? "✓" : "✗"}
               {" · "}
@@ -283,11 +304,34 @@ export function AdminXWatchPanel({
               {" · "}
               自动 Quote {meta.autoReplyEnabled ? `✓ ≥${meta.autoReplyMinScore}分` : "✗ 关"}
             </p>
+            {meta.influencerMeta.mode === "registry" ? (
+              <details className="mt-2 text-[11px] text-muted-soft">
+                <summary className="cursor-pointer font-semibold text-muted">
+                  查看 {meta.influencerMeta.totalAccounts} 个监听账号
+                </summary>
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                  {Object.entries(meta.influencerMeta.byCategory).map(([cat, handles]) => (
+                    <div key={cat}>
+                      <p className="font-semibold uppercase text-muted">
+                        {X_WATCH_CATEGORY_LABEL[cat as keyof typeof X_WATCH_CATEGORY_LABEL] ?? cat}
+                      </p>
+                      <p className="mt-0.5 font-mono text-[10px] leading-relaxed">
+                        {(handles ?? []).map((h) => `@${h}`).join(" ")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ) : (
+              <p className="mt-1 font-mono text-[10px] text-muted-soft">
+                {meta.watchUsernames.map((u) => `@${u}`).join(" · ")}
+              </p>
+            )}
             {!meta.autoReplyEnabled ? (
               <p className="mt-1 text-[11px] text-muted-soft">
                 自动回复：<code className="font-mono">X_WATCH_AUTO_REPLY=1</code>
                 {" · "}
-                多账号：<code className="font-mono">X_WATCH_USERNAMES=aleabitoreddit,handle2</code>
+                三赛道 TOP20：<code className="font-mono">X_WATCH_CATEGORIES=ai,finance,semiconductor</code>
               </p>
             ) : null}
             {!meta.readConfigured ? (
@@ -353,7 +397,9 @@ export function AdminXWatchPanel({
           </p>
         ) : null}
         <p className="mt-2 text-[11px] text-muted-soft">
-          Cron 每 5 分钟拉取多账号；原创帖 9:00 + 14:30 各发研报 Thread。自动 Quote 需 AI 评分 ≥ 阈值（markets topic）。
+          Cron 每 5 分钟轮询（每轮 {meta.influencerMeta.pollBatchSize} 账号，全量约{" "}
+          {Math.ceil(meta.influencerMeta.totalAccounts / Math.max(meta.influencerMeta.pollBatchSize, 1)) * 5}{" "}
+          分钟）；AI / 金融 / 半导体各 TOP{meta.influencerMeta.topN}。原创帖 9:00 + 14:30。
           <span className="text-muted"> 楼中回复仍受 X 互动限制。</span>
         </p>
       </section>

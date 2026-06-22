@@ -4,6 +4,11 @@ import { analyzeXWatchTweet, generateXWatchReply, translateXWatchReplyZh } from 
 import { mysqlQuery } from "@/lib/mysql";
 import { postTweet, isXPostingEnabled } from "@/lib/social/x-api";
 import { fetchTweetMetrics, fetchUserTimeline, isXReadConfigured, resolveXUserId } from "@/lib/social/x-read";
+import {
+  resolveWatchInfluencers,
+  watchPollBatchSize,
+  type XWatchInfluencerCategory,
+} from "@/lib/x-watch-influencers";
 
 export const DEFAULT_X_WATCH_USERNAME = "aleabitoreddit";
 
@@ -111,19 +116,67 @@ export function watchUsername(): string {
 }
 
 export function watchUsernames(): string[] {
-  const raw = process.env.X_WATCH_USERNAMES?.trim();
-  if (raw) {
+  const env = process.env.X_WATCH_USERNAMES?.trim();
+  if (env) {
     return [
       ...new Set(
-        raw
+        env
           .split(/[,;\s]+/)
           .map((u) => u.replace(/^@/, "").trim())
           .filter(Boolean),
       ),
     ];
   }
-  const single = (process.env.X_WATCH_USERNAME ?? DEFAULT_X_WATCH_USERNAME).replace(/^@/, "");
-  return [single];
+  return resolveWatchInfluencers().handles;
+}
+
+const POLL_CURSOR_KEY = "__poll_cursor__";
+
+async function getPollCursor(): Promise<number> {
+  const [row] = await mysqlQuery<{ last_tweet_id: string | null }[]>(
+    `select last_tweet_id from x_watch_state where source_username = ?`,
+    [POLL_CURSOR_KEY],
+  );
+  return Math.max(0, Number(row?.last_tweet_id ?? 0) || 0);
+}
+
+async function setPollCursor(idx: number): Promise<void> {
+  await mysqlQuery(
+    `insert into x_watch_state (source_username, last_tweet_id, last_polled_at)
+     values (?, ?, current_timestamp(3))
+     on duplicate key update last_tweet_id = values(last_tweet_id), last_polled_at = current_timestamp(3)`,
+    [POLL_CURSOR_KEY, String(idx)],
+  );
+}
+
+export function getWatchInfluencerMeta(): {
+  mode: "env" | "registry";
+  categories: XWatchInfluencerCategory[];
+  topN: number;
+  totalAccounts: number;
+  pollBatchSize: number;
+  byCategory: Partial<Record<XWatchInfluencerCategory, string[]>>;
+} {
+  if (process.env.X_WATCH_USERNAMES?.trim()) {
+    const handles = watchUsernames();
+    return {
+      mode: "env",
+      categories: [],
+      topN: handles.length,
+      totalAccounts: handles.length,
+      pollBatchSize: watchPollBatchSize(),
+      byCategory: {},
+    };
+  }
+  const resolved = resolveWatchInfluencers();
+  return {
+    mode: "registry",
+    categories: resolved.categories,
+    topN: resolved.topN,
+    totalAccounts: resolved.handles.length,
+    pollBatchSize: watchPollBatchSize(),
+    byCategory: resolved.byCategory,
+  };
 }
 
 export function autoReplyMinScore(): number {
@@ -369,6 +422,7 @@ export async function pollAllXWatch(opts?: {
 }): Promise<{
   ok: boolean;
   usernames: string[];
+  polledUsernames: string[];
   fetched: number;
   inserted: number;
   analyzed: number;
@@ -376,9 +430,20 @@ export async function pollAllXWatch(opts?: {
   autoSkipped: number;
   autoFailed: number;
   metricsSynced: number;
+  pollCursor: number;
+  totalAccounts: number;
   errors?: string[];
 }> {
-  const usernames = watchUsernames();
+  const all = watchUsernames();
+  const batchSize = watchPollBatchSize();
+  const cursor = await getPollCursor();
+  const polledUsernames: string[] = [];
+  for (let i = 0; i < Math.min(batchSize, all.length); i++) {
+    polledUsernames.push(all[(cursor + i) % all.length]!);
+  }
+  const nextCursor = all.length > 0 ? (cursor + polledUsernames.length) % all.length : 0;
+  await setPollCursor(nextCursor);
+
   const errors: string[] = [];
   let fetched = 0;
   let inserted = 0;
@@ -388,7 +453,7 @@ export async function pollAllXWatch(opts?: {
   let autoFailed = 0;
   let ok = true;
 
-  for (const username of usernames) {
+  for (const username of polledUsernames) {
     const r = await pollXWatch({ ...opts, username });
     if (!r.ok) {
       ok = false;
@@ -407,7 +472,8 @@ export async function pollAllXWatch(opts?: {
 
   return {
     ok,
-    usernames,
+    usernames: all,
+    polledUsernames,
     fetched,
     inserted,
     analyzed,
@@ -415,6 +481,8 @@ export async function pollAllXWatch(opts?: {
     autoSkipped,
     autoFailed,
     metricsSynced,
+    pollCursor: nextCursor,
+    totalAccounts: all.length,
     errors: errors.length > 0 ? errors : undefined,
   };
 }
@@ -636,6 +704,7 @@ export async function postXWatchReply(id: string): Promise<{
 export async function getXWatchMeta(): Promise<{
   username: string;
   watchUsernames: string[];
+  influencerMeta: ReturnType<typeof getWatchInfluencerMeta>;
   readConfigured: boolean;
   postConfigured: boolean;
   autoReplyEnabled: boolean;
@@ -644,7 +713,10 @@ export async function getXWatchMeta(): Promise<{
   pendingCount: number;
 }> {
   const usernames = watchUsernames();
-  const states = await Promise.all(usernames.map((u) => getState(u)));
+  const influencerMeta = getWatchInfluencerMeta();
+  const states = await Promise.all(
+    usernames.filter((u) => u !== POLL_CURSOR_KEY).map((u) => getState(u)),
+  );
   const lastPolled = states
     .map((s) => (s?.last_polled_at ? toIso(s.last_polled_at) : null))
     .filter(Boolean)
@@ -656,6 +728,7 @@ export async function getXWatchMeta(): Promise<{
   return {
     username: usernames[0] ?? DEFAULT_X_WATCH_USERNAME,
     watchUsernames: usernames,
+    influencerMeta,
     readConfigured: isXReadConfigured(),
     postConfigured: isXPostingEnabled(),
     autoReplyEnabled: isXWatchAutoReplyEnabled(),
